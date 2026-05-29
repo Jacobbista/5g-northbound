@@ -1,0 +1,30 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.venv/
+**/*.egg-info/
+
+# Node
+**/node_modules/
+**/dist/
+
+# Env files
+# Python services read from environment directly; no .env needed there.
+camara-gateway/.env
+positioning-engine/.env
+# Edge scanner deploy.sh reads from a local .env (template: .env.example).
+**/.env
+
+# Local overrides of dev fixtures — real AP maps, real device registries, etc.
+# Stays on the developer's machine; the .json defaults in dev/ are placeholders.
+dev/*.local.json
+dev/*.local.*
+
+# Docker compose local overrides
+docker-compose.override.yml
+
+# OS / editors
+.DS_Store
+**/.idea/
+**/.vscode/

@@ -1,0 +1,9 @@
+source: https://github.com/camaraproject/DeviceLocation
+meta_release: r3.2
+commit: bc17ceeb4ee34929d5f65b8851d99d4dda4c5af1
+files:
+  - location-retrieval.yaml      # Location Retrieval API v0.5.0
+  - location-verification.yaml   # Location Verification API v3.0.0
+note: |
+  YAMLs copied verbatim from the pinned commit. Do not hand-edit.
+  To bump: refetch both files at the new commit and update this file.

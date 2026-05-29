@@ -1,0 +1,55 @@
+name: Build & Push
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # ghcr namespace mirrors the GitHub repo: ghcr.io/<owner>/<repo>/<service>
+  IMAGE_PREFIX: ghcr.io/jacobbista/5g-northbound
+
+jobs:
+  build:
+    name: build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # lmf slots in here once phase 11 lands
+        service: [camara-gateway, positioning-engine, wifi-positioning, positioning-demo]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+            type=sha
+          # On a v0.1.0 tag this yields :0.1.0, :latest and :sha-<short>
+          flavor: latest=false
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+# Package visibility: GitHub Packages default to private. Set each package to
+# Public once (Repo > Packages > <pkg> > Package settings > Change visibility).
+# GITHUB_TOKEN cannot change visibility, so this is a one-time manual step.

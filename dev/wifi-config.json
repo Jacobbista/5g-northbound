@@ -1,0 +1,45 @@
+{
+  "_comment": "Example AP map. BSSIDs are placeholders. To run against a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real BSSID list and point the adapter's WIFI_CONFIG_PATH at it (or edit the compose mount).",
+  "room_w": 13,
+  "room_h": 32,
+  "tx_power": -42,
+  "path_loss_n": 2.7,
+  "algorithm": "trilateration",
+  "smoothing": true,
+  "process_noise": 1.0,
+  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154 },
+  "routers": [
+    {
+      "id": "AP01",
+      "x": 11.5,
+      "y": -1,
+      "bssids": [
+        "AA:BB:CC:00:01:01", "AA:BB:CC:00:01:02", "AA:BB:CC:00:01:03"
+      ]
+    },
+    {
+      "id": "AP02",
+      "x": 13.5,
+      "y": 14,
+      "bssids": [
+        "AA:BB:CC:00:02:01", "AA:BB:CC:00:02:02", "AA:BB:CC:00:02:03"
+      ]
+    },
+    {
+      "id": "AP03",
+      "x": 14.5,
+      "y": 28,
+      "bssids": [
+        "AA:BB:CC:00:03:01", "AA:BB:CC:00:03:02", "AA:BB:CC:00:03:03"
+      ]
+    },
+    {
+      "id": "AP04",
+      "x": 3.5,
+      "y": 21,
+      "bssids": [
+        "AA:BB:CC:00:04:01", "AA:BB:CC:00:04:02", "AA:BB:CC:00:04:03"
+      ]
+    }
+  ]
+}

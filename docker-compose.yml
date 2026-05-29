@@ -1,0 +1,139 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: changeme
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./dev/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    networks:
+      - 5g-net
+
+  mock-smf:
+    image: python:3.11-slim
+    command: python /app/mock_smf.py
+    volumes:
+      - ./dev/mock_smf.py:/app/mock_smf.py:ro
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:9090/session-info', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - 5g-net
+
+  wifi-positioning:
+    build:
+      context: ./wifi-positioning
+    ports:
+      - "8089:8080"
+    volumes:
+      # Defaults to the placeholder map in dev/. To use a real AP map without
+      # touching the repo: `export WIFI_CONFIG=./dev/wifi-config.local.json`
+      # (gitignored) then `docker compose up`.
+      - ${WIFI_CONFIG:-./dev/wifi-config.json}:/app/config/wifi-config.json:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  positioning-engine:
+    build:
+      context: ./positioning-engine
+    ports:
+      - "8081:8080"
+      - "8082:8080"
+    volumes:
+      - ./dev/floor-plan.json:/app/config/floor-plan.json:ro
+    environment:
+      DEVICE_IDS: "wifi-asset-01"
+      # Each URL = one adapter pod speaking GET /measurement/{id}.
+      # Add more (comma-separated) to fuse multiple sources, e.g. vendor UWB:
+      #   ADAPTER_URLS: "http://wifi-positioning:8080,http://uwb-adapter:8080"
+      # Unset (empty) -> built-in random-walk mock adapters (dev shortcut).
+      ADAPTER_URLS: "http://wifi-positioning:8080"
+    depends_on:
+      wifi-positioning:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  camara-gateway:
+    build:
+      context: ./camara-gateway
+    ports:
+      # host 8080 is taken by the IDE here; gateway published on 8088
+      - "8088:8080"
+    environment:
+      SKIP_AUTH: "true"
+      SMF_URL: "http://mock-smf:9090"
+      # Engine honours the northbound contract (returns lat/lon); gateway consumes it.
+      # Unset this to fall back to the gateway's built-in mock position source.
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      KEYCLOAK_URL: "http://keycloak:8080"
+      KEYCLOAK_REALM: "5g-testbed"
+      # CAMARA device identifier -> internal device id (matches the scanner's DEVICE_ID)
+      DEVICE_REGISTRY: '{"+390111234567":"wifi-asset-01"}'
+    depends_on:
+      positioning-engine:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  positioning-demo:
+    build:
+      context: ./positioning-demo
+    ports:
+      - "3001:80"
+    volumes:
+      # live-swappable visual layout (no rebuild; nginx serves it no-cache)
+      - ./positioning-demo/public/layout.json:/usr/share/nginx/html/layout.json:ro
+    depends_on:
+      camara-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - 5g-net
+
+networks:
+  5g-net:
+    driver: bridge
