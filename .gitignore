@@ -14,7 +14,8 @@
 camara-gateway/.env
 positioning-engine/.env
 # Edge scanner deploy.sh reads from a local .env (template: .env.example).
-**/.env
+wifi-positioning/edge/scanner/.env
+# positioning-demo/.env IS committed: no secrets, dev defaults consumed by vite
 
 # Local overrides of dev fixtures — real AP maps, real device registries, etc.
 # Stays on the developer's machine; the .json defaults in dev/ are placeholders.
