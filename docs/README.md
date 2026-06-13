@@ -21,7 +21,7 @@ After these two you can read any other doc without surprise.
 1. [`deployment.md`](deployment.md). Image set, CI/CD flow, the [step-by-step testbed deployment walkthrough](deployment.md#deploying-to-the-testbed), per-service environment variables, ConfigMap and Secret shapes, health probes.
 2. [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md). How venue config splits into a portable blueprint (geometry, committable placeholder) and a per-venue bindings file (BSSIDs and MACs, never committed).
 
-The manifests themselves live in the companion repository [`5g-k3s-kubedge-testbed`](https://github.com/jacobbista/5g-k3s-kubedge-testbed). This repo defines the contract those manifests consume.
+The manifests themselves live in the companion repository [`kelt`](https://github.com/Jacobbista/kelt). This repo defines the contract those manifests consume.
 
 ### 4. I want to add a positioning source
 

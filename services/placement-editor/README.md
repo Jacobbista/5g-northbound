@@ -1,6 +1,6 @@
 # placement-editor
 
-Operator-facing service that owns the floor-plan / room / anchor layout JSON. Lives in this repository so the published image can be pulled by the [`5g-k3s-kubedge-testbed`](https://github.com/jacobbista/5g-k3s-kubedge-testbed) dashboard - keeping a single source for the artefact, while the testbed only consumes it.
+Operator-facing service that owns the floor-plan / room / anchor layout JSON. Lives in this repository so the published image can be pulled by the [`kelt`](https://github.com/Jacobbista/kelt) dashboard - keeping a single source for the artefact, while the testbed only consumes it.
 
 `positioning-demo` is the **end-user / CAMARA consumer**; `placement-editor` is the **operator** sibling. They never talk to each other directly - only through the shared `layout.json` file the editor writes and the demo (and the engine) read.
 

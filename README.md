@@ -2,7 +2,7 @@
 
 Open positioning stack for a 5G research testbed. Exposes device location to applications over the [CAMARA Device Location API](https://camaraproject.org/), backed by a positioning engine that fuses one or more sources (WiFi RSSI, UWB, vendor RTLS, future 5G/GNSS).
 
-The stack ships ten containers. Three are infrastructure: Keycloak (OIDC), a mocked Open5GS SMF, and a mocked Wittra cloud for local demos. Seven are the actual product: `camara-gateway`, `positioning-engine`, two reference adapters (`wifi-positioning`, `mock-positioning`), a schema-driven `rest-adapter` for vendor REST APIs, an operator-facing `placement-editor`, and a browser `positioning-demo`. It runs unchanged on Kubernetes; manifests live in the companion repository [`5g-k3s-kubedge-testbed`](https://github.com/jacobbista/5g-k3s-kubedge-testbed). New measurement sources arrive as new adapters; the engine and gateway never change.
+The stack ships ten containers. Three are infrastructure: Keycloak (OIDC), a mocked Open5GS SMF, and a mocked Wittra cloud for local demos. Seven are the actual product: `camara-gateway`, `positioning-engine`, two reference adapters (`wifi-positioning`, `mock-positioning`), a schema-driven `rest-adapter` for vendor REST APIs, an operator-facing `placement-editor`, and a browser `positioning-demo`. It runs unchanged on Kubernetes; manifests live in the companion repository [`kelt`](https://github.com/Jacobbista/kelt). New measurement sources arrive as new adapters; the engine and gateway never change.
 
 ## Quick start
 

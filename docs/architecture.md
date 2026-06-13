@@ -164,4 +164,4 @@ flowchart LR
 
 ## Deployment model
 
-This repository builds container images. A companion testbed repository (`5g-k3s-kubedge-testbed`) owns the Kubernetes manifests, ConfigMaps, and Secrets that compose them into a running cluster. See [`deployment.md`](deployment.md) for the image and configuration contract between the two.
+This repository builds container images. A companion testbed repository (`kelt`) owns the Kubernetes manifests, ConfigMaps, and Secrets that compose them into a running cluster. See [`deployment.md`](deployment.md) for the image and configuration contract between the two.

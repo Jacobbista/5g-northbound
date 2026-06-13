@@ -1,6 +1,6 @@
 # Deployment
 
-This repository produces container images and exposes a deployment contract (environment variables, ConfigMap shape, port numbers, health probes). The companion repository `5g-k3s-kubedge-testbed` consumes that contract through Ansible roles that render Kubernetes manifests. This document covers the producer side.
+This repository produces container images and exposes a deployment contract (environment variables, ConfigMap shape, port numbers, health probes). The companion repository `kelt` consumes that contract through Ansible roles that render Kubernetes manifests. This document covers the producer side.
 
 ## Images
 
