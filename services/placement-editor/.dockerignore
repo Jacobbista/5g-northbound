@@ -1,0 +1,10 @@
+# Keep the operator's local runtime config out of the image.
+# The .example template is enough at build time; the real env-config.js is
+# regenerated from env vars by entrypoint.sh at container start.
+frontend/public/env-config.js
+frontend/node_modules
+static/env-config.js
+__pycache__
+.pytest_cache
+.venv
+*.egg-info

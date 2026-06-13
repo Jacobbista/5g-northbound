@@ -1,0 +1,13 @@
+5g-northbound
+Copyright 2026 Jacopo Bennati
+
+This product includes OpenAPI documents from the CAMARA Project
+(https://camaraproject.org/), licensed under the Apache License,
+Version 2.0. The pinned copies live under services/camara-gateway/spec/
+and the upstream commit is recorded in services/camara-gateway/spec/VERSION.
+
+Map data and imagery shown in the placement editor are fetched at runtime
+from third-party providers (OpenStreetMap contributors, CARTO, Esri, Google,
+Mapbox) under their respective terms; attribution is displayed in the
+application's map view. OpenStreetMap data is available under the Open
+Database License (ODbL).

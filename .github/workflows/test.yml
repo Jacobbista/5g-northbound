@@ -7,19 +7,26 @@ on:
 
 jobs:
   test-python:
-    name: pytest (${{ matrix.service }})
+    name: pytest (${{ matrix.path }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service: [camara-gateway, positioning-engine, wifi-positioning]
+        path:
+          - services/camara-gateway
+          - services/positioning-engine
+          - services/wifi-positioning
+          - services/placement-editor
+          - services/rest-adapter
+          - mocks/mock-positioning
+          - mocks/mock-wittra
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Install dependencies
-        working-directory: ${{ matrix.service }}
+        working-directory: ${{ matrix.path }}
         run: |
           python -m pip install --upgrade pip
           if [ -f pyproject.toml ]; then
@@ -28,22 +35,28 @@ jobs:
             pip install -r requirements.txt -r requirements-dev.txt
           fi
       - name: Run tests
-        working-directory: ${{ matrix.service }}
+        working-directory: ${{ matrix.path }}
         run: pytest
 
   test-frontend:
-    name: vitest (positioning-demo)
+    name: vitest (${{ matrix.path }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        path:
+          - services/positioning-demo
+          - services/placement-editor/frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: positioning-demo/package-lock.json
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
       - name: Install dependencies
-        working-directory: positioning-demo
+        working-directory: ${{ matrix.path }}
         run: npm ci
       - name: Run tests
-        working-directory: positioning-demo
+        working-directory: ${{ matrix.path }}
         run: npm test

@@ -1,0 +1,87 @@
+# API reference
+
+One-row-per-endpoint index for every HTTP route in this repository. Auth and error envelopes are documented in [`data-contracts.md`](data-contracts.md); this page is a lookup table.
+
+Live OpenAPI docs (FastAPI):
+
+| Service              | URL                                                |
+|----------------------|----------------------------------------------------|
+| `camara-gateway`     | http://localhost:8087/docs · http://localhost:8087/openapi.json |
+| `positioning-engine` | http://localhost:8081/docs · http://localhost:8081/openapi.json |
+| `wifi-positioning`   | http://localhost:8089/docs · http://localhost:8089/openapi.json |
+| `mock-positioning`   | http://localhost:8090/docs · http://localhost:8090/openapi.json |
+| `placement-editor`   | http://localhost:3003/docs · http://localhost:3003/openapi.json |
+
+`positioning-demo` is a static SPA, no HTTP surface.
+
+## camara-gateway
+
+Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on every route except `/health`. `SKIP_AUTH=true` bypasses validation for dev only.
+
+| Method · path                                          | Returns                      | Notes                                                                  |
+|--------------------------------------------------------|------------------------------|------------------------------------------------------------------------|
+| `GET    /health`                                       | `{"status":"ok"}`            | Liveness; no auth                                                      |
+| `POST   /location-retrieval/v0.5/retrieve`             | `Location` (CAMARA)          | CAMARA Device Location Retrieval r3.2                                  |
+| `POST   /location-verification/v3/verify`              | `VerifyLocationResponse`     | CAMARA Device Location Verification r3.2                               |
+| `GET    /devices`                                      | `{"devices":[…]}`            | **Vendor extension**: list registered devices for the demo UI         |
+| `GET    /devices/{phoneNumber}/details`                | `{"phoneNumber",…,"telemetry":…}` | **Vendor extension**: registry entry + engine telemetry. `telemetry: null` when offline |
+| `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
+| `WS     /positions/stream?token=<jwt>`                 | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated browser clients. Token is supplied as a query parameter because browsers cannot set `Authorization` on a WebSocket handshake. Closes with code 4401 on auth failure, 1011 on upstream failure |
+
+Error envelope (all non-health routes): `{ "status": <int>, "code": <string>, "message": <string> }`.
+
+## positioning-engine
+
+No auth (cluster-internal). Mounts:
+
+| Method · path                          | Returns            | Notes                                                                            |
+|----------------------------------------|--------------------|----------------------------------------------------------------------------------|
+| `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
+| `GET    /position/{device_id}`         | `EnginePosition`   | Fuses every configured adapter that reports a measurement for `device_id`. `404` when no adapter has a fix (legitimate "offline") |
+| `GET    /adapters`                     | `{"adapters":[…]}` | Health snapshot per adapter: `name`, `base_url`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`. Operator diagnostic |
+| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS` |
+
+## Adapter contract (consumed by the engine)
+
+Every adapter pod implements:
+
+| Method · path                          | Returns            | Notes                                                                            |
+|----------------------------------------|--------------------|----------------------------------------------------------------------------------|
+| `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
+| `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
+
+`wifi-positioning` also exposes:
+
+| Method · path                          | Returns         | Notes                                                                  |
+|----------------------------------------|-----------------|------------------------------------------------------------------------|
+| `POST   /ingest/wifi-scan`             | `202 Accepted`  | Edge client pushes a single scan ({bssid, rssi}[]) here                |
+
+`mock-positioning` exposes only the contract endpoints, no ingest path (data is synthesised internally).
+
+`rest-adapter` also exposes admin endpoints for runtime schema management:
+
+| Method · path                          | Returns                          | Notes                                                                  |
+|----------------------------------------|----------------------------------|------------------------------------------------------------------------|
+| `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
+| `PUT    /schema`                       | `{"status":"ok","vendor":"…"}`   | Replace + persist the schema, clear the cache. See [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) |
+
+`mock-wittra` is the demo-only fake Wittra cloud, not an adapter; it implements one path: `GET /v1/organizations/{org}/projects/{prj}/devices/{device_id}` returning Wittra-shaped JSON behind HTTP Basic auth.
+
+## placement-editor
+
+No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-protected ingress and the realm role `placement-admin`.
+
+| Method · path                          | Returns                                    | Notes                                          |
+|----------------------------------------|--------------------------------------------|------------------------------------------------|
+| `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
+| `GET    /api/layout`                   | layout JSON                                | Reads `LAYOUT_FILE`. `404` if file missing     |
+| `PUT    /api/layout`                   | `{"status":"ok","path":"…"}`               | Overwrites `LAYOUT_FILE` with the request body. `extra="allow"`: unknown fields preserved |
+| `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |
+
+## Conventions across services
+
+- All Python services: FastAPI, multi-stage `python:3.11-slim` Dockerfile, non-root user (uid 1001), `uvicorn` as PID 1 on port `8080` internally.
+- Health endpoints (`/health`) are always unauthenticated and return `{"status":"ok"}` with HTTP 200.
+- Schemas validate request and response bodies; unknown fields are silently dropped (`ConfigDict(extra="ignore")`) except in `placement-editor` where `extra="allow"` lets the layout schema evolve without backend changes.
+- Time fields are RFC 3339 UTC strings (`...Z` suffix). Unix epoch seconds are used only on the adapter contract (`Measurement.timestamp`).
+- Distances are metres, angles WGS84 decimal degrees.

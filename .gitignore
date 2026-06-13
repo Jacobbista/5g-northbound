@@ -11,13 +11,35 @@
 
 # Env files
 # Python services read from environment directly; no .env needed there.
-camara-gateway/.env
-positioning-engine/.env
+services/camara-gateway/.env
+services/positioning-engine/.env
 # Edge scanner deploy.sh reads from a local .env (template: .env.example).
-wifi-positioning/edge/scanner/.env
-# positioning-demo/.env IS committed: no secrets, dev defaults consumed by vite
+edge/wifi-scanner/.env
+# rest-adapter local credentials for the Wittra (or any other vendor)
+# integration. Template: services/rest-adapter/.env.example.
+services/rest-adapter/.env
 
-# Local overrides of dev fixtures — real AP maps, real device registries, etc.
+# Runtime env-config.js for both frontends. The .example.js sibling is the
+# committed template; the .js file is the operator's working copy (may carry
+# real tokens, never committed).
+services/positioning-demo/public/env-config.js
+services/placement-editor/frontend/public/env-config.js
+# placement-editor's static/ is a Vite build artifact (the Dockerfile builds
+# the frontend itself); never commit generated bundles or the runtime
+# env-config.js they may contain.
+services/placement-editor/static/
+
+# The live blueprint the editor reads/writes. Real venue geometry (floor-plan
+# imagery, building georef, anchor positions) never enters the repo; the
+# committed template is layout.example.json and `make demo` bootstraps the
+# working copy from it. See docs/blueprint-vs-bindings.md.
+services/positioning-demo/public/layout.json
+
+# Calibration backups taken before risky georef experiments. Same sensitivity
+# as the live blueprint.
+dev/calibration-backups/
+
+# Local overrides of dev fixtures - real AP maps, real device registries, etc.
 # Stays on the developer's machine; the .json defaults in dev/ are placeholders.
 dev/*.local.json
 dev/*.local.*

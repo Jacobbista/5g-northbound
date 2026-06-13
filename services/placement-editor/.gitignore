@@ -1,0 +1,8 @@
+# vite output (rebuilt by the Dockerfile)
+static/
+# node modules
+frontend/node_modules/
+# venv (already at repo root, kept here for clarity)
+.venv/
+__pycache__/
+.pytest_cache/

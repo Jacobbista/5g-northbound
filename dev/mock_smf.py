@@ -1,4 +1,4 @@
-"""Minimal SMF stub — stdlib only, no pip install required."""
+"""Minimal SMF stub - stdlib only, no pip install required."""
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

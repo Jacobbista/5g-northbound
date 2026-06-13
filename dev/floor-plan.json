@@ -1,6 +1,11 @@
 {
   "version": 1,
-  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154 },
+  "gps_origin": {
+    "latitude": 45.064312,
+    "longitude": 7.659154,
+    "azimuth_deg": 0.0,
+    "altitude_m": 240.0
+  },
   "floors": [
     {
       "id": 0,

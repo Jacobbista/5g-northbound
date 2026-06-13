@@ -1,0 +1,98 @@
+# End-to-end example for one production service.
+# Generated from services/placement-editor/env.contract.yaml by the deploy
+# portal. Edit the contract, not this file, to add a new variable.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: placement-editor-config
+  namespace: 5g-northbound
+data:
+  LAYOUT_FILE: /app/data/layout.json
+  WIFI_POSITIONING_URL: http://wifi-positioning:8080
+  REST_ADAPTER_URL: http://rest-adapter:8080
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: placement-editor-secrets
+  namespace: 5g-northbound
+type: Opaque
+stringData:
+  # Optional Mapbox public token. Empty string means "no Mapbox layer in
+  # the editor"; populated string means the entrypoint will emit the token
+  # into the generated env-config.js.
+  VITE_MAPBOX_TOKEN: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placement-editor
+  namespace: 5g-northbound
+  labels:
+    app.kubernetes.io/name: placement-editor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: placement-editor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: placement-editor
+    spec:
+      # The placement-editor writes the blueprint to /app/data/layout.json
+      # and the calibration tool persists per-anchor overrides back to the
+      # bindings file. Both paths must be writable by the container's app
+      # user (uid 1001); fsGroup ensures the mounted PVC matches.
+      securityContext:
+        fsGroup: 1001
+      containers:
+        - name: placement-editor
+          image: ghcr.io/jacobbista/5g-northbound/placement-editor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: placement-editor-config
+            - secretRef:
+                name: placement-editor-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: placement-editor-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: placement-editor-data
+  namespace: 5g-northbound
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: placement-editor
+  namespace: 5g-northbound
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: placement-editor
+  ports:
+    - port: 8080
+      targetPort: 8080

@@ -1,45 +1,26 @@
 {
-  "_comment": "Example AP map. BSSIDs are placeholders. To run against a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real BSSID list and point the adapter's WIFI_CONFIG_PATH at it (or edit the compose mount).",
-  "room_w": 13,
-  "room_h": 32,
+  "_comment": "Per-venue WiFi adapter bindings. Each entry maps an anchor `id` (defined in the placement-editor blueprint at positioning-demo/public/layout.json) to its physical BSSIDs. Positions are NOT here - they come from the blueprint. BSSIDs below are placeholders; for a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real values and `export WIFI_CONFIG=./dev/wifi-config.local.json` before `make demo`.",
   "tx_power": -42,
   "path_loss_n": 2.7,
   "algorithm": "trilateration",
   "smoothing": true,
   "process_noise": 1.0,
-  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154 },
-  "routers": [
+  "bindings": [
     {
-      "id": "AP01",
-      "x": 11.5,
-      "y": -1,
-      "bssids": [
-        "AA:BB:CC:00:01:01", "AA:BB:CC:00:01:02", "AA:BB:CC:00:01:03"
-      ]
+      "id": "AP07",
+      "bssids": ["AA:BB:CC:00:07:01", "AA:BB:CC:00:07:02"]
     },
     {
-      "id": "AP02",
-      "x": 13.5,
-      "y": 14,
-      "bssids": [
-        "AA:BB:CC:00:02:01", "AA:BB:CC:00:02:02", "AA:BB:CC:00:02:03"
-      ]
+      "id": "AP08",
+      "bssids": ["AA:BB:CC:00:08:01", "AA:BB:CC:00:08:02"]
     },
     {
-      "id": "AP03",
-      "x": 14.5,
-      "y": 28,
-      "bssids": [
-        "AA:BB:CC:00:03:01", "AA:BB:CC:00:03:02", "AA:BB:CC:00:03:03"
-      ]
+      "id": "AP09",
+      "bssids": ["AA:BB:CC:00:09:01", "AA:BB:CC:00:09:02"]
     },
     {
-      "id": "AP04",
-      "x": 3.5,
-      "y": 21,
-      "bssids": [
-        "AA:BB:CC:00:04:01", "AA:BB:CC:00:04:02", "AA:BB:CC:00:04:03"
-      ]
+      "id": "AP10",
+      "bssids": ["AA:BB:CC:00:10:01", "AA:BB:CC:00:10:02"]
     }
   ]
 }

@@ -1,0 +1,48 @@
+{
+  "vendor": "wittra",
+  "default_base_url": "https://api.wittra.se",
+  "base_url_env": "WITTRA_BASE_URL",
+  "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}/telemetry",
+  "path_vars": {
+    "org_id":     { "env": "WITTRA_ORG_ID" },
+    "project_id": { "env": "WITTRA_PROJECT_ID" }
+  },
+  "auth": {
+    "scheme": "basic",
+    "username": { "env": "WITTRA_ORG_ID" },
+    "password": { "env": "WITTRA_API_KEY" }
+  },
+  "cache_ttl_s": 5.0,
+  "request_timeout_s": 5.0,
+  "mapping": {
+    "frame":      { "const": "wgs84" },
+    "latitude":   { "path": "location.value.latitude" },
+    "longitude":  { "path": "location.value.longitude" },
+    "accuracy_m": { "path": "location.value.accuracy", "default": 5.0 },
+    "confidence": { "const": 0.5 },
+    "y":          { "path": "location.value.height", "default": 0.0 },
+    "timestamp":  { "path": "location.timestamp", "format": "iso8601" }
+  },
+  "discover": {
+    "_comment": "Filters out devices without a fixedLocation: those are mobile tags, not anchors. Use the editor's manual placement flow for tags, sync only for beacons that the Wittra portal has positioned.",
+    "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
+    "list_path": "",
+    "path_vars": {
+      "org_id":     { "env": "WITTRA_ORG_ID" },
+      "project_id": { "env": "WITTRA_PROJECT_ID" }
+    },
+    "pagination": {
+      "type": "none"
+    },
+    "mapping": {
+      "vendor_device_id": { "path": "deviceId" },
+      "label":            { "path": "deviceId" },
+      "latitude":         { "path": "fixedLocation.latitude" },
+      "longitude":        { "path": "fixedLocation.longitude" },
+      "height_m":         { "const": 0 }
+    },
+    "filter": {
+      "require_path": "fixedLocation.latitude"
+    }
+  }
+}

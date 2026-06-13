@@ -4,14 +4,20 @@ This repository produces container images and exposes a deployment contract (env
 
 ## Images
 
-Four images are built and published by CI on every `v*` tag:
+Eight images are built and published by CI on every `v*` tag:
 
 | Image                                                              | Source path                                    | Default port |
 |--------------------------------------------------------------------|------------------------------------------------|--------------|
-| `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`camara-gateway/`](../camara-gateway/)        | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`positioning-engine/`](../positioning-engine/)| 8080         |
-| `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`wifi-positioning/`](../wifi-positioning/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`positioning-demo/`](../positioning-demo/)    | 80           |
+| `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](../services/camara-gateway/)        | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](../services/positioning-engine/)| 8080         |
+| `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`services/wifi-positioning/`](../services/wifi-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](../mocks/mock-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](../services/placement-editor/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`services/positioning-demo/`](../services/positioning-demo/)    | 80           |
+| `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`              | [`services/rest-adapter/`](../services/rest-adapter/)            | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/mock-wittra:<tag>`               | [`mocks/mock-wittra/`](../mocks/mock-wittra/)              | 8080         |
+
+`mock-wittra` ships an image for the local demo only, production deployments do not pull it. The other seven are intended for the testbed.
 
 Each tag publishes three references: the semver tag (`0.1.0`), `latest`, and a short-SHA tag (`sha-abcdef0`).
 
@@ -21,7 +27,7 @@ GitHub Packages defaults each new package to private. They must be flipped to **
 
 ## CI
 
-[`.github/workflows/test.yml`](../.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds and pushes all four images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
+[`.github/workflows/test.yml`](../.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds and pushes all eight images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
 
 To cut a release:
 
@@ -30,7 +36,54 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
+On the first release each ghcr package is created private. Flip every package to **Public** once (Repo, Packages, the package, Package settings, Change visibility); `GITHUB_TOKEN` cannot do this.
+
+## Deploying to the testbed
+
+End-to-end path from a green build to running pods. The manifests live in the companion repository; this section is the producer-side checklist.
+
+**1. Read what each service needs.** Every service declares its environment surface in `env.contract.yaml` next to its code. Inspect them without leaving the repo:
+
+```bash
+make env-check                                       # required vars per service + where each is set
+python3 deploy/tools/contracts.py validate -v        # full per-var breakdown
+python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skeleton with <FILL> sentinels
+```
+
+`sensitive: true` in a contract means the value belongs in a `Secret`; `false` means a `ConfigMap`. `runtime_layer: window.__ENV__` flags a browser variable that the container's `entrypoint.sh` renders into `env-config.js` at start, so it is still supplied as a normal pod env var.
+
+**2. Copy the manifest pattern.** [`deploy/k8s/examples/placement-editor.yaml`](../../deploy/k8s/examples/placement-editor.yaml) is a complete worked example: ConfigMap + Secret + Deployment (`envFrom` both, `fsGroup` for the writable PVC) + PVC + Service. Replicate it per service, filling values from that service's contract. The per-variable tables below add the cross-service context (which URL points where) that does not fit a contract field.
+
+**3. Carry the data that never enters the repo.** These are gitignored locally and become cluster resources:
+
+| Artifact                    | Local source                              | Cluster resource                                  |
+|-----------------------------|-------------------------------------------|---------------------------------------------------|
+| Blueprint (geometry)        | editor `↓ export`                         | PVC shared by placement-editor + engine + demo    |
+| Bindings (BSSIDs, calib.)   | `dev/wifi-config.local.json`              | writable PVC on wifi-positioning                  |
+| Vendor credentials          | `services/rest-adapter/.env`              | `Secret` (names come from the active vendor schema) |
+| Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
+| Device registry             | `dev/devices.json`                        | `ConfigMap` (`DEVICE_REGISTRY_FILE`)              |
+| Engine floor-plan georef    | `dev/floor-plan.json`                     | `ConfigMap` (`FLOOR_PLAN_PATH`)                   |
+
+The blueprint/bindings split and its cluster mounts are detailed in [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md); the georef workflow, if you re-calibrate for a new venue, in [`georeferencing.md`](georeferencing.md).
+
+**4. Rotate secrets without a rebuild.** Edit the `Secret`, then `kubectl rollout restart`. Frontend containers regenerate `env-config.js` from env vars at start, so a restart is enough; no image rebuild.
+
 ## Environment variables
+
+Every service ships an authoritative declaration of its environment surface
+next to its code as `env.contract.yaml` (required vs optional, sensitive flag,
+default, description, runtime layer). The tables below mirror those contracts
+and add the cross-service context that does not fit a YAML field - but if a
+value disagrees, the contract is the source of truth.
+
+Discover them locally:
+
+```bash
+make env-check                                       # what each service needs and where to set it
+python3 deploy/tools/contracts.py validate -v        # full per-var breakdown
+python3 deploy/tools/contracts.py render-k8s <svc>   # preview a ConfigMap + Secret pair
+```
 
 ### camara-gateway
 
@@ -41,48 +94,117 @@ git push origin v0.1.0
 | `REQUIRED_ROLE`           | `camara-location-read`                                 | Realm role required to call CAMARA endpoints |
 | `POSITIONING_ENGINE_URL`  | empty (mock fallback)                                  | Engine base URL; gateway calls `GET /position/{id}` |
 | `SMF_URL`                 | `http://smf.5g.svc.cluster.local:9090`                 | Open5GS SMF management API for cross-tech identity |
-| `DEVICE_REGISTRY`         | `{}`                                                   | JSON object mapping CAMARA identifiers to internal device ids |
-| `SKIP_AUTH`               | `false`                                                | Development override only |
+| `DEVICE_REGISTRY_FILE`    | empty                                                  | Path to a JSON file describing the device registry. Preferred over `DEVICE_REGISTRY`. Schema: `{"devices":[{"phoneNumber","deviceId","label"}]}`. Mount the file via a volume (compose) or ConfigMap (K8s) and edit it without rebuilding the image |
+| `DEVICE_REGISTRY`         | `{}`                                                   | Flat JSON map `{phoneNumber: deviceId}` used as a fallback when `DEVICE_REGISTRY_FILE` is empty or unreadable. Kept for back-compat; new deployments should prefer the file form so labels are available to the discovery endpoint |
+| `SKIP_AUTH`               | `false`                                                | Development override only, bypasses JWT validation for every endpoint except `/health` |
+
+The gateway also exposes two **vendor-extension** endpoints used by the demo UI (not part of CAMARA): `GET /devices` and `GET /devices/{phoneNumber}/details`. Auth and error envelope are identical to the CAMARA routes. See [`data-contracts.md`](data-contracts.md#vendor-extensions-on-the-gateway).
 
 ### positioning-engine
 
 | Variable                | Default                              | Notes |
 |-------------------------|--------------------------------------|-------|
-| `ADAPTER_URLS`          | empty                                | Comma-separated adapter base URLs. Empty → in-process mock adapters (development only) |
+| `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-positioning:8080,mock=http://mock-positioning:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
+| `DEVICE_MAP`            | empty                                | Comma-separated `device_id=adapter_name` entries. When set, the listed device is polled only against the named adapter; unlisted devices hit every adapter and are fused |
+| `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
+| `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
 | `FLOOR_PLAN_PATH`       | `/app/config/floor-plan.json`        | Mounted from `positioning-floor-plan` ConfigMap |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
 | `DEVICE_IDS`            | `uwb-tag-001`                        | Comma-separated devices broadcast on the WebSocket |
+| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine--external-adapter) |
+| `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
+| `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
 
 ### wifi-positioning
 
 | Variable           | Default                          | Notes |
 |--------------------|----------------------------------|-------|
-| `WIFI_CONFIG_PATH` | `/app/config/wifi-config.json`   | Path to the AP-map / RSSI calibration JSON. In docker compose, mounted from `dev/wifi-config.json`; in Kubernetes, from the `wifi-positioning-config` ConfigMap. Provisioning is documented in [`adapters.md`](adapters.md#configuration-provisioning). |
+| `WIFI_CONFIG_PATH` | `/app/config/wifi-config.json`   | Path to the per-venue **bindings** file: tunables (`tx_power`, `path_loss_n`, `algorithm`, smoothing), the `id → BSSIDs` map, the persistent `calibration_samples`, and per-AP overrides. In docker compose, mounted from `dev/wifi-config.json` (or `dev/wifi-config.local.json` when present). In Kubernetes, mounted from a writable PVC because the calibration tool writes samples and overrides back at runtime. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md#deploying-to-kubernetes). |
+| `LAYOUT_PATH`      | unset                            | Optional path to the placement-editor **blueprint** JSON. When set, anchor positions are taken from `rooms[0].anchors` (where `technology == "wifi"`) and joined to the bindings file by anchor `id`. Unset → legacy mode where the bindings file must carry positions inline. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md). |
+
+The split into blueprint + bindings is a deliberate architectural choice: blueprints are portable across clusters and never contain secrets, bindings are per-venue and never committed. Skim [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) before configuring a real venue.
+
+### mock-positioning
+
+Synthetic random-walk adapter. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-positioning`, so the engine treats them uniformly.
+
+| Variable      | Default | Notes |
+|---------------|---------|-------|
+| `SOURCE`      | `mock`  | Tag set on every measurement (surfaces in `sources[]` northbound) |
+| `WIDTH_M`     | `20.0`  | Room width along x (metres); positions are clamped to `[0, WIDTH_M]` |
+| `DEPTH_M`     | `30.0`  | Room depth along z |
+| `HEIGHT_M`    | `3.0`   | Room height along y |
+| `STEP_M`      | `0.3`   | Random-walk step per poll (metres). Larger values produce more visible motion in the demo |
+| `ACCURACY_M`  | `1.5`   | Fixed accuracy reported on every measurement |
+| `CONFIDENCE`  | `0.6`   | Fixed confidence reported on every measurement |
+| `RNG_SEED`    | `0`     | Set non-zero for reproducible trajectories in tests / recordings |
+
+### rest-adapter
+
+Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor; the schema is loaded at runtime through `PUT /schema` (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)).
+
+| Variable        | Default                       | Notes |
+|-----------------|-------------------------------|-------|
+| `SCHEMA_FILE`   | `/app/data/schema.json`       | Persistent path for the loaded schema. Mount a PVC here; the testbed dashboard writes through `PUT /schema` |
+
+Vendor-specific env vars (base URL override, credentials, path-template parameters) are referenced *by name* from inside the schema, so the adapter pod needs `WITTRA_API_KEY`, `WITTRA_ORG_ID`, etc. (or your vendor's equivalents) mounted from a Kubernetes `Secret`. The schema itself contains no credentials and is safe to keep in plain text / a `ConfigMap`.
+
+### mock-wittra
+
+Toy fake of the Wittra cloud REST API. Demo / CI only, never deployed alongside the real adapter.
+
+| Variable                 | Default      | Notes                                  |
+|--------------------------|--------------|----------------------------------------|
+| `MOCK_WITTRA_ORG_ID`     | `demo-org`   | Expected Basic-auth username           |
+| `MOCK_WITTRA_API_KEY`    | `demo-key`   | Expected Basic-auth password           |
+| `MOCK_WITTRA_PROJECT_ID` | `demo-prj`   | Required project segment in the URL    |
+
+### placement-editor
+
+| Variable      | Default                       | Notes |
+|---------------|-------------------------------|-------|
+| `LAYOUT_FILE` | `/app/data/layout.json`       | Path the editor reads from and writes to. Mount the same artefact (volume / ConfigMap-backed PVC) on the engine and demo so changes flow through |
+
+The editor's drag-drop UI is not implemented yet (`v0.0.1` is a scaffold). The HTTP surface is stable: `GET /api/layout`, `PUT /api/layout`, `GET /health`. Auth is not wired in for the scaffold, production deployments MUST front it with a Keycloak-protected ingress and the realm role `placement-admin` until the service grows its own JWT middleware (planned).
 
 ### positioning-demo
 
-Runtime configuration is injected through `/usr/share/nginx/html/env-config.js`, mounted from a ConfigMap and served `Cache-Control: no-cache`:
+Runtime configuration is injected through `/usr/share/nginx/html/env-config.js`, served `Cache-Control: no-cache`. The image's `entrypoint.sh` regenerates this file from container env vars at every pod start, so a Secret / ConfigMap update only needs a `kubectl rollout restart`. The image build itself does not bake any of these values in.
 
-```javascript
-window.__ENV__ = {
-  VITE_CAMARA_API_BASE:        "https://gateway.example.com",
-  VITE_KEYCLOAK_URL:           "https://keycloak.example.com",
-  VITE_KEYCLOAK_REALM:         "5g-testbed",
-  VITE_KEYCLOAK_CLIENT_ID:     "positioning-demo",
-  VITE_DEVICE_PHONE_NUMBER:    "+390111234567",
-  VITE_DEVICE_LABEL:           "wifi-asset-01",
-  VITE_GPS_ORIGIN_LAT:         45.064312,
-  VITE_GPS_ORIGIN_LON:         7.659154,
-  VITE_FLOOR_W:                13,
-  VITE_FLOOR_D:                32
-};
-```
-
-The image build does not bake any of these in; the same image runs in every environment.
+Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/positioning-demo/env.contract.yaml`](../services/positioning-demo/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
 
 ## Health probes
 
 Every service exposes `GET /health` returning `200 {"status": "ok"}` with no authentication. Use it for both `readinessProbe` and `livenessProbe`. Initial delays should account for the startup work: floor plan loading, JWKS fetch, AP map parsing.
+
+## Registering a new device
+
+Devices are listed in a JSON file the gateway loads at startup. The file lives outside the image so an operator can register devices without rebuilding anything.
+
+### File shape
+
+```json
+{
+  "devices": [
+    { "phoneNumber": "+390111234567", "deviceId": "wifi-asset-01", "label": "WiFi asset 01" },
+    { "phoneNumber": "+390117654321", "deviceId": "mock-demo-01",  "label": "Mock demo 01" }
+  ]
+}
+```
+
+- `phoneNumber`: the CAMARA identifier the consumer sends in `device.phoneNumber`.
+- `deviceId`: the internal id the engine fuses on (matches the key in the engine's `DEVICE_MAP`).
+- `label`: human-readable name shown in the demo's device sidebar. Optional; falls back to `deviceId`.
+
+### How it is consumed
+
+| Environment | Source                                                                                  |
+|-------------|------------------------------------------------------------------------------------------|
+| compose     | [`dev/devices.json`](../dev/devices.json), mounted via `volumes:` into `/app/config/devices.json` |
+| Kubernetes  | ConfigMap, mounted on the gateway pod at `/app/config/devices.json` (set `DEVICE_REGISTRY_FILE` to that path) |
+| Tests / CI  | `DEVICE_REGISTRY` env fallback (flat JSON map) for inline fixtures                       |
+
+Editing the file requires a gateway restart (or rollout) to take effect; the file is parsed at boot. The demo discovers the resulting list via `GET /devices` and renders one toggleable entry per device, no front-end rebuild needed.
 
 ## Adding a new adapter to a running cluster
 
@@ -94,8 +216,4 @@ The adapter contract is documented in full in [`adapters.md`](adapters.md).
 
 ## Local development
 
-```bash
-docker compose up --build
-```
-
-Local ports: gateway `8088`, engine `8081`, wifi-positioning `8089`, demo `3001`, Keycloak `8180`, mock-smf `9090`. The gateway and demo are intentionally bound to non-default host ports to avoid clashes with common IDE-bound ports (8080, 3000).
+The host-level quick start (`docker compose up --build`, port table, CAMARA call example) lives in the top-level [README](../README.md). This document covers the producer-side contract: images, environment variables, ConfigMap shape, health probes. Anything that differs between *what the image expects* and *how a local compose run wires it up* is intentional, the compose file is one consumer of this contract; Kubernetes is the other.

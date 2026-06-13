@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: build (${{ matrix.service }})
+    name: build (${{ matrix.image }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,8 +21,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # lmf slots in here once phase 11 lands
-        service: [camara-gateway, positioning-engine, wifi-positioning, positioning-demo]
+        include:
+          # Production tier - published images.
+          - { image: camara-gateway,     path: services/camara-gateway }
+          - { image: positioning-engine, path: services/positioning-engine }
+          - { image: wifi-positioning,   path: services/wifi-positioning }
+          - { image: placement-editor,   path: services/placement-editor }
+          - { image: positioning-demo,   path: services/positioning-demo }
+          - { image: rest-adapter,       path: services/rest-adapter }
+          # Mock tier - built and pushed too so a testbed without real
+          # vendor creds can stand the stack up end-to-end. Tagged the same
+          # way so consumers pin a specific build.
+          - { image: mock-positioning,   path: mocks/mock-positioning }
+          - { image: mock-wittra,        path: mocks/mock-wittra }
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +46,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
@@ -45,7 +56,7 @@ jobs:
 
       - uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
+          context: ./${{ matrix.path }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

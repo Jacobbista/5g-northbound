@@ -1,0 +1,295 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: changeme
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./dev/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    networks:
+      - 5g-net
+
+  mock-smf:
+    image: python:3.11-slim
+    command: python /app/mock_smf.py
+    volumes:
+      - ./dev/mock_smf.py:/app/mock_smf.py:ro
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:9090/session-info', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - 5g-net
+
+  wifi-positioning:
+    build:
+      context: ./services/wifi-positioning
+    ports:
+      - "8089:8080"
+    # Run as the host user so the calibration tool can write back to the
+    # bind-mounted bindings file (the Dockerfile's `app` user uid 1001 has
+    # no rights on a host-owned file). The host uid is passed in via
+    # docker-compose env; on Linux: `export HOST_UID=$(id -u)` before
+    # `make demo`. Falls back to 1000, the typical first non-root uid.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      # Bindings file: tunables + id → BSSIDs mapping. Default placeholder
+      # lives in dev/; override at run time without touching the repo:
+      # `export WIFI_CONFIG=./dev/wifi-config.local.json` (gitignored).
+      # Read-write because the calibration tool persists `tx_power` and
+      # `path_loss_n` per binding back to this file after a fit.
+      - ${WIFI_CONFIG:-./dev/wifi-config.json}:/app/config/wifi-config.json
+      # Blueprint (placement-editor JSON). When this file exists, the
+      # adapter reads anchor positions from it and joins to BSSIDs by id.
+      # Operator edits the blueprint in the placement editor; nothing
+      # downstream duplicates positions.
+      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
+    environment:
+      LAYOUT_PATH: "/app/config/layout.json"
+      # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
+      # trilateration diagnostics in this container's logs. Useful for
+      # tuning tx_power / path_loss_n against a real venue.
+      WIFI_DEBUG: "${WIFI_DEBUG:-0}"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  mock-wittra:
+    build:
+      context: ./mocks/mock-wittra
+    ports:
+      - "8091:8080"
+    environment:
+      MOCK_WITTRA_ORG_ID: "demo-org"
+      MOCK_WITTRA_PROJECT_ID: "demo-prj"
+      MOCK_WITTRA_API_KEY: "demo-key"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  rest-adapter:
+    build:
+      context: ./services/rest-adapter
+    ports:
+      - "8092:8080"
+    volumes:
+      # In dev the example schema is mounted as the persistent schema file so
+      # the adapter boots configured. In production the testbed PUTs the
+      # schema via its vendor-integrations UI and the file lives on a PVC.
+      - ./services/rest-adapter/examples/wittra-schema.json:/app/data/schema.json
+    environment:
+      # Defaults below target the local mock-wittra fake so `make demo` runs
+      # end-to-end on a fresh clone. To talk to a real Wittra cloud, copy
+      # rest-adapter/.env.example to rest-adapter/.env, fill it in, then
+      # `set -a; . rest-adapter/.env; set +a; make demo` (or set the four
+      # vars any other way). In K8s these come from a Secret instead.
+      WITTRA_BASE_URL: "${WITTRA_BASE_URL:-http://mock-wittra:8080}"
+      WITTRA_ORG_ID: "${WITTRA_ORG_ID:-demo-org}"
+      WITTRA_PROJECT_ID: "${WITTRA_PROJECT_ID:-demo-prj}"
+      WITTRA_API_KEY: "${WITTRA_API_KEY:-demo-key}"
+      # Verbose discover logging. Set REST_ADAPTER_DEBUG=1 in the shell
+      # before `make demo` to dump GET URLs + response previews into the
+      # rest-adapter container's logs (useful when wiring a new vendor
+      # schema or chasing a real cloud returning 0 devices).
+      REST_ADAPTER_DEBUG: "${REST_ADAPTER_DEBUG:-0}"
+    depends_on:
+      mock-wittra:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  mock-positioning:
+    build:
+      context: ./mocks/mock-positioning
+    ports:
+      - "8090:8080"
+    volumes:
+      # Same layout file the editor + demo share. When the operator saves a
+      # new layout (rooms, walls, openings), the walker picks it up on the
+      # next container restart - paths inside the room stay realistic.
+      - ./services/positioning-demo/public/layout.json:/app/data/layout.json:ro
+    environment:
+      # Default bounds; the layout file (if present) overrides them with the
+      # actual room size at startup.
+      WIDTH_M: "13"
+      DEPTH_M: "32"
+      HEIGHT_M: "3"
+      SPEED_MPS: "1.0"
+      LAYOUT_PATH: "/app/data/layout.json"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  positioning-engine:
+    build:
+      context: ./services/positioning-engine
+    ports:
+      - "8081:8080"
+      - "8082:8080"
+    volumes:
+      - ./dev/floor-plan.json:/app/config/floor-plan.json:ro
+    environment:
+      DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
+      # Named adapter entries: name=url,name=url. Each entry is one HttpAdapter
+      # polling GET /measurement/{device_id} at the given URL.
+      ADAPTER_URLS: "wifi=http://wifi-positioning:8080,mock=http://mock-positioning:8080,wittra=http://rest-adapter:8080"
+      # Per-device routing: each device is pinned to a single adapter so the
+      # demo can show real "online vs offline" semantics. mock-demo-01 always
+      # has a fix (synthetic walker); wifi-asset-01 stays offline until a real
+      # WiFi scan is pushed to the wifi adapter - the demo will render the
+      # device as offline in the meantime instead of falling back to mock.
+      # wittra-tag-01 routes to the rest-adapter, which translates Wittra's
+      # cloud REST shape into the engine's Measurement contract.
+      DEVICE_MAP: "mock-demo-01=mock,wifi-asset-01=wifi,wittra-tag-01=wittra"
+      # Fusion strategy applied to the merged measurements (see docs/fusion-strategies.md).
+      FUSION_STRATEGY: "weighted_avg"
+      # WebSocket broadcast cadence. The demo does not subscribe so the loop is
+      # a no-op, but keep it well above 500 ms to avoid wasted wake-ups.
+      WEBSOCKET_INTERVAL_MS: "2000"
+    depends_on:
+      wifi-positioning:
+        condition: service_healthy
+      mock-positioning:
+        condition: service_healthy
+      rest-adapter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  camara-gateway:
+    build:
+      context: ./services/camara-gateway
+    ports:
+      # host 8080 is taken by the IDE here; gateway published on a free port
+      - "8087:8080"
+    volumes:
+      # Device registry: anagrafica (phoneNumber, deviceId, label). Edit the
+      # file and restart the gateway to register a new device.
+      - ./dev/devices.json:/app/config/devices.json:ro
+    environment:
+      SKIP_AUTH: "true"
+      SMF_URL: "http://mock-smf:9090"
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      KEYCLOAK_URL: "http://keycloak:8080"
+      KEYCLOAK_REALM: "5g-testbed"
+      DEVICE_REGISTRY_FILE: "/app/config/devices.json"
+    depends_on:
+      positioning-engine:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - 5g-net
+
+  positioning-demo:
+    build:
+      context: ./services/positioning-demo
+    ports:
+      - "3002:80"
+    volumes:
+      # live-swappable visual layout (no rebuild; nginx serves it no-cache)
+      - ./services/positioning-demo/public/layout.json:/usr/share/nginx/html/layout.json:ro
+      # runtime env (window.__ENV__) - overrides VITE_DEVICES etc without a rebuild
+      - ./services/positioning-demo/public/env-config.js:/usr/share/nginx/html/env-config.js:ro
+    depends_on:
+      camara-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - 5g-net
+
+  placement-editor:
+    build:
+      context: ./services/placement-editor
+    ports:
+      - "3003:8080"
+    volumes:
+      # Editor reads/writes the same layout file the demo serves. Two-way
+      # binding: edit here, refresh the demo to see the new geometry.
+      - ./services/positioning-demo/public/layout.json:/app/data/layout.json
+      # Hot-edit runtime config: bind-mount the gitignored env-config.js so
+      # the operator can paste a Mapbox token (or any other window.__ENV__
+      # override) and reload the browser, no rebuild. Read-only - the
+      # container's entrypoint.sh skips regeneration when the file is RO.
+      - ./services/placement-editor/frontend/public/env-config.js:/app/static/env-config.js:ro
+    environment:
+      LAYOUT_FILE: "/app/data/layout.json"
+      # Upstream for the calibration proxy (browser -> placement-editor ->
+      # wifi-positioning). Internal service name on the compose network.
+      WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
+      # Upstream for the vendor discovery proxy.
+      REST_ADAPTER_URL: "http://rest-adapter:8080"
+      # Optional Mapbox public token. When set, the editor exposes a
+      # "Satellite (Mapbox)" basemap. Leave empty to keep ESRI only.
+      VITE_MAPBOX_TOKEN: "${VITE_MAPBOX_TOKEN:-}"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - 5g-net
+
+networks:
+  5g-net:
+    driver: bridge

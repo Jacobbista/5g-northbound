@@ -1,0 +1,50 @@
+name: Checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  env-contracts:
+    name: env contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+      # Resolves the compose environment and checks every service supplies the
+      # variables its env.contract.yaml marks required. Fails on contract drift
+      # (a new required var that the compose file forgets to set).
+      - run: python3 deploy/tools/contracts.py validate
+
+  compose-config:
+    name: compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Parses + resolves the compose file without starting anything. Catches
+      # a broken build context path, bad volume mapping, or invalid YAML.
+      - run: docker compose -p 5g-northbound --project-directory . -f deploy/compose/docker-compose.yml config --quiet
+
+  leak-scan:
+    name: leak scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # High-signal secret patterns in tracked files. The real tokens live in
+      # gitignored .env / env-config.js / layout.json; this is the backstop if
+      # one slips past .gitignore. Narrow patterns keep false positives at zero.
+      - name: Scan tracked files for secrets
+        run: |
+          set -e
+          PATTERN='pk\.eyJ[A-Za-z0-9_.-]{30,}|sk\.eyJ[A-Za-z0-9_.-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+          HITS=$(git ls-files | grep -vE 'package-lock\.json$' | xargs grep -lEI "$PATTERN" 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "Potential secret(s) found in tracked files:"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "No secrets found in tracked files."
