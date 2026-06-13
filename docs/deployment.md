@@ -4,20 +4,19 @@ This repository produces container images and exposes a deployment contract (env
 
 ## Images
 
-Eight images are built and published by CI on every `v*` tag:
+Seven images are built and published by CI on every `v*` tag:
 
 | Image                                                              | Source path                                    | Default port |
 |--------------------------------------------------------------------|------------------------------------------------|--------------|
 | `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](../services/camara-gateway/)        | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](../services/positioning-engine/)| 8080         |
 | `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`services/wifi-positioning/`](../services/wifi-positioning/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](../mocks/mock-positioning/)    | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](../services/placement-editor/)    | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`services/positioning-demo/`](../services/positioning-demo/)    | 80           |
 | `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`              | [`services/rest-adapter/`](../services/rest-adapter/)            | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/mock-wittra:<tag>`               | [`mocks/mock-wittra/`](../mocks/mock-wittra/)              | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](../mocks/mock-positioning/)    | 8080         |
 
-`mock-wittra` ships an image for the local demo only, production deployments do not pull it. The other seven are intended for the testbed.
+`mock-positioning` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-wittra` is **not** published: it is a local fake of the Wittra cloud used only by `make demo` (compose builds it from source); in the testbed `rest-adapter` points at the real vendor cloud.
 
 Each tag publishes three references: the semver tag (`0.1.0`), `latest`, and a short-SHA tag (`sha-abcdef0`).
 
@@ -27,7 +26,7 @@ GitHub Packages defaults each new package to private. They must be flipped to **
 
 ## CI
 
-[`.github/workflows/test.yml`](../.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds and pushes all eight images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
+[`.github/workflows/test.yml`](../.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds and pushes the seven published images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
 
 To cut a release:
 

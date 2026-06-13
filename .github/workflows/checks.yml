@@ -10,8 +10,8 @@ jobs:
     name: env contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: pip install pyyaml
@@ -24,7 +24,7 @@ jobs:
     name: compose config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Parses + resolves the compose file without starting anything. Catches
       # a broken build context path, bad volume mapping, or invalid YAML.
       - run: docker compose -p 5g-northbound --project-directory . -f deploy/compose/docker-compose.yml config --quiet
@@ -33,7 +33,7 @@ jobs:
     name: leak scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # High-signal secret patterns in tracked files. The real tokens live in
       # gitignored .env / env-config.js / layout.json; this is the backstop if
       # one slips past .gitignore. Narrow patterns keep false positives at zero.

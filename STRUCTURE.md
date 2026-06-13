@@ -19,15 +19,15 @@ services) `requirements.txt` + `pyproject.toml`.
 | `services/wifi-positioning/`   | wifi-positioning   | WiFi RSSI → position adapter (consumes scans from the edge agent) |
 | `services/rest-adapter/`       | rest-adapter       | Schema-driven REST adapter for vendor clouds (Wittra et al.)      |
 
-## Tier 2 - Mocks (compose-only, never in the testbed)
+## Tier 2 - Mocks
 
 Stand-in services that let `docker compose up` work without real hardware or
-vendor accounts. They DO build images, but those images stay local.
+vendor accounts.
 
-| Folder              | Image            | Replaces                                                |
-|---------------------|------------------|---------------------------------------------------------|
-| `mocks/mock-positioning/` | mock-positioning | UWB / 5G adapter when no real RTLS is connected         |
-| `mocks/mock-wittra/`      | mock-wittra      | Wittra API v4 when no real Wittra org credentials exist |
+| Folder              | Image            | Replaces                                                | Published to ghcr |
+|---------------------|------------------|---------------------------------------------------------|-------------------|
+| `mocks/mock-positioning/` | mock-positioning | UWB / 5G adapter when no real RTLS is connected   | yes - useful in the testbed for a demo device with no hardware |
+| `mocks/mock-wittra/`      | mock-wittra      | Wittra API v4 when no real Wittra org credentials exist | no - local `make demo` only; compose builds it from source |
 
 ## Tier 3 - Third-party in compose (public images)
 
