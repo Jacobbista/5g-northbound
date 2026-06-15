@@ -37,6 +37,36 @@ git push origin v0.1.0
 
 On the first release each ghcr package is created private. Flip every package to **Public** once (Repo, Packages, the package, Package settings, Change visibility); `GITHUB_TOKEN` cannot do this.
 
+## Configuration mechanism (single, by convention)
+
+Every service in this repository takes its configuration through exactly one
+input: **pod environment variables**. There is no second mechanism, and a
+deploy tool can treat all services identically:
+
+- Non-sensitive variables (a contract entry with `sensitive: false`) go in a
+  **ConfigMap**; sensitive ones in a **Secret**. Both are wired to the pod with
+  `envFrom`. The `sensitive` flag on each `/contract` entry is the only thing
+  that decides which.
+- **Frontends are not an exception.** `positioning-demo` and `placement-editor`
+  run in the browser and cannot read pod env vars directly, so their image's
+  `entrypoint.sh` renders the same env vars into `env-config.js`
+  (`window.__ENV__`) at container start. The *source* is still pod env vars;
+  the file is an internal materialisation step, invisible to the deployer.
+- **Apply is uniform:** write the operator's answers into the service's
+  ConfigMap + Secret, then `kubectl rollout restart`. The frontend entrypoint
+  re-renders `env-config.js` on the restart. Same path for every service.
+
+**Anti-pattern, do not do this:** mounting `env-config.js` directly from a
+ConfigMap as a file. That predates the entrypoint and creates a second,
+divergent config path for the frontends. Always supply env vars via `envFrom`
+and let the entrypoint render the file. (In local `docker compose` the file is
+bind-mounted for hot-editing convenience; that is a dev affordance, not the
+cluster pattern.)
+
+The worked example [`deploy/k8s/examples/placement-editor.yaml`](../../deploy/k8s/examples/placement-editor.yaml)
+follows this exactly: `envFrom` a ConfigMap + a Secret, no file-mounted
+`env-config.js`. Copy it; do not reintroduce the file mount.
+
 ## Deploying to the testbed
 
 End-to-end path from a green build to running pods. The manifests live in the companion repository; this section is the producer-side checklist.

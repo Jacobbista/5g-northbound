@@ -15,6 +15,22 @@ deploy/k8s/
 └── <service>.yaml                # Per-service manifests, emitted by the deploy portal
 ```
 
+## Single config mechanism
+
+Every service is configured through exactly one input: **pod environment
+variables**. Non-sensitive contract entries go in a ConfigMap, sensitive ones
+in a Secret, both wired with `envFrom`. This holds for the frontends too:
+`positioning-demo` and `placement-editor` cannot read pod env from the browser,
+so their `entrypoint.sh` renders the same env vars into `env-config.js`
+(`window.__ENV__`) at container start. The file is an internal step; the input
+is still env vars.
+
+**Do not mount `env-config.js` from a ConfigMap as a file.** That is a second,
+divergent config path that predates the entrypoint and breaks the uniform
+"patch ConfigMap/Secret, then rollout" apply. Supply env vars via `envFrom` and
+let the entrypoint render the file. `examples/placement-editor.yaml` follows
+this; copy it, do not reintroduce a file mount.
+
 ## Pattern per service
 
 Each service's manifest contains four resources (concatenated with `---`):
@@ -25,7 +41,10 @@ Each service's manifest contains four resources (concatenated with `---`):
 3. **Deployment** - one pod, image pulled from
    `ghcr.io/<owner>/5g-northbound/<image>:<tag>`. `envFrom:` references both
    the ConfigMap and the Secret above so the operator never edits the
-   Deployment to add a new env var.
+   Deployment to add a new env var. Point `livenessProbe` at `/health` and
+   `readinessProbe` at `/ready` (where the service exposes it) so a
+   misconfigured pod stays alive and keeps serving `/contract` while being
+   held out of rotation.
 4. **Service** - `ClusterIP`. Cross-service URLs live in the ConfigMap of
    the consumer, never hard-coded in code.
 
