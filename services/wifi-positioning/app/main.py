@@ -10,7 +10,7 @@ from .calibration import CalibrationStore
 from .config import settings
 from .models import CalibrationSample
 from .routers import calibration as calibration_router
-from .routers import health, ingest, measurement
+from .routers import contract, health, ingest, measurement
 from .wifi import WifiAdapter
 
 logging.basicConfig(level=logging.INFO)
@@ -35,8 +35,15 @@ def _load_persisted_samples(bindings_path: Path) -> list[CalibrationSample]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Degraded boot: a missing / malformed bindings or blueprint file must not
+    # crash the process. On failure we mark the pod not-ready (readiness gates
+    # real traffic) but keep liveness + /contract answering, so a deploy
+    # dashboard can still read the contract from a misconfigured pod.
     bindings_path = Path(settings.wifi_config_path)
     blueprint_path = Path(settings.layout_path) if settings.layout_path else None
+    app.state.ready = False
+    app.state.config_error = None
+    app.state.adapter = None
 
     def _reload() -> "WifiConfig":  # noqa: F821
         return load_wifi_config(
@@ -44,43 +51,51 @@ async def lifespan(app: FastAPI):
             blueprint_path=blueprint_path,
         )
 
-    wifi_cfg = _reload()
-    app.state.wifi_config = wifi_cfg
-    app.state.adapter = WifiAdapter(wifi_cfg)
+    try:
+        wifi_cfg = _reload()
+        app.state.wifi_config = wifi_cfg
+        app.state.adapter = WifiAdapter(wifi_cfg)
 
-    samples = _load_persisted_samples(bindings_path)
-    store = CalibrationStore(samples=samples)
-    app.state.calibration = store
-    app.state.adapter.on_ingest = store.on_ingest
+        samples = _load_persisted_samples(bindings_path)
+        store = CalibrationStore(samples=samples)
+        app.state.calibration = store
+        app.state.adapter.on_ingest = store.on_ingest
 
-    # Closures over the resolved paths so the calibration router does not
-    # need to know about config / settings plumbing.
-    app.state.reload_wifi_config = _reload
-    app.state.persist_calibration = lambda overrides, samples: persist_calibration(
-        bindings_path, overrides, samples
-    )
+        # Closures over the resolved paths so the calibration router does not
+        # need to know about config / settings plumbing.
+        app.state.reload_wifi_config = _reload
+        app.state.persist_calibration = lambda overrides, samples: persist_calibration(
+            bindings_path, overrides, samples
+        )
 
-    # Auto-persist samples after every capture / delete / clear so the
-    # operator cannot lose survey data between runs. Path-loss overrides
-    # are NOT touched here; they are written only on explicit apply.
-    def _persist_samples_only(current_samples):
-        try:
-            persist_calibration(bindings_path, overrides={}, samples=current_samples)
-        except Exception as exc:
-            log.warning("auto-persist of calibration samples failed: %s", exc)
+        # Auto-persist samples after every capture / delete / clear so the
+        # operator cannot lose survey data between runs. Path-loss overrides
+        # are NOT touched here; they are written only on explicit apply.
+        def _persist_samples_only(current_samples):
+            try:
+                persist_calibration(bindings_path, overrides={}, samples=current_samples)
+            except Exception as exc:
+                log.warning("auto-persist of calibration samples failed: %s", exc)
 
-    store.on_samples_changed = _persist_samples_only
+        store.on_samples_changed = _persist_samples_only
+        app.state.ready = True
 
-    log.info(
-        "wifi-positioning: %d routers, room %g x %g m, algo=%s, calibration samples=%d",
-        len(wifi_cfg.routers), wifi_cfg.room_w, wifi_cfg.room_h, wifi_cfg.algorithm,
-        len(samples),
-    )
+        log.info(
+            "wifi-positioning: %d routers, room %g x %g m, algo=%s, calibration samples=%d",
+            len(wifi_cfg.routers), wifi_cfg.room_w, wifi_cfg.room_h, wifi_cfg.algorithm,
+            len(samples),
+        )
+    except Exception as exc:
+        app.state.config_error = str(exc)
+        log.error(
+            "wifi-positioning: config load failed, serving in not-ready mode: %s", exc
+        )
     yield
 
 
 app = FastAPI(title="WiFi Positioning Adapter", lifespan=lifespan)
 app.include_router(health.router)
+app.include_router(contract.router)
 app.include_router(ingest.router)
 app.include_router(measurement.router)
 app.include_router(calibration_router.router)

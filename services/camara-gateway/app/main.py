@@ -10,7 +10,15 @@ from .errors import (
     unhandled_error_handler,
     validation_error_handler,
 )
-from .routers import adapters, devices, health, positions_stream, retrieval, verification
+from .routers import (
+    adapters,
+    contract,
+    devices,
+    health,
+    positions_stream,
+    retrieval,
+    verification,
+)
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -33,6 +41,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(health.router)
+app.include_router(contract.router)
 app.include_router(retrieval.router)
 app.include_router(verification.router)
 app.include_router(devices.router)

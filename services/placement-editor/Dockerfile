@@ -19,6 +19,7 @@ RUN useradd -r -u 1001 app
 COPY --from=pybuild /install /usr/local
 WORKDIR /app
 COPY app/ app/
+COPY env.contract.yaml /app/env.contract.yaml
 COPY --from=frontend /static static/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh && chown -R app /app/static

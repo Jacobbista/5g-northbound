@@ -10,7 +10,7 @@ from .config import adapter_options, settings
 from .fusion.registry import get_strategy
 from .models import Floor, FloorPlan
 from .routers import adapters as adapters_router
-from .routers import health, position, websocket
+from .routers import contract, health, position, websocket
 from .services.position_service import PositionService
 
 logging.basicConfig(level=logging.INFO)
@@ -78,6 +78,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Positioning Engine", lifespan=lifespan)
 app.include_router(health.router)
+app.include_router(contract.router)
 app.include_router(position.router)
 app.include_router(websocket.router)
 app.include_router(adapters_router.router)

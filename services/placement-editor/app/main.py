@@ -11,9 +11,11 @@ SKIP_AUTH=true is dev-only.
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import httpx
+import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -48,6 +50,48 @@ class Layout(BaseModel):
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+# Baked env contract. First existing path wins: CONTRACT_PATH override, the
+# image's /app/env.contract.yaml, then the repo-relative file for local runs.
+_CONTRACT_CANDIDATES = [
+    os.environ.get("CONTRACT_PATH"),
+    "/app/env.contract.yaml",
+    str(Path(__file__).resolve().parent.parent / "env.contract.yaml"),
+]
+
+
+def _sanitize_contract(entries: list) -> list:
+    """Strip value-bearing fields from sensitive entries: the contract is
+    schema only, never a value for a secret field."""
+    out = []
+    for entry in entries or []:
+        if isinstance(entry, dict) and entry.get("sensitive"):
+            entry = {k: v for k, v in entry.items() if k not in ("default", "example")}
+        out.append(entry)
+    return out
+
+
+@app.get("/contract")
+async def contract() -> dict:
+    """Serve this service's env contract (schema only, never values or
+    secrets). No auth, no dependency on business config, so a deploy
+    dashboard can read it from a live-but-unconfigured pod."""
+    for candidate in _CONTRACT_CANDIDATES:
+        if candidate and Path(candidate).is_file():
+            raw = yaml.safe_load(Path(candidate).read_text()) or {}
+            return {
+                "service": raw.get("service"),
+                "kind": raw.get("kind"),
+                "external_origin": raw.get("external_origin"),
+                "description": raw.get("description"),
+                "env": {
+                    "required": _sanitize_contract(raw.get("required")),
+                    "recommended": _sanitize_contract(raw.get("recommended")),
+                    "optional": _sanitize_contract(raw.get("optional")),
+                },
+            }
+    raise HTTPException(500, detail="env.contract.yaml not found")
 
 
 @app.get("/api/layout", response_model=Layout)
