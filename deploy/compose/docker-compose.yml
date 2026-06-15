@@ -166,8 +166,14 @@ services:
       - "8081:8080"
       - "8082:8080"
     volumes:
+      # Shared blueprint: same file the editor writes and the demo +
+      # wifi-positioning read. The engine derives gps_origin from its
+      # floor_plans[0].georef. floor-plan.json stays mounted as the legacy
+      # fallback when LAYOUT_PATH is unset / unreadable.
+      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
       - ./dev/floor-plan.json:/app/config/floor-plan.json:ro
     environment:
+      LAYOUT_PATH: "/app/config/layout.json"
       DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
       # Named adapter entries: name=url,name=url. Each entry is one HttpAdapter
       # polling GET /measurement/{device_id} at the given URL.

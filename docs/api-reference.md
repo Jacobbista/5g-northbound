@@ -21,6 +21,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | Method · path                                          | Returns                      | Notes                                                                  |
 |--------------------------------------------------------|------------------------------|------------------------------------------------------------------------|
 | `GET    /health`                                       | `{"status":"ok"}`            | Liveness; no auth                                                      |
+| `GET    /contract`                                     | env contract (JSON)          | No auth. This service's `env.contract.yaml` as JSON (schema only, sensitive values redacted). See [Conventions](#conventions-across-services) |
 | `POST   /location-retrieval/v0.5/retrieve`             | `Location` (CAMARA)          | CAMARA Device Location Retrieval r3.2                                  |
 | `POST   /location-verification/v3/verify`              | `VerifyLocationResponse`     | CAMARA Device Location Verification r3.2                               |
 | `GET    /devices`                                      | `{"devices":[…]}`            | **Vendor extension**: list registered devices for the demo UI         |
@@ -81,7 +82,8 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 ## Conventions across services
 
 - All Python services: FastAPI, multi-stage `python:3.11-slim` Dockerfile, non-root user (uid 1001), `uvicorn` as PID 1 on port `8080` internally.
-- Health endpoints (`/health`) are always unauthenticated and return `{"status":"ok"}` with HTTP 200.
+- Health endpoints (`/health`) are always unauthenticated and return `{"status":"ok"}` with HTTP 200. `/health` is liveness; services that load business config at startup also expose `/ready` (503 until that config loads) for the k8s readiness probe.
+- The six configurable services (camara-gateway, positioning-engine, wifi-positioning, rest-adapter, placement-editor, positioning-demo) expose **`GET /contract`** (unauthenticated, no dependency on business config so it answers even on a misconfigured pod). The mocks do not. It returns the service's `env.contract.yaml` as JSON - `{service, kind, external_origin, description, env:{required, recommended, optional}}` - describing which environment variables it expects. Schema only: it never returns a runtime value, and sensitive entries drop their `default`/`example`. positioning-demo (static nginx) serves the same shape from a `contract.json` baked at build. A deploy dashboard reads `/contract` from the live pod to drive a config wizard; the **blueprint** (`layout.json`) is *not* part of the contract - that is shared venue data on a PVC, see [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md).
 - Schemas validate request and response bodies; unknown fields are silently dropped (`ConfigDict(extra="ignore")`) except in `placement-editor` where `extra="allow"` lets the layout schema evolve without backend changes.
 - Time fields are RFC 3339 UTC strings (`...Z` suffix). Unix epoch seconds are used only on the adapter contract (`Measurement.timestamp`).
 - Distances are metres, angles WGS84 decimal degrees.

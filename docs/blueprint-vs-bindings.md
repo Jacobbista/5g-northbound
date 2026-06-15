@@ -49,7 +49,7 @@ positions twice. We don't.
 
 | File                                        | Owner                | Mounted into                                      |
 | ------------------------------------------- | -------------------- | ------------------------------------------------- |
-| `services/positioning-demo/public/layout.json` (gitignored working copy) | placement-editor | placement-editor, positioning-demo, mock-positioning, wifi-positioning |
+| `services/positioning-demo/public/layout.json` (gitignored working copy) | placement-editor | placement-editor, positioning-demo, mock-positioning, wifi-positioning, positioning-engine |
 | `services/positioning-demo/public/layout.example.json` (committed template) | repo          | bootstrapped into `layout.json` by `make demo` on first run |
 | `dev/wifi-config.json` (placeholder)        | repo                 | wifi-positioning (legacy / demo)                  |
 | `dev/wifi-config.local.json` (real venue)   | operator             | wifi-positioning (auto-mounted by `make demo` when present; gitignored) |
@@ -64,7 +64,29 @@ editor writes the blueprint back to the same PVC, so the loop closes:
 
 ```
 edit anchors in editor  ──▶  blueprint on PVC  ──▶  wifi-positioning rebuilds AP map
+                                              └──▶  positioning-engine reads gps_origin
+                                              └──▶  positioning-demo renders the scene
 ```
+
+Each consumer reads only what it needs from the one blueprint:
+
+| Consumer            | Reads from the blueprint                                   |
+|---------------------|------------------------------------------------------------|
+| wifi-positioning    | WiFi anchor positions (`rooms[].anchors`, joined to BSSIDs) |
+| positioning-engine  | `floor_plans[0].georef` as `gps_origin` for the WGS84 conversion (set `LAYOUT_PATH`; falls back to the legacy `FLOOR_PLAN_PATH`) |
+| mock-positioning    | room bounds + walls for the synthetic walker               |
+| positioning-demo    | full geometry (rooms, walls, anchors) for the 3D scene     |
+
+The `rest-adapter` is the exception: it does **not** read the blueprint. A
+vendor cloud returns positioned WGS84 fixes that the adapter passes through.
+The editor's `↻ sync vendor` imports those positions into the blueprint at
+authoring time, but the adapter never consumes it at runtime.
+
+Wiring this in the cluster: mount the same blueprint PVC (or a ConfigMap
+rendered from it) into positioning-engine and set `LAYOUT_PATH` to it, exactly
+as wifi-positioning already does. Do not leave the engine on the generic
+`floor-plan.json` ConfigMap, or it will report positions against a 20x30 box
+instead of the authored venue.
 
 ## Authoring flow
 
@@ -196,9 +218,30 @@ PVC: wifi-positioning-bindings        (RWO, ~5 MB)
   └─ /app/config/wifi-config.json     (BSSIDs, tunables, calibration data)
 ```
 
-Both fit `ReadWriteOnce` because the adapters are normally single-replica
-per venue. Use `ReadWriteMany` only if you scale wifi-positioning
-horizontally; otherwise RWO is cheaper and simpler.
+The **bindings** PVC is mounted only by wifi-positioning, so `ReadWriteOnce`
+is enough.
+
+The **blueprint** PVC has more than one reader: placement-editor mounts it
+read-write (it writes the file), while positioning-engine, positioning-demo,
+mock-positioning and wifi-positioning mount it read-only. RWO allows multiple
+pods only when they are co-scheduled on the same node. On a single-node
+testbed that holds; if the blueprint consumers can land on different nodes,
+use `ReadWriteMany` (NFS, Longhorn, etc.) for the blueprint PVC. The bindings
+PVC stays RWO regardless.
+
+Mount it read-only everywhere except placement-editor:
+
+| Service             | Blueprint mount | Env                                      |
+|---------------------|-----------------|------------------------------------------|
+| placement-editor    | read-write      | `LAYOUT_FILE=/app/data/layout.json`      |
+| positioning-engine  | read-only       | `LAYOUT_PATH=/app/config/layout.json`    |
+| wifi-positioning    | read-only       | `LAYOUT_PATH=/app/config/layout.json`    |
+| mock-positioning    | read-only       | `LAYOUT_PATH=/app/data/layout.json`      |
+| positioning-demo    | read-only       | mounted into nginx html as `/layout.json` (the SPA fetches it over HTTP) |
+
+The engine consuming the blueprint replaces its generic `floor-plan.json`
+ConfigMap: keep that ConfigMap only as the fallback for a cluster that has not
+provisioned the blueprint PVC yet.
 
 Pod-side, the container's user must be able to write the volume. The
 `wifi-positioning` Dockerfile runs as the `app` user (uid 1001). The

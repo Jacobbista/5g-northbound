@@ -39,6 +39,11 @@ def adapter_options(name: str) -> dict:
 
 class Settings(BaseSettings):
     floor_plan_path: str = "/app/config/floor-plan.json"
+    # Path to the authored blueprint (placement-editor layout.json), shared
+    # with the demo and wifi-positioning. When set, the engine derives its
+    # gps_origin from floor_plans[0].georef instead of the legacy
+    # floor-plan.json. Empty -> use floor_plan_path. See docs/blueprint-vs-bindings.md.
+    layout_path: str = ""
     websocket_interval_ms: int = 500
     device_ids: str = "uwb-tag-001"
 
