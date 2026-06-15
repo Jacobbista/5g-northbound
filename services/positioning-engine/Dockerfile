@@ -9,6 +9,10 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY app/ app/
 COPY env.contract.yaml /app/env.contract.yaml
+# Writable dir for the persisted blueprint (GET/PUT /blueprint). In the cluster
+# mount a PVC here; the directory must be owned by the non-root app user.
+RUN mkdir -p /app/data && chown -R app /app/data
 USER app
+EXPOSE 8080
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

@@ -67,19 +67,26 @@ def load_bindings(path: Path) -> WifiBindings:
 def assemble_from_blueprint(
     blueprint_path: Path, bindings_path: Path
 ) -> WifiConfig:
+    """File-reading wrapper kept for legacy callers / tests."""
+    return assemble_from_blueprint_dict(json.loads(blueprint_path.read_text()), bindings_path)
+
+
+def assemble_from_blueprint_dict(
+    raw_layout: dict, bindings_path: Path
+) -> WifiConfig:
     """Build a WifiConfig by joining blueprint positions to BSSID bindings.
 
-    Anchors with `technology != "wifi"` in the blueprint are skipped - UWB
-    and 5G anchors live in their own adapters. Anchors with no matching
-    binding are logged + dropped (no positioning without a BSSID).
-    Bindings with no matching anchor are also logged + dropped (no
-    positioning without a position).
+    The blueprint arrives as a dict (fetched over HTTP from the engine, the
+    blueprint authority). Anchors with `technology != "wifi"` are skipped - UWB
+    and 5G anchors live in their own adapters. Anchors with no matching binding
+    are logged + dropped (no positioning without a BSSID). Bindings with no
+    matching anchor are also logged + dropped (no positioning without a
+    position).
     """
-    raw_layout = json.loads(blueprint_path.read_text())
     layout = _normalize_layout(raw_layout)
     rooms = layout.get("rooms") or []
     if not rooms:
-        raise ValueError(f"blueprint {blueprint_path} has no rooms")
+        raise ValueError("blueprint has no rooms")
     room = rooms[0]
     width = float(room.get("width_m") or 0)
     height = float(room.get("height_m") or 0)
@@ -204,10 +211,20 @@ def persist_calibration(
 
 
 def load_wifi_config(
-    bindings_path: Path, blueprint_path: Optional[Path]
+    bindings_path: Path,
+    blueprint_path: Optional[Path] = None,
+    blueprint: Optional[dict] = None,
 ) -> WifiConfig:
-    """Single entry point used by main.py. Picks blueprint mode if a
-    blueprint path is configured + readable, legacy mode otherwise."""
+    """Single entry point used by main.py. Blueprint mode when a blueprint is
+    available (a dict fetched from the engine, or a readable file path), legacy
+    mode otherwise. Bindings always come from the local file (PVC)."""
+    if blueprint is not None:
+        cfg = assemble_from_blueprint_dict(blueprint, bindings_path)
+        log.info(
+            "wifi-positioning: blueprint mode (from engine, bindings=%s) - %d routers",
+            bindings_path, len(cfg.routers),
+        )
+        return cfg
     if blueprint_path is not None and blueprint_path.is_file():
         cfg = assemble_from_blueprint(blueprint_path, bindings_path)
         log.info(

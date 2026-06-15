@@ -6,9 +6,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Path the editor reads from and writes to. Mounted as a volume in compose,
-    # mounted from a ConfigMap-backed PVC in Kubernetes.
-    layout_file: str = "/app/data/layout.json"
+    # The editor is a blueprint write-client. It reads and writes the canonical
+    # blueprint over HTTP from the positioning-engine (the blueprint authority),
+    # so there is no shared blueprint PVC. See docs/blueprint-vs-bindings.md.
+    positioning_engine_url: str = "http://positioning-engine:8080"
 
     # Base URL of the wifi-positioning adapter. The placement-editor proxies
     # calibration requests through to it (so the browser does not need CORS

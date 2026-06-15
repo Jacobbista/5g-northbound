@@ -50,6 +50,11 @@ class PositionService:
         self._primary = primary_strategy
         self._compare = compare_strategies
 
+    def set_floor_plan(self, floor_plan: FloorPlan) -> None:
+        """Swap the active floor plan at runtime. Called after a PUT /blueprint
+        so the new georef takes effect without restarting the engine."""
+        self._floor_plan = floor_plan
+
     def _select_adapters(self, device_id: str) -> list[Adapter]:
         target = self._device_map.get(device_id)
         if target is None:

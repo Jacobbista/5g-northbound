@@ -9,7 +9,7 @@ import {
 } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { FLOOR_D, FLOOR_W, GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
+import { CAMARA_API_BASE, FLOOR_D, FLOOR_W, GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
 import { ema2d } from "../lib/smoothing";
 
 const M_PER_DEG = 111320;
@@ -780,18 +780,32 @@ function Scene({ positions, layout, visibleTechs, onSelectDevice, onSelectAp }) 
   );
 }
 
-export function FloorPlanScene({ positions = [], visibleTechs, onSelectDevice, onSelectAp, onLayoutLoaded }) {
+export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDevice, onSelectAp, onLayoutLoaded }) {
   const [layout, setLayout] = useState(null);
 
+  // The blueprint comes from the CAMARA gateway (which proxies the engine, the
+  // blueprint authority). The demo is a MEC app: it talks only to the gateway,
+  // never the engine directly. A 404 means no venue authored yet -> the scene
+  // falls back to its default dimensions.
   useEffect(() => {
-    fetch("/layout.json")
+    if (!token) return;
+    let cancelled = false;
+    fetch(`${CAMARA_API_BASE}/blueprint`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
+        if (cancelled) return;
         setLayout(data);
         if (onLayoutLoaded) onLayoutLoaded(data);
       })
-      .catch(() => setLayout(null));
-  }, [onLayoutLoaded]);
+      .catch(() => {
+        if (!cancelled) setLayout(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, onLayoutLoaded]);
 
   const w = layout?.room_w ?? FLOOR_W;
   const d = layout?.room_h ?? FLOOR_D;

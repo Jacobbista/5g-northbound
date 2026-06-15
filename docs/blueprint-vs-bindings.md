@@ -45,48 +45,54 @@ inline) means a real BSSID is one careless `git add` away from being
 public, and that moving the blueprint between sites requires editing
 positions twice. We don't.
 
-## Where each file lives
+## The blueprint is network-distributed; the engine is its authority
 
-| File                                        | Owner                | Mounted into                                      |
-| ------------------------------------------- | -------------------- | ------------------------------------------------- |
-| `services/positioning-demo/public/layout.json` (gitignored working copy) | placement-editor | placement-editor, positioning-demo, mock-positioning, wifi-positioning, positioning-engine |
-| `services/positioning-demo/public/layout.example.json` (committed template) | repo          | bootstrapped into `layout.json` by `make demo` on first run |
-| `dev/wifi-config.json` (placeholder)        | repo                 | wifi-positioning (legacy / demo)                  |
-| `dev/wifi-config.local.json` (real venue)   | operator             | wifi-positioning (auto-mounted by `make demo` when present; gitignored) |
-
-The blueprint file in `services/positioning-demo/public/layout.json` is the
-canonical name in the dev stack. It is **gitignored**: the editor auto-saves
-your real venue (floor-plan imagery, building georef, anchor positions) into
-it, and none of that belongs in the repository. The committed
-`layout.example.json` carries a generic demo venue so a fresh clone runs.
-On a real cluster, both files come from a ConfigMap or PVC; the placement
-editor writes the blueprint back to the same PVC, so the loop closes:
+There is **one** canonical blueprint and it lives in the **positioning-engine**.
+The engine persists it on its own writable volume and serves it over HTTP
+(`GET /blueprint`, `PUT /blueprint`). Nobody mounts a shared blueprint file or
+ConfigMap; everyone goes over the network. This is what makes adapters
+edge-deployable (an edge pod fetches the blueprint over the data network, like
+the WiFi scanner already does) and decouples the stack from node-local storage
+and from the editor's uptime.
 
 ```
-edit anchors in editor  ──▶  blueprint on PVC  ──▶  wifi-positioning rebuilds AP map
-                                              └──▶  positioning-engine reads gps_origin
-                                              └──▶  positioning-demo renders the scene
+placement-editor  ──PUT /blueprint──▶  positioning-engine  ◀──GET /blueprint──  wifi-positioning
+   (write-client)                       (AUTHORITY: owns                          (read-client, retries
+                                         persistence, GET/PUT)                     while engine boots)
+                                              ▲
+                                              │ GET /blueprint (proxy)
+                                       camara-gateway  ◀──GET /blueprint──  positioning-demo
+                                                                            (MEC: gateway only)
 ```
 
-Each consumer reads only what it needs from the one blueprint:
+| Role          | Service            | How it touches the blueprint                                   |
+|---------------|--------------------|----------------------------------------------------------------|
+| Authority     | positioning-engine | Persists it (`BLUEPRINT_PATH`, a writable PVC); serves GET/PUT; derives `gps_origin` for the WGS84 conversion |
+| Write-client  | placement-editor   | `GET/PUT` over HTTP (`POSITIONING_ENGINE_URL`); its `/api/layout` proxies the engine. No local blueprint file |
+| Read-client   | wifi-positioning   | `GET /blueprint` from the engine at boot (retry + degraded), joins anchors to BSSIDs |
+| Read-client   | positioning-demo   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (CLAUDE.md) |
+| Proxy         | camara-gateway     | Read-only `GET /blueprint` proxy so the demo reaches it through its single allowed backend |
+| Not a consumer| mock-positioning   | Synthetic walker; uses `WIDTH_M`/`DEPTH_M` env, no real geometry |
+| Not a consumer| rest-adapter       | Vendor cloud returns positioned WGS84 fixes; pass-through. (The editor's `↻ sync vendor` imports those at authoring time only) |
 
-| Consumer            | Reads from the blueprint                                   |
-|---------------------|------------------------------------------------------------|
-| wifi-positioning    | WiFi anchor positions (`rooms[].anchors`, joined to BSSIDs) |
-| positioning-engine  | `floor_plans[0].georef` as `gps_origin` for the WGS84 conversion (set `LAYOUT_PATH`; falls back to the legacy `FLOOR_PLAN_PATH`) |
-| mock-positioning    | room bounds + walls for the synthetic walker               |
-| positioning-demo    | full geometry (rooms, walls, anchors) for the 3D scene     |
+Write authorisation is the **placement-editor's front-door gate**
+(oauth2-proxy / admin), not the engine: the engine is `ClusterIP`, never
+externally exposed, so an internal `PUT /blueprint` is consistent with its
+existing no-auth internal-trust model (it already serves positions and polls
+adapters unauthenticated in-cluster). This is a deliberate, declared choice.
 
-The `rest-adapter` is the exception: it does **not** read the blueprint. A
-vendor cloud returns positioned WGS84 fixes that the adapter passes through.
-The editor's `↻ sync vendor` imports those positions into the blueprint at
-authoring time, but the adapter never consumes it at runtime.
+### Files in the dev stack
 
-Wiring this in the cluster: mount the same blueprint PVC (or a ConfigMap
-rendered from it) into positioning-engine and set `LAYOUT_PATH` to it, exactly
-as wifi-positioning already does. Do not leave the engine on the generic
-`floor-plan.json` ConfigMap, or it will report positions against a 20x30 box
-instead of the authored venue.
+| File                                        | Role                                                      |
+| ------------------------------------------- | --------------------------------------------------------- |
+| `services/positioning-demo/public/layout.example.json` (committed) | generic demo venue; `make demo` bootstraps `layout.json` from it |
+| `services/positioning-demo/public/layout.json` (gitignored)        | **seed only**: mounted read-only into the engine as `BLUEPRINT_SEED_PATH`; the engine copies it into its volume on first boot, then owns it. Editor edits go to the engine, not back to this file |
+| `dev/wifi-config.json` (placeholder)        | bindings, wifi-positioning (legacy / demo)                |
+| `dev/wifi-config.local.json` (real venue)   | bindings, gitignored, auto-mounted by `make demo`         |
+
+The bindings file (`wifi-config.json`) is **not** network-distributed: it is
+read-write, mutated at runtime by the calibration tool, and local to
+wifi-positioning. It stays a file / PVC. See "Deploying to Kubernetes" below.
 
 ## Authoring flow
 
@@ -203,56 +209,34 @@ for the exact code.
 
 ## Deploying to Kubernetes
 
-The bindings file is **read-write** at runtime. The calibration tool
-appends samples after every capture and rewrites per-AP overrides on
-apply. ConfigMaps and Secrets are mounted read-only by Kubernetes; they
-cannot host the bindings file as-is. You need a writable volume.
-
-Recommended layout on the cluster:
+Two writable volumes, each mounted by exactly **one** pod, so both are plain
+`ReadWriteOnce` - no `ReadWriteMany`, no co-scheduling constraints, because
+nothing is shared across pods. Everything else moves over HTTP.
 
 ```
-PVC: positioning-blueprint            (RWO, ~1 MB)
-  └─ /app/config/layout.json          (geometry; shared with placement-editor)
+PVC: positioning-blueprint   (RWO, ~1 MB)  ── mounted ONLY by positioning-engine
+  └─ /app/data/blueprint.json   (the canonical blueprint; engine owns it)
 
-PVC: wifi-positioning-bindings        (RWO, ~5 MB)
-  └─ /app/config/wifi-config.json     (BSSIDs, tunables, calibration data)
+PVC: wifi-positioning-bindings (RWO, ~5 MB) ── mounted ONLY by wifi-positioning
+  └─ /app/config/wifi-config.json  (BSSIDs, tunables, calibration data)
 ```
 
-The **bindings** PVC is mounted only by wifi-positioning, so `ReadWriteOnce`
-is enough.
+| Service             | Blueprint volume | How it gets the blueprint                          |
+|---------------------|------------------|----------------------------------------------------|
+| positioning-engine  | RW (authority)   | persists + serves it; `BLUEPRINT_PATH=/app/data/blueprint.json` |
+| placement-editor    | none             | `GET/PUT` over HTTP, `POSITIONING_ENGINE_URL`       |
+| wifi-positioning    | none             | `GET /blueprint` from the engine, `POSITIONING_ENGINE_URL` |
+| positioning-demo    | none             | `GET /blueprint` via the gateway proxy (`CAMARA_API_BASE`) |
+| mock-positioning    | none             | env dimensions only                                |
 
-The **blueprint** PVC has more than one reader: placement-editor mounts it
-read-write (it writes the file), while positioning-engine, positioning-demo,
-mock-positioning and wifi-positioning mount it read-only. RWO allows multiple
-pods only when they are co-scheduled on the same node. On a single-node
-testbed that holds; if the blueprint consumers can land on different nodes,
-use `ReadWriteMany` (NFS, Longhorn, etc.) for the blueprint PVC. The bindings
-PVC stays RWO regardless.
-
-Mount it read-only everywhere except placement-editor:
-
-| Service             | Blueprint mount | Env                                      |
-|---------------------|-----------------|------------------------------------------|
-| placement-editor    | read-write      | `LAYOUT_FILE=/app/data/layout.json`      |
-| positioning-engine  | read-only       | `LAYOUT_PATH=/app/config/layout.json`    |
-| wifi-positioning    | read-only       | `LAYOUT_PATH=/app/config/layout.json`    |
-| mock-positioning    | read-only       | `LAYOUT_PATH=/app/data/layout.json`      |
-| positioning-demo    | read-only       | mounted into nginx html as `/layout.json` (the SPA fetches it over HTTP) |
-
-The engine consuming the blueprint replaces its generic `floor-plan.json`
-ConfigMap: keep that ConfigMap only as the fallback for a cluster that has not
-provisioned the blueprint PVC yet.
-
-Pod-side, the container's user must be able to write the volume. The
-`wifi-positioning` Dockerfile runs as the `app` user (uid 1001). The
-`securityContext` block below gives that uid ownership of the mounted
-volume via `fsGroup`:
+Only the engine and wifi-positioning carry a PVC. The engine's blueprint PVC
+must be writable by its non-root `app` user (uid 1001) - `fsGroup: 1001`:
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wifi-positioning
+  name: positioning-engine
 spec:
   replicas: 1
   template:
@@ -260,55 +244,39 @@ spec:
       securityContext:
         fsGroup: 1001
       containers:
-        - name: wifi-positioning
-          image: ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>
+        - name: positioning-engine
+          image: ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>
           env:
-            - { name: WIFI_CONFIG_PATH, value: /app/config/wifi-config.json }
-            - { name: LAYOUT_PATH,      value: /app/config/layout.json }
-          securityContext:
-            runAsUser: 1001
-            runAsGroup: 1001
+            - { name: BLUEPRINT_PATH, value: /app/data/blueprint.json }
           volumeMounts:
-            - { name: bindings,  mountPath: /app/config/wifi-config.json, subPath: wifi-config.json }
-            - { name: blueprint, mountPath: /app/config/layout.json,      subPath: layout.json }
+            - { name: blueprint, mountPath: /app/data }
       volumes:
-        - name: bindings
-          persistentVolumeClaim:
-            claimName: wifi-positioning-bindings
         - name: blueprint
           persistentVolumeClaim:
             claimName: positioning-blueprint
 ```
 
-`fsGroup` retags every file on the mounted volume with group 1001 and
-rw permission. Without it the bind to the container's non-root user
-fails the same way it does on docker compose without `HOST_UID`.
+wifi-positioning mounts only its bindings PVC (same `fsGroup: 1001` pattern),
+with `WIFI_CONFIG_PATH=/app/config/wifi-config.json` and
+`POSITIONING_ENGINE_URL` pointing at the engine Service. It fetches the
+blueprint over HTTP at boot, retrying while the engine comes up, and serves
+degraded (no anchors, readiness false) until it succeeds.
 
-### Seeding the volumes
+### Seeding the blueprint
 
-PVCs start empty. The bindings PVC needs initial content (tunables plus
-the `id → BSSIDs` map for the venue) before the operator can calibrate.
-Two patterns work:
+The blueprint PVC starts empty. Two ways to put the first venue in:
 
-- **`kubectl cp` on first install** (simplest):
+- **PUT it through the editor** (normal path): open the placement editor, author
+  or import the venue, save. The editor `PUT`s it to the engine, which persists
+  it on the PVC. Nothing else to do.
+- **`BLUEPRINT_SEED_PATH`** (GitOps / cold start): mount an exported blueprint
+  read-only (ConfigMap or file) and point `BLUEPRINT_SEED_PATH` at it. On first
+  boot, when the PVC is empty, the engine copies the seed into the PVC and then
+  owns it; the seed mount can be removed afterwards.
 
-  ```bash
-  # 1. Start the deployment so the pod runs and the PVCs are bound.
-  kubectl -n positioning apply -f wifi-positioning.yaml
-
-  # 2. Copy the seed files into the running pod.
-  POD=$(kubectl -n positioning get pod -l app=wifi-positioning -o name | head -1)
-  kubectl -n positioning cp ./wifi-config.local.json $POD:/app/config/wifi-config.json
-  kubectl -n positioning cp ./exported-blueprint.json $POD:/app/config/layout.json
-
-  # 3. Restart the pod so it picks up the seeded files.
-  kubectl -n positioning rollout restart deployment wifi-positioning
-  ```
-
-- **Init container** (one-shot, idempotent, fits GitOps): runs before
-  the main container, checks whether `/app/config/wifi-config.json`
-  exists on the PVC, and copies a seed payload from a Secret if not.
-  More moving parts; pick this when you operate more than one venue.
+The bindings PVC seeds the same way it did before (tunables + `id → BSSIDs`):
+`kubectl cp` into the wifi-positioning pod, or an init container that copies a
+seed payload from a Secret when the file is absent.
 
 The placement editor can also write the blueprint PVC directly (its
 `PUT /api/layout` endpoint persists to the same path). On the cluster,

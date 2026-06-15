@@ -576,6 +576,7 @@ export function App() {
 
       <div style={sceneWrap}>
         <FloorPlanScene
+          token={token}
           positions={scenePositions}
           visibleTechs={visibleTechs}
           onSelectDevice={(d) => setSelection({ kind: "device", device: d })}

@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
+import httpx
 from fastapi import FastAPI
 
 from .assemble import load_wifi_config, persist_calibration
@@ -33,22 +36,53 @@ def _load_persisted_samples(bindings_path: Path) -> list[CalibrationSample]:
     return out
 
 
+async def _fetch_blueprint() -> Optional[dict]:
+    """Fetch the canonical blueprint from the engine (the authority), retrying
+    a few times because the engine may still be booting (engine <-> adapter
+    startup is mutually dependent). Returns None when the engine has no
+    blueprint yet (404) or stays unreachable - the adapter then boots degraded
+    and a later reload picks it up."""
+    base = settings.positioning_engine_url
+    url = f"{base.rstrip('/')}/blueprint"
+    for attempt in range(1, settings.blueprint_fetch_attempts + 1):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+            if resp.status_code == 404:
+                log.warning("engine has no blueprint yet (404); booting degraded")
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            if attempt < settings.blueprint_fetch_attempts:
+                await asyncio.sleep(settings.blueprint_fetch_backoff_s)
+                continue
+            log.warning("engine /blueprint unreachable after %d tries (%s)", attempt, exc)
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Degraded boot: a missing / malformed bindings or blueprint file must not
-    # crash the process. On failure we mark the pod not-ready (readiness gates
-    # real traffic) but keep liveness + /contract answering, so a deploy
-    # dashboard can still read the contract from a misconfigured pod.
+    # Degraded boot: a missing blueprint / unreachable engine / malformed
+    # bindings must not crash the process. On failure we mark the pod not-ready
+    # (readiness gates real traffic) but keep liveness + /contract answering.
     bindings_path = Path(settings.wifi_config_path)
+    # Offline fallback only; in the cluster the blueprint comes from the engine.
     blueprint_path = Path(settings.layout_path) if settings.layout_path else None
     app.state.ready = False
     app.state.config_error = None
     app.state.adapter = None
 
+    blueprint = await _fetch_blueprint()
+
     def _reload() -> "WifiConfig":  # noqa: F821
+        # Calibration reloads re-read the bindings file (tx_power, samples);
+        # the blueprint geometry is the one fetched at boot. A re-authored
+        # venue propagates on the next restart/rollout.
         return load_wifi_config(
             bindings_path=bindings_path,
             blueprint_path=blueprint_path,
+            blueprint=blueprint,
         )
 
     try:

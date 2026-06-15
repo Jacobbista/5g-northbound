@@ -12,11 +12,16 @@ class Settings(BaseSettings):
     # (legacy mode, kept for tests and standalone runs).
     wifi_config_path: str = "/app/config/wifi-config.json"
 
-    # Optional path to the placement-editor blueprint (rooms + anchors).
-    # When set, AP positions are taken from `rooms[0].anchors` where
-    # `technology == "wifi"`, joined to BSSIDs by anchor `id`. This is
-    # how the deployed cluster avoids duplicating positions between the
-    # editor's blueprint and the WiFi adapter's config.
+    # The blueprint (AP positions) is fetched over HTTP from the engine, the
+    # blueprint authority. Positions are taken from `rooms[0].anchors` where
+    # `technology == "wifi"`, joined to BSSIDs by anchor `id`. The adapter
+    # tolerates the engine not being ready yet (retry + degraded boot).
+    positioning_engine_url: str = "http://positioning-engine:8080"
+    blueprint_fetch_attempts: int = 5
+    blueprint_fetch_backoff_s: float = 1.0
+
+    # Optional local blueprint file, used only as an offline fallback when the
+    # engine cannot be reached (dev / standalone). Unset in the cluster.
     layout_path: Optional[str] = None
 
     class Config:

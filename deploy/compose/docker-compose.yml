@@ -47,23 +47,23 @@ services:
     # `make demo`. Falls back to 1000, the typical first non-root uid.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:
-      # Bindings file: tunables + id → BSSIDs mapping. Default placeholder
-      # lives in dev/; override at run time without touching the repo:
+      # Bindings file ONLY: tunables + id → BSSIDs mapping (+ calibration
+      # samples written back at runtime). Stays a local RW file / PVC. The
+      # blueprint (AP positions) is NOT here - it is fetched over HTTP from
+      # the engine, the blueprint authority. Override at run time:
       # `export WIFI_CONFIG=./dev/wifi-config.local.json` (gitignored).
-      # Read-write because the calibration tool persists `tx_power` and
-      # `path_loss_n` per binding back to this file after a fit.
       - ${WIFI_CONFIG:-./dev/wifi-config.json}:/app/config/wifi-config.json
-      # Blueprint (placement-editor JSON). When this file exists, the
-      # adapter reads anchor positions from it and joins to BSSIDs by id.
-      # Operator edits the blueprint in the placement editor; nothing
-      # downstream duplicates positions.
-      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
     environment:
-      LAYOUT_PATH: "/app/config/layout.json"
+      # Blueprint authority. The adapter GETs /blueprint from here, retrying
+      # while the engine boots (degraded until it succeeds).
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
       # trilateration diagnostics in this container's logs. Useful for
       # tuning tx_power / path_loss_n against a real venue.
       WIFI_DEBUG: "${WIFI_DEBUG:-0}"
+    depends_on:
+      positioning-engine:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -136,19 +136,14 @@ services:
       context: ./mocks/mock-positioning
     ports:
       - "8090:8080"
-    volumes:
-      # Same layout file the editor + demo share. When the operator saves a
-      # new layout (rooms, walls, openings), the walker picks it up on the
-      # next container restart - paths inside the room stay realistic.
-      - ./services/positioning-demo/public/layout.json:/app/data/layout.json:ro
     environment:
-      # Default bounds; the layout file (if present) overrides them with the
-      # actual room size at startup.
+      # Synthetic walker - bounds come from env, no blueprint needed. A mock
+      # does not consume the real venue geometry; it just produces continuous
+      # motion inside a box.
       WIDTH_M: "13"
       DEPTH_M: "32"
       HEIGHT_M: "3"
       SPEED_MPS: "1.0"
-      LAYOUT_PATH: "/app/data/layout.json"
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -166,14 +161,14 @@ services:
       - "8081:8080"
       - "8082:8080"
     volumes:
-      # Shared blueprint: same file the editor writes and the demo +
-      # wifi-positioning read. The engine derives gps_origin from its
-      # floor_plans[0].georef. floor-plan.json stays mounted as the legacy
-      # fallback when LAYOUT_PATH is unset / unreadable.
-      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
-      - ./dev/floor-plan.json:/app/config/floor-plan.json:ro
+      # The engine is the blueprint authority: it persists the blueprint on a
+      # named volume (survives restarts) and serves it via GET/PUT /blueprint.
+      # On first boot the store is empty, so it seeds once from the committed
+      # dev blueprint mounted read-only below.
+      - engine-blueprint:/app/data
+      - ./services/positioning-demo/public/layout.json:/app/config/seed-blueprint.json:ro
     environment:
-      LAYOUT_PATH: "/app/config/layout.json"
+      BLUEPRINT_SEED_PATH: "/app/config/seed-blueprint.json"
       DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
       # Named adapter entries: name=url,name=url. Each entry is one HttpAdapter
       # polling GET /measurement/{device_id} at the given URL.
@@ -191,13 +186,10 @@ services:
       # WebSocket broadcast cadence. The demo does not subscribe so the loop is
       # a no-op, but keep it well above 500 ms to avoid wasted wake-ups.
       WEBSOCKET_INTERVAL_MS: "2000"
-    depends_on:
-      wifi-positioning:
-        condition: service_healthy
-      mock-positioning:
-        condition: service_healthy
-      rest-adapter:
-        condition: service_healthy
+    # No depends_on adapters: the engine boots independently (it is the
+    # blueprint authority the adapters fetch from) and tolerates adapters being
+    # down via per-adapter cooldown. This breaks the engine<->adapter cycle so
+    # the adapters can depend on the engine for their blueprint.
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -246,9 +238,9 @@ services:
     ports:
       - "3002:80"
     volumes:
-      # live-swappable visual layout (no rebuild; nginx serves it no-cache)
-      - ./services/positioning-demo/public/layout.json:/usr/share/nginx/html/layout.json:ro
-      # runtime env (window.__ENV__) - overrides VITE_DEVICES etc without a rebuild
+      # runtime env (window.__ENV__) - overrides config without a rebuild.
+      # The blueprint is NOT mounted: the demo fetches it from the CAMARA
+      # gateway (GET /blueprint), which proxies the engine.
       - ./services/positioning-demo/public/env-config.js:/usr/share/nginx/html/env-config.js:ro
     depends_on:
       camara-gateway:
@@ -268,16 +260,15 @@ services:
     ports:
       - "3003:8080"
     volumes:
-      # Editor reads/writes the same layout file the demo serves. Two-way
-      # binding: edit here, refresh the demo to see the new geometry.
-      - ./services/positioning-demo/public/layout.json:/app/data/layout.json
       # Hot-edit runtime config: bind-mount the gitignored env-config.js so
       # the operator can paste a Mapbox token (or any other window.__ENV__
       # override) and reload the browser, no rebuild. Read-only - the
       # container's entrypoint.sh skips regeneration when the file is RO.
       - ./services/placement-editor/frontend/public/env-config.js:/app/static/env-config.js:ro
     environment:
-      LAYOUT_FILE: "/app/data/layout.json"
+      # The editor is a blueprint write-client: GET/PUT the blueprint over HTTP
+      # from the engine (the authority). No shared blueprint volume.
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       # Upstream for the calibration proxy (browser -> placement-editor ->
       # wifi-positioning). Internal service name on the compose network.
       WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
@@ -286,6 +277,9 @@ services:
       # Optional Mapbox public token. When set, the editor exposes a
       # "Satellite (Mapbox)" basemap. Leave empty to keep ESRI only.
       VITE_MAPBOX_TOKEN: "${VITE_MAPBOX_TOKEN:-}"
+    depends_on:
+      positioning-engine:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -295,6 +289,11 @@ services:
       start_period: 5s
     networks:
       - 5g-net
+
+volumes:
+  # Persists the engine's authored blueprint across restarts (the engine is
+  # the blueprint authority). Seeded once from the committed dev blueprint.
+  engine-blueprint:
 
 networks:
   5g-net:

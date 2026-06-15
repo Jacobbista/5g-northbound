@@ -38,12 +38,14 @@ def adapter_options(name: str) -> dict:
 
 
 class Settings(BaseSettings):
-    floor_plan_path: str = "/app/config/floor-plan.json"
-    # Path to the authored blueprint (placement-editor layout.json), shared
-    # with the demo and wifi-positioning. When set, the engine derives its
-    # gps_origin from floor_plans[0].georef instead of the legacy
-    # floor-plan.json. Empty -> use floor_plan_path. See docs/blueprint-vs-bindings.md.
-    layout_path: str = ""
+    # The engine is the canonical blueprint authority. It persists the venue
+    # blueprint on its OWN writable volume here and serves it over HTTP
+    # (GET/PUT /blueprint). See docs/blueprint-vs-bindings.md.
+    blueprint_path: str = "/app/data/blueprint.json"
+    # Optional one-time seed: a read-only layout.json migrated into the
+    # persisted store on first boot when blueprint_path is empty. Leave unset
+    # in steady state - the editor PUTs the blueprint over HTTP.
+    blueprint_seed_path: str = ""
     websocket_interval_ms: int = 500
     device_ids: str = "uwb-tag-001"
 

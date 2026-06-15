@@ -9,7 +9,6 @@ Distinct realm role (`placement-admin`) is assumed when auth is wired in;
 SKIP_AUTH=true is dev-only.
 """
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -17,9 +16,8 @@ from pathlib import Path
 import httpx
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 from .config import get_settings
 
@@ -33,18 +31,6 @@ app = FastAPI(
 )
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-
-
-class Layout(BaseModel):
-    """Loose schema for now - the editor evolves it. We just round-trip the
-    JSON object as-is."""
-
-    room_w: float | None = None
-    room_h: float | None = None
-    aps: list[dict] | None = None
-    gps_origin: dict | None = None
-
-    model_config = {"extra": "allow"}
 
 
 @app.get("/health")
@@ -94,24 +80,22 @@ async def contract() -> dict:
     raise HTTPException(500, detail="env.contract.yaml not found")
 
 
-@app.get("/api/layout", response_model=Layout)
-async def get_layout() -> Layout:
-    path = Path(get_settings().layout_file)
-    if not path.exists():
-        raise HTTPException(404, detail=f"layout not found at {path}")
-    try:
-        return Layout.model_validate(json.loads(path.read_text()))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(500, detail=f"layout unreadable: {exc}") from exc
+@app.get("/api/layout")
+async def get_layout(request: Request) -> Response:
+    """Read the canonical blueprint from the engine (the authority). The editor
+    is a pure client - no shared PVC. Engine 404 (nothing authored yet) is
+    surfaced as 404 so the frontend opens a blank canvas."""
+    base = get_settings().positioning_engine_url
+    return await _proxy(base, "/blueprint", request, "positioning-engine")
 
 
 @app.put("/api/layout")
-async def put_layout(layout: Layout) -> JSONResponse:
-    path = Path(get_settings().layout_file)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(layout.model_dump(exclude_none=True), indent=2))
-    log.info("layout written to %s", path)
-    return JSONResponse({"status": "ok", "path": str(path)})
+async def put_layout(request: Request) -> Response:
+    """Write the blueprint back to the engine. Write authorisation is the
+    editor's front-door gate (oauth2-proxy / admin), not the engine: the engine
+    is ClusterIP and never externally exposed. See docs/blueprint-vs-bindings.md."""
+    base = get_settings().positioning_engine_url
+    return await _proxy(base, "/blueprint", request, "positioning-engine")
 
 
 async def _proxy(target_base: str, suffix: str, request: Request, label: str) -> Response:

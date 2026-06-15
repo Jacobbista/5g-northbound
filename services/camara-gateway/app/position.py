@@ -185,6 +185,30 @@ async def get_adapter_status() -> list[dict] | None:
         return None
 
 
+async def get_blueprint() -> dict | None:
+    """Vendor extension: proxy the engine's GET /blueprint so the demo (which
+    talks only to the gateway, per the MEC constraint in CLAUDE.md) can read
+    the venue blueprint without reaching the engine directly.
+
+    Returns the raw blueprint dict, or None when the engine is not configured,
+    is unreachable, or has no blueprint authored yet (engine 404). The caller
+    maps None to a 404 so the demo degrades gracefully.
+    """
+    url = get_settings().positioning_engine_url
+    if not url:
+        return None
+    try:
+        return await _engine_get("/blueprint", timeout=_ADAPTERS_REQUEST_TIMEOUT_S)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return None
+        log.warning("engine /blueprint -> %d", exc.response.status_code)
+        return None
+    except Exception as exc:
+        log.warning("engine /blueprint unreachable (%s)", exc)
+        return None
+
+
 def _mock_position() -> Position:
     # ~0.00005 deg ≈ 5 m, so a consumer converting back to a small indoor floor
     # plan keeps the device on the plan.

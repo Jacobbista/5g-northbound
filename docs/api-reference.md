@@ -27,6 +27,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | `GET    /devices`                                      | `{"devices":[…]}`            | **Vendor extension**: list registered devices for the demo UI         |
 | `GET    /devices/{phoneNumber}/details`                | `{"phoneNumber",…,"telemetry":…}` | **Vendor extension**: registry entry + engine telemetry. `telemetry: null` when offline |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
+| `GET    /blueprint`                                    | blueprint JSON               | **Vendor extension**: read-only proxy of the engine's blueprint so the demo (MEC: gateway only) can render the venue. `404` when the engine has none |
 | `WS     /positions/stream?token=<jwt>`                 | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated browser clients. Token is supplied as a query parameter because browsers cannot set `Authorization` on a WebSocket handshake. Closes with code 4401 on auth failure, 1011 on upstream failure |
 
 Error envelope (all non-health routes): `{ "status": <int>, "code": <string>, "message": <string> }`.
@@ -39,6 +40,8 @@ No auth (cluster-internal). Mounts:
 |----------------------------------------|--------------------|----------------------------------------------------------------------------------|
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
 | `GET    /position/{device_id}`         | `EnginePosition`   | Fuses every configured adapter that reports a measurement for `device_id`. `404` when no adapter has a fix (legitimate "offline") |
+| `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
+| `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
 | `GET    /adapters`                     | `{"adapters":[…]}` | Health snapshot per adapter: `name`, `base_url`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`. Operator diagnostic |
 | `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS` |
 
@@ -75,8 +78,8 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 | Method · path                          | Returns                                    | Notes                                          |
 |----------------------------------------|--------------------------------------------|------------------------------------------------|
 | `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
-| `GET    /api/layout`                   | layout JSON                                | Reads `LAYOUT_FILE`. `404` if file missing     |
-| `PUT    /api/layout`                   | `{"status":"ok","path":"…"}`               | Overwrites `LAYOUT_FILE` with the request body. `extra="allow"`: unknown fields preserved |
+| `GET    /api/layout`                   | blueprint JSON                             | Proxies the engine's `GET /blueprint` (the editor is a blueprint client, no local file). `404` when none authored yet |
+| `PUT    /api/layout`                   | `{"status":"ok",…}`                        | Proxies the engine's `PUT /blueprint`. Unknown fields preserved verbatim |
 | `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |
 
 ## Conventions across services
