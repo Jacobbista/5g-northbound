@@ -12,6 +12,7 @@ from .assemble import load_wifi_config, persist_calibration
 from .calibration import CalibrationStore
 from .config import settings
 from .models import CalibrationSample
+from . import register
 from .routers import calibration as calibration_router
 from .routers import contract, health, ingest, measurement
 from .wifi import WifiAdapter
@@ -124,7 +125,11 @@ async def lifespan(app: FastAPI):
         log.error(
             "wifi-positioning: config load failed, serving in not-ready mode: %s", exc
         )
+    # Announce ourselves to the engine's adapter registry + heartbeat.
+    reg_task = asyncio.create_task(register.heartbeat_loop())
     yield
+    reg_task.cancel()
+    await register.deregister()
 
 
 app = FastAPI(title="WiFi Positioning Adapter", lifespan=lifespan)

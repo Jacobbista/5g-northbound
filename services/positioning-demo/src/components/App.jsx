@@ -177,23 +177,28 @@ function AdapterHealthBadge({ adapters }) {
   if (!adapters || adapters.length === 0) {
     return <span style={adapterBadge("unknown")} title="adapter health unknown">adapters n/a</span>;
   }
-  const degraded = adapters.filter((a) => a.in_cooldown);
-  if (degraded.length === 0) {
+  // The engine's registry reports a per-adapter `state`: live / unreachable
+  // (polls failing) / stale (stopped heartbeating). Anything not live is a
+  // problem worth surfacing. Fall back to in_cooldown for older engines.
+  const notLive = adapters.filter((a) =>
+    a.state ? a.state !== "live" : a.in_cooldown
+  );
+  if (notLive.length === 0) {
     return (
       <span
         style={adapterBadge("ok")}
-        title={adapters.map((a) => a.name).join(", ")}
+        title={adapters.map((a) => `${a.name} [${a.state || "ok"}]`).join("\n")}
       >
         {adapters.length} adapter{adapters.length === 1 ? "" : "s"} ok
       </span>
     );
   }
-  const detail = degraded
-    .map((a) => `${a.name} (${a.fail_count} fail, ${a.cooldown_seconds_remaining.toFixed(0)}s)`)
+  const detail = notLive
+    .map((a) => `${a.name}: ${a.state || (a.in_cooldown ? "unreachable" : "?")}`)
     .join("\n");
   return (
     <span style={adapterBadge("degraded")} title={detail}>
-      {degraded.length}/{adapters.length} degraded
+      {notLive.length}/{adapters.length} degraded
     </span>
   );
 }

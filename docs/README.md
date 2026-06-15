@@ -27,6 +27,7 @@ The manifests themselves live in the companion repository [`kelt`](https://githu
 
 1. [`adapters.md`](adapters.md). The HTTP contract every adapter implements, the engine wiring, a minimal Python skeleton.
 2. If your source is a vendor with a REST API, read [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) before writing code. The schema-driven `rest-adapter` may already cover your case.
+3. [`adapter-registry.md`](adapter-registry.md). How adapters self-register with the engine, heartbeat, and surface `live` / `unreachable` / `stale` - the model that makes adapters edge-deployable.
 
 ### 5. I want to deploy the WiFi edge scanner to a Raspberry Pi
 
@@ -59,6 +60,7 @@ The whole flow is restart-on-change. Edit `.env` in `edge/wifi-scanner/`, run `.
 | [`data-contracts.md`](data-contracts.md)                   | Exact wire formats                                                                                                            |
 | [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md)     | Venue config: portable blueprint plus per-venue bindings                                                                      |
 | [`georeferencing.md`](georeferencing.md)                   | Local metric frame ↔ world anchoring: datums, tile drift, N-point calibration, provenance fields                              |
+| [`adapter-registry.md`](adapter-registry.md)               | Adapter self-registration, heartbeat/TTL, engine-as-authority, live/unreachable/stale                                          |
 | [`adapters.md`](adapters.md)                               | Writing a positioning adapter                                                                                                 |
 | [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) | Wrapping a vendor REST API with the schema-driven `rest-adapter`                                                              |
 | [`fusion-strategies.md`](fusion-strategies.md)             | Fusion algorithms and how to switch between them                                                                              |

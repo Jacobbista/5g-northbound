@@ -54,9 +54,12 @@ services:
       # `export WIFI_CONFIG=./dev/wifi-config.local.json` (gitignored).
       - ${WIFI_CONFIG:-./dev/wifi-config.json}:/app/config/wifi-config.json
     environment:
-      # Blueprint authority. The adapter GETs /blueprint from here, retrying
-      # while the engine boots (degraded until it succeeds).
+      # Engine = blueprint authority + adapter registry. The adapter GETs
+      # /blueprint from here and self-registers (POST /adapters) + heartbeats.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      ADAPTER_NAME: "wifi"
+      ADAPTER_KIND: "wifi"
+      ADAPTER_BASE_URL: "http://wifi-positioning:8080"
       # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
       # trilateration diagnostics in this container's logs. Useful for
       # tuning tx_power / path_loss_n against a real venue.
@@ -118,8 +121,15 @@ services:
       # rest-adapter container's logs (useful when wiring a new vendor
       # schema or chasing a real cloud returning 0 devices).
       REST_ADAPTER_DEBUG: "${REST_ADAPTER_DEBUG:-0}"
+      # Self-register with the engine's adapter registry.
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      ADAPTER_NAME: "wittra"
+      ADAPTER_KIND: "vendor"
+      ADAPTER_BASE_URL: "http://rest-adapter:8080"
     depends_on:
       mock-wittra:
+        condition: service_healthy
+      positioning-engine:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c",
@@ -144,6 +154,14 @@ services:
       DEPTH_M: "32"
       HEIGHT_M: "3"
       SPEED_MPS: "1.0"
+      # Self-register with the engine's adapter registry.
+      POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      ADAPTER_NAME: "mock"
+      ADAPTER_KIND: "mock"
+      ADAPTER_BASE_URL: "http://mock-positioning:8080"
+    depends_on:
+      positioning-engine:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -170,9 +188,10 @@ services:
     environment:
       BLUEPRINT_SEED_PATH: "/app/config/seed-blueprint.json"
       DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
-      # Named adapter entries: name=url,name=url. Each entry is one HttpAdapter
-      # polling GET /measurement/{device_id} at the given URL.
-      ADAPTER_URLS: "wifi=http://wifi-positioning:8080,mock=http://mock-positioning:8080,wittra=http://rest-adapter:8080"
+      # No ADAPTER_URLS: adapters self-register with the engine (POST /adapters)
+      # and heartbeat. ADAPTER_URLS stays supported as a cold-start seed for
+      # deployments that prefer it, but the dev stack exercises the real
+      # self-registration model. See docs/adapter-registry.md.
       # Per-device routing: each device is pinned to a single adapter so the
       # demo can show real "online vs offline" semantics. mock-demo-01 always
       # has a fix (synthetic walker); wifi-asset-01 stays offline until a real

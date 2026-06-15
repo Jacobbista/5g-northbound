@@ -42,7 +42,9 @@ No auth (cluster-internal). Mounts:
 | `GET    /position/{device_id}`         | `EnginePosition`   | Fuses every configured adapter that reports a measurement for `device_id`. `404` when no adapter has a fix (legitimate "offline") |
 | `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
 | `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
-| `GET    /adapters`                     | `{"adapters":[…]}` | Health snapshot per adapter: `name`, `base_url`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`. Operator diagnostic |
+| `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `base_url`, `kind`, `registered_via`, `last_seen_s_ago`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
+| `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, base_url, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
+| `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
 | `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS` |
 
 ## Adapter contract (consumed by the engine)

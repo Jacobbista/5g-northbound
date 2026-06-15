@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     # Empty -> no adapters configured; the engine returns no measurements.
     adapter_urls: str = ""
 
+    # Adapter registry. The engine is the registry authority: adapters
+    # self-register (POST /adapters) and heartbeat; ADAPTER_URLS is only a
+    # cold-start seed applied once to an empty registry. The seed/manual
+    # entries are persisted here; self-registered entries are not (they
+    # repopulate via heartbeat). See docs/adapter-registry.md.
+    adapter_registry_path: str = "/app/data/adapters.json"
+    # Self-registered entries are evicted after this many seconds without a
+    # heartbeat; seed/manual entries are never TTL-evicted.
+    adapter_ttl_s: float = 45.0
+    # Expected heartbeat cadence; an entry older than one interval (but within
+    # TTL) shows as "stale" (has not re-announced).
+    adapter_heartbeat_s: float = 15.0
+
     # Optional per-device routing: "device_id=adapter_name,..."
     # If a device appears here, only the named adapter is polled for it.
     # Devices not listed are polled against all configured adapters.

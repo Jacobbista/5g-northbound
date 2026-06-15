@@ -4,10 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .adapters.http import HttpAdapter
 from .blueprint import DEFAULT_FLOOR_PLAN, floor_plan_from_blueprint, load_blueprint
-from .config import adapter_options, settings
+from .config import settings
 from .fusion.registry import get_strategy
+from .registry import SEED, AdapterRegistry, _safe_aclose
 from .routers import adapters as adapters_router
 from .routers import blueprint as blueprint_router
 from .routers import contract, health, position, websocket
@@ -36,20 +36,29 @@ async def lifespan(app: FastAPI):
         "set" if app.state.floor_plan.gps_origin else "absent",
     )
 
-    named_urls = settings.adapter_url_list
-    adapters: dict[str, HttpAdapter] = {}
-    for name, url in named_urls:
-        if name in adapters:
-            log.warning("duplicate adapter name '%s' in ADAPTER_URLS; later URL wins", name)
-        opts = adapter_options(name)
-        adapters[name] = HttpAdapter(name=name, base_url=url, **opts)
-        if opts.get("headers"):
-            log.info("adapter %s: auth header configured", name)
-    if adapters:
-        log.info("engine: %d adapter(s) configured: %s", len(adapters), ", ".join(adapters))
+    # Adapter registry: the engine is the authority. Restore persisted
+    # seed/manual entries; if the registry is still empty (true cold start),
+    # apply ADAPTER_URLS as a one-time seed. A re-applied ADAPTER_URLS never
+    # clobbers a live/persisted registry. Self-registered entries are not
+    # persisted - they repopulate via heartbeat.
+    registry = AdapterRegistry(
+        ttl_s=settings.adapter_ttl_s,
+        heartbeat_s=settings.adapter_heartbeat_s,
+        persist_path=settings.adapter_registry_path,
+    )
+    registry.load_persisted()
+    if registry.is_empty():
+        for name, url in settings.adapter_url_list:
+            registry.upsert(name, url, "adapter", SEED)
+        if not registry.is_empty():
+            registry.persist()
+            log.info("engine: seeded registry from ADAPTER_URLS: %s",
+                     ", ".join(registry.adapters))
     else:
-        log.warning("engine: ADAPTER_URLS is empty; no measurements will be produced")
-    app.state.adapters = adapters
+        log.info("engine: registry restored with %d declared adapter(s)", len(registry.adapters))
+    app.state.registry = registry
+    # Back-compat alias: some call sites read app.state.adapters directly.
+    app.state.adapters = registry.adapters
 
     primary = get_strategy(settings.fusion_strategy)
     compare = [get_strategy(n) for n in settings.fusion_compare_list if n != settings.fusion_strategy]
@@ -60,7 +69,7 @@ async def lifespan(app: FastAPI):
     )
 
     app.state.position_service = PositionService(
-        adapters=adapters,
+        adapters=registry.adapters,  # live dict, mutated in place by the registry
         floor_plan=app.state.floor_plan,
         device_map=settings.device_map_dict,
         primary_strategy=primary,
@@ -68,11 +77,27 @@ async def lifespan(app: FastAPI):
     )
 
     broadcast_task = asyncio.create_task(websocket.broadcast_loop(app))
+    evict_task = asyncio.create_task(_evict_loop(app))
     yield
     broadcast_task.cancel()
-    for a in adapters.values():
-        if hasattr(a, "aclose"):
-            await a.aclose()
+    evict_task.cancel()
+    await registry.aclose()
+
+
+async def _evict_loop(app: FastAPI):
+    """Periodically drop self-registered adapters that stopped heartbeating."""
+    registry = app.state.registry
+    interval = max(5.0, settings.adapter_heartbeat_s)
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            orphans = registry.evict_expired()
+            if orphans:
+                registry.persist()
+                for a in orphans:
+                    await _safe_aclose(a)
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="Positioning Engine", lifespan=lifespan)

@@ -1,8 +1,10 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from . import register
 from .config import settings
 from .routers import contract as contract_router
 from .routers import discover as discover_router
@@ -35,7 +37,11 @@ async def lifespan(app: FastAPI):
             "no schema loaded; PUT one to /schema or mount it at %s",
             settings.schema_file,
         )
+    # Announce ourselves to the engine's adapter registry + heartbeat.
+    reg_task = asyncio.create_task(register.heartbeat_loop())
     yield
+    reg_task.cancel()
+    await register.deregister()
 
 
 app = FastAPI(
