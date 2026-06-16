@@ -21,27 +21,27 @@ def wittra_schema(wittra_schema_dict) -> Schema:
 
 
 @pytest.fixture
-def wittra_sample_payload() -> dict:
-    """Trimmed Wittra v4 telemetry response (single device)."""
-    return {
-        "deviceId": "D001",
-        "dataType": "telemetry",
-        "telemetryId": "t-001",
-        "source": "p",
-        "location": {
-            "telemetryId": "loc-001",
-            "value": {
-                "latitude": 45.064547,
-                "longitude": 7.659272,
-                "height": 1.2,
-                "level": 0,
-                "accuracy": 0.85,
-                "label": "Lab A",
-                "motion": "stationary",
+def wittra_sample_payload() -> list:
+    """Trimmed Wittra v4 get-data response: an array of location
+    DeviceDataPoints, ascending by time. The adapter takes the last (most
+    recent) element, so the expected fix is the second entry here."""
+    def _pt(lat, lon, acc, ts):
+        return {
+            "dataType": "location",
+            "deviceId": "D001",
+            "location": {
+                "value": {
+                    "latitude": lat, "longitude": lon, "height": 1.2,
+                    "level": 0, "accuracy": acc, "label": "Lab A",
+                    "motion": "stationary",
+                },
+                "timestamp": ts,
             },
-            "timestamp": "2026-06-03T14:36:17.000000+00:00",
-        },
-    }
+        }
+    return [
+        _pt(45.060000, 7.650000, 1.20, "2026-06-03 14:35:00.000000+00:00"),
+        _pt(45.064547, 7.659272, 0.85, "2026-06-03 14:36:17.000000+00:00"),  # latest
+    ]
 
 
 @pytest.fixture

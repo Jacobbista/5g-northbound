@@ -79,7 +79,7 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
   "vendor": "wittra",
   "default_base_url": "https://api.wittra.se",
   "base_url_env": "WITTRA_BASE_URL",
-  "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}/telemetry",
+  "path": "/v4/organizations/{org_id}/projects/{project_id}/data?deviceId={device_id}&dataType=location",
   "path_vars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
     "project_id": { "env": "WITTRA_PROJECT_ID" }
@@ -93,12 +93,12 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
   "request_timeout_s": 5.0,
   "mapping": {
     "frame":      { "const": "wgs84" },
-    "latitude":   { "path": "location.value.latitude" },
-    "longitude":  { "path": "location.value.longitude" },
-    "accuracy_m": { "path": "location.value.accuracy", "default": 5.0 },
+    "latitude":   { "path": "-1.location.value.latitude" },
+    "longitude":  { "path": "-1.location.value.longitude" },
+    "accuracy_m": { "path": "-1.location.value.accuracy", "default": 5.0 },
     "confidence": { "const": 0.5 },
-    "y":          { "path": "location.value.height", "default": 0.0 },
-    "timestamp":  { "path": "location.timestamp", "format": "iso8601" }
+    "y":          { "path": "-1.location.value.height", "default": 0.0 },
+    "timestamp":  { "path": "-1.location.timestamp", "format": "iso8601" }
   },
   "discover": {
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
@@ -125,6 +125,7 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
 }
 ```
 
+- **Array responses + "most recent" via path index.** Wittra v4 `GET /data` returns an *array* of `DeviceDataPoint`. `?dataType=location` filters server-side to location points only, returned ascending by time, so the latest fix is the last element. Dotted paths support list indices including negatives, so `-1.location.value.latitude` reads the latest point's latitude. No code change - the negative index is a mapper feature. (If a vendor returned the array newest-first, use `0.` instead.)
 - **Credentials never live in the schema.** Only `{ "env": "VAR_NAME" }` references. The schema can be committed to a public repo or pasted into a UI without leaking anything.
 - **`mapping.accuracy_m`** pulls from `location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
 - **`format: "iso8601"`** parses the timestamp string to a Unix epoch float so the engine can reason about staleness.

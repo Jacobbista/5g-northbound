@@ -8,7 +8,7 @@ def test_example_wittra_schema_validates(wittra_schema):
     assert wittra_schema.vendor == "wittra"
     assert wittra_schema.auth.scheme == "basic"
     assert wittra_schema.mapping.frame.const == "wgs84"
-    assert wittra_schema.mapping.latitude.path == "location.value.latitude"
+    assert wittra_schema.mapping.latitude.path == "-1.location.value.latitude"
     # Discover block ships in the example so the editor's sync flow can be
     # exercised against the local mock-wittra. Real Wittra v4 returns the
     # device array directly (no envelope) so list_path is empty and

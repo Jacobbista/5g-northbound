@@ -39,7 +39,7 @@ async def test_fetch_substitutes_path_vars_and_returns_json(wittra_schema, monke
     monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
     monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-wittra")
 
-    expected_url = "http://mock-wittra/v4/organizations/orgA/projects/prj1/devices/D001/telemetry"
+    expected_url = "http://mock-wittra/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
     route = respx.get(expected_url).mock(return_value=httpx.Response(200, json=wittra_sample_payload))
 
     result = await fetch(wittra_schema, "D001")
@@ -56,7 +56,7 @@ async def test_fetch_404_returns_none(wittra_schema, monkeypatch):
     monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-wittra")
 
     respx.get(
-        "http://mock-wittra/v4/organizations/orgA/projects/prj1/devices/D001/telemetry"
+        "http://mock-wittra/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
     ).mock(return_value=httpx.Response(404))
     assert await fetch(wittra_schema, "D001") is None
 
@@ -70,7 +70,7 @@ async def test_fetch_non_200_returns_none(wittra_schema, monkeypatch):
     monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-wittra")
 
     respx.get(
-        "http://mock-wittra/v4/organizations/orgA/projects/prj1/devices/D001/telemetry"
+        "http://mock-wittra/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
     ).mock(return_value=httpx.Response(500, text="boom"))
     assert await fetch(wittra_schema, "D001") is None
 

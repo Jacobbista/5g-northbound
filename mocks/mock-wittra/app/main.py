@@ -14,9 +14,9 @@ import base64
 import os
 import random
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 
 ORG_ID = os.environ.get("MOCK_WITTRA_ORG_ID", "demo-org")
 API_KEY = os.environ.get("MOCK_WITTRA_API_KEY", "demo-key")
@@ -92,6 +92,47 @@ def _telemetry_object(device_id: str) -> dict:
     }
 
 
+def _location_point(device_id: str, ts) -> dict:
+    """One v4 `location` DeviceDataPoint, matching the real get-data shape:
+    {dataType, deviceId, location: {timestamp, value: {latitude, ...}}}."""
+    obj = _telemetry_object(device_id)
+    return {
+        "dataType": "location",
+        "deviceId": device_id,
+        "location": {
+            "timestamp": ts.isoformat(sep=" "),
+            "value": obj["location"]["value"],
+        },
+    }
+
+
+@app.get("/v4/organizations/{org_id}/projects/{project_id}/data")
+async def get_data(
+    org_id: str,
+    project_id: str,
+    deviceId: str = Query(...),
+    dataType: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+):
+    """Real Wittra v4 get-data endpoint: returns an array of DeviceDataPoint
+    for one device, ascending by time (latest last). `?dataType=location`
+    filters server-side, as the real cloud does."""
+    _check_basic_auth(authorization)
+    if org_id != ORG_ID or project_id != PROJECT_ID:
+        raise HTTPException(404, detail="Unknown org/project")
+    if deviceId not in KNOWN_DEVICES:
+        raise HTTPException(404, detail="Unknown device")
+    now = datetime.now(timezone.utc)
+    # Three points, oldest first; the consumer takes the last (most recent).
+    points = [
+        _location_point(deviceId, now - timedelta(seconds=offset))
+        for offset in (2, 1, 0)
+    ]
+    if dataType:
+        points = [p for p in points if p["dataType"] == dataType]
+    return points
+
+
 @app.get("/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}/telemetry")
 async def get_device_telemetry(
     org_id: str,
@@ -99,6 +140,7 @@ async def get_device_telemetry(
     device_id: str,
     authorization: str | None = Header(default=None),
 ):
+    # Legacy single-object endpoint, kept for back-compat with older schemas.
     _check_basic_auth(authorization)
     if org_id != ORG_ID or project_id != PROJECT_ID:
         raise HTTPException(404, detail="Unknown org/project")
