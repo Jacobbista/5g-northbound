@@ -66,8 +66,9 @@ async def test_get_blueprint_404_when_absent():
 async def test_put_then_get_roundtrip(tmp_path, monkeypatch):
     from app import config
     monkeypatch.setattr(config.settings, "blueprint_path", str(tmp_path / "bp.json"))
-    body = {"floor_plans": [{"georef": {"latitude": 59.4, "longitude": 17.9, "azimuth_deg": -36.0}}],
-            "rooms": [{"width_m": 13, "height_m": 32}]}
+    body = {"version": 2,
+            "floor_plans": [{"georef": {"latitude": 59.4, "longitude": 17.9, "azimuth_deg": -36.0}}],
+            "rooms": [{"x_m": 0, "y_m": 0, "width_m": 13, "height_m": 32}]}
     async with await _client() as c:
         put = await c.put("/blueprint", json=body)
         assert put.status_code == 200
