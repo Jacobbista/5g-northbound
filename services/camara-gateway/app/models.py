@@ -2,37 +2,29 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# --- Device identifiers (CAMARA Commonalities) ---
-
-
-class DeviceIpv4Addr(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    publicAddress: Optional[str] = None
-    privateAddress: Optional[str] = None
-    publicPort: Optional[int] = Field(default=None, ge=0, le=65535)
-
-    @model_validator(mode="after")
-    def _require_pair(self) -> "DeviceIpv4Addr":
-        if not self.publicAddress:
-            raise ValueError("publicAddress is required")
-        if not (self.privateAddress or self.publicPort is not None):
-            raise ValueError("privateAddress or publicPort is required")
-        return self
+# --- Device identifier (CAMARA private-asset profile) ---
 
 
 class Device(BaseModel):
+    """The tracked entity is an ASSET, not a cellular subscriber.
+
+    Private-asset profile (see spec/private-profile/): `assetId` is the
+    first-class identifier. `networkAccessIdentifier` is accepted only as an
+    optional alias carrier using the asset scheme `<asset_id>@<org>.assets`,
+    for consumers that must stay on a stock CAMARA field. No MSISDN/IMSI/IP -
+    those are public-network subscriber identifiers and have no meaning here.
+    """
+
     model_config = ConfigDict(extra="ignore")
-    phoneNumber: Optional[str] = Field(default=None, pattern=r"^\+[1-9][0-9]{4,14}$")
+    assetId: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     networkAccessIdentifier: Optional[str] = None
-    ipv4Address: Optional[DeviceIpv4Addr] = None
-    ipv6Address: Optional[str] = None
 
     @model_validator(mode="after")
     def _at_least_one(self) -> "Device":
-        if not any(
-            (self.phoneNumber, self.networkAccessIdentifier, self.ipv4Address, self.ipv6Address)
-        ):
-            raise ValueError("at least one device identifier is required")
+        if not (self.assetId or self.networkAccessIdentifier):
+            raise ValueError(
+                "device.assetId is required (or networkAccessIdentifier as an asset alias)"
+            )
         return self
 
 
@@ -66,6 +58,15 @@ class Location(BaseModel):
     lastLocationTime: str
     area: Circle
     device: Optional[Device] = None
+    # Private-asset profile extensions (omitted when null). `source`/`kind`
+    # let quality-sensitive consumers reason about the fix (a UWB fix is
+    # trusted differently from a WiFi fix at the same radius). `altitude` +
+    # `verticalAccuracy` carry the third dimension CAMARA's 2D Circle drops
+    # (multi-floor / stacked storage).
+    source: Optional[str] = None
+    kind: Optional[str] = None
+    altitude: Optional[float] = None
+    verticalAccuracy: Optional[float] = None
 
 
 # --- Location Verification (v3) ---

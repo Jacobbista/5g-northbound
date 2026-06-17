@@ -60,6 +60,9 @@ services:
       ADAPTER_NAME: "wifi"
       ADAPTER_KIND: "wifi"
       ADAPTER_BASE_URL: "http://wifi-positioning:8080"
+      # Advertised capabilities (mirrors adapter.contract.yaml; validated by
+      # `make positioning-check`). Drives the gateway's GET /capabilities.
+      ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"local","streaming":false,"z":false,"accuracy_class":"metre"}'
       # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
       # trilateration diagnostics in this container's logs. Useful for
       # tuning tx_power / path_loss_n against a real venue.
@@ -126,6 +129,7 @@ services:
       ADAPTER_NAME: "wittra"
       ADAPTER_KIND: "vendor"
       ADAPTER_BASE_URL: "http://rest-adapter:8080"
+      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre"}'
     depends_on:
       mock-wittra:
         condition: service_healthy
@@ -146,10 +150,16 @@ services:
       context: ./mocks/mock-positioning
     ports:
       - "8090:8080"
+    volumes:
+      # Walk inside the operator's actual room: the walker reads room bounds +
+      # walls AND the floor-plan frame (room base + georef height) so it emits
+      # in the engine's `local` frame (floor-plan-local, north-up). Same seed
+      # blueprint the engine boots from, so the mock device lands among the
+      # anchors instead of in an arbitrary box.
+      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
     environment:
-      # Synthetic walker - bounds come from env, no blueprint needed. A mock
-      # does not consume the real venue geometry; it just produces continuous
-      # motion inside a box.
+      LAYOUT_PATH: "/app/config/layout.json"
+      # Fallback bounds when no layout is mounted; the layout overrides these.
       WIDTH_M: "13"
       DEPTH_M: "32"
       HEIGHT_M: "3"
@@ -159,6 +169,7 @@ services:
       ADAPTER_NAME: "mock"
       ADAPTER_KIND: "mock"
       ADAPTER_BASE_URL: "http://mock-positioning:8080"
+      ADAPTER_CAPABILITIES: '{"source":"mock","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse"}'
     depends_on:
       positioning-engine:
         condition: service_healthy
@@ -185,6 +196,9 @@ services:
       # dev blueprint mounted read-only below.
       - engine-blueprint:/app/data
       - ./services/positioning-demo/public/layout.json:/app/config/seed-blueprint.json:ro
+      # Versioned layout schema (read-only): the engine best-effort validates
+      # PUT /blueprint against it. Absent in prod -> validation degrades to no-op.
+      - ./schema:/app/schema:ro
     environment:
       BLUEPRINT_SEED_PATH: "/app/config/seed-blueprint.json"
       DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
@@ -226,16 +240,20 @@ services:
       # host 8080 is taken by the IDE here; gateway published on a free port
       - "8087:8080"
     volumes:
-      # Device registry: anagrafica (phoneNumber, deviceId, label). Edit the
-      # file and restart the gateway to register a new device.
-      - ./dev/devices.json:/app/config/devices.json:ro
+      # Asset Identity Map: the gateway is the network authority (GET/PUT
+      # /assets), mirroring the engine's blueprint store. Persisted on a named
+      # volume (survives restarts); seeded once from the committed dev fixture
+      # mounted read-only. Authoring is over HTTP, never by editing a mount.
+      - gateway-assets:/app/data
+      - ./dev/assets.json:/app/config/assets.seed.json:ro
     environment:
       SKIP_AUTH: "true"
-      SMF_URL: "http://mock-smf:9090"
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
+      WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
       KEYCLOAK_URL: "http://keycloak:8080"
       KEYCLOAK_REALM: "5g-testbed"
-      DEVICE_REGISTRY_FILE: "/app/config/devices.json"
+      ASSET_STORE_FILE: "/app/data/assets.json"
+      ASSET_SEED_FILE: "/app/config/assets.seed.json"
     depends_on:
       positioning-engine:
         condition: service_healthy
@@ -293,6 +311,9 @@ services:
       WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
       # Upstream for the vendor discovery proxy.
       REST_ADAPTER_URL: "http://rest-adapter:8080"
+      # Asset Identity Map authority, proxied at /api/assets (GET/PUT) for an
+      # onboarding client. Onboarding UI itself is the KELT dashboard's.
+      CAMARA_GATEWAY_URL: "http://camara-gateway:8080"
       # Optional Mapbox public token. When set, the editor exposes a
       # "Satellite (Mapbox)" basemap. Leave empty to keep ESRI only.
       VITE_MAPBOX_TOKEN: "${VITE_MAPBOX_TOKEN:-}"
@@ -313,6 +334,9 @@ volumes:
   # Persists the engine's authored blueprint across restarts (the engine is
   # the blueprint authority). Seeded once from the committed dev blueprint.
   engine-blueprint:
+  # Persists the gateway's Asset Identity Map (the gateway is the asset
+  # authority). Seeded once from dev/assets.json.
+  gateway-assets:
 
 networks:
   5g-net:

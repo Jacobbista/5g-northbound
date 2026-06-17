@@ -188,16 +188,28 @@ class WifiAdapter:
                 x, y = tracker.update(x, y, dt, accuracy_m**2)
         self._last_ts[device_id] = ts
 
+        # Trilateration runs in room-local (canvas-y); lift to the engine's
+        # documented `local` frame (floor-plan-local, north-up) before caching.
+        fx, fz = self._to_floor_plan(x, y)
         self._cache[device_id] = Measurement(
             source=self.source,
-            x=x,
+            x=fx,
             y=0.0,
-            z=y,  # room y maps to engine z (north)
+            z=fz,
             accuracy_m=accuracy_m,
             confidence=max(0.01, confidence / 100.0),
             timestamp=ts,
         )
         return True
+
+    def _to_floor_plan(self, x: float, y: float) -> tuple[float, float]:
+        """Room-local (canvas-y) -> floor-plan-local (north-up). Falls back to
+        room-local + base when no floor-plan height is known (no georef); the
+        engine degrades to (0, 0) WGS84 in that case anyway."""
+        fx = self.cfg.base_x + x
+        if self.cfg.fp_height_m > 0:
+            return fx, self.cfg.fp_height_m - (self.cfg.base_y + y)
+        return fx, self.cfg.base_y + y
 
     def get_measurement(self, device_id: str) -> Optional[Measurement]:
         # Always return the last fix with its real timestamp; the consumer decides

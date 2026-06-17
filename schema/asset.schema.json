@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/schema/asset.schema.json",
+  "title": "Asset Identity Map",
+  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked thing (UWB tag, tool, pallet, forklift), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. The gateway resolves a CAMARA `device.assetId` to one of these entries and routes to the positioning source by `positioning_id`. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod.",
+  "type": "object",
+  "required": ["version", "assets"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 2,
+      "description": "Asset Identity Map schema version. Pinned in schema/VERSION."
+    },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "required": ["asset_id", "positioning_id", "kind", "source", "org"],
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+          "description": "First-class CAMARA identifier (device.assetId). A business id chosen by the enterprise (e.g. pkg-4471, forklift-7). NOT a phone number."
+        },
+        "positioning_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+          "description": "Internal id the positioning engine routes on (engine /position/{positioning_id}). Joins to an adapter via the engine's adapter registry / DEVICE_MAP."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["uwb-tag", "tool", "pallet", "forklift", "asset", "ue"],
+          "description": "Asset class. Surfaced as profile `kind` so consumers can reason about the entity type."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["wittra", "wifi", "fiveg", "gnss", "mock"],
+          "description": "Positioning modality / adapter. Surfaced as profile `source` (a UWB fix is trusted differently from a WiFi fix at the same radius)."
+        },
+        "org": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,64}$",
+          "description": "Tenant. The gateway joins this against the token `org` claim (2-legged enterprise auth) so a consumer sees only its tenant's assets."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable name for UIs."
+        },
+        "simulated": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when wired to a synthetic/demo source (mock-positioning, mock-wittra). UIs show a MOCK badge."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Free-form per-asset metadata (e.g. floor, bay).",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

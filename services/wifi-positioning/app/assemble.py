@@ -135,9 +135,18 @@ def assemble_from_blueprint_dict(
             "longitude": float(georef["longitude"]),
         }
 
+    # Room origin + floor-plan height: lift the room-local fix into the
+    # engine's `local` frame (floor-plan-local, north-up) at emit time.
+    base_x = float(room.get("x_m") or 0)
+    base_y = float(room.get("y_m") or 0)
+    fp_height_m = float(georef.get("height_m") or 0)
+
     return WifiConfig(
         room_w=width,
         room_h=height,
+        base_x=base_x,
+        base_y=base_y,
+        fp_height_m=fp_height_m,
         tx_power=bindings.tx_power,
         path_loss_n=bindings.path_loss_n,
         gps_origin=gps_origin,

@@ -73,6 +73,14 @@ async def validate_token(token: str) -> dict | None:
     return claims
 
 
+def consumer_org(claims: dict | None) -> str | None:
+    """Tenant of the calling consumer, from the token `org` claim (2-legged
+    enterprise auth). None when absent - dev SKIP_AUTH ({}), or an untenanted
+    token - which the callers treat as 'see everything'. Production issues one
+    per-consumer Keycloak client carrying its `org`."""
+    return (claims or {}).get("org")
+
+
 async def require_location_role(request: Request) -> dict:
     s = get_settings()
     if s.skip_auth:

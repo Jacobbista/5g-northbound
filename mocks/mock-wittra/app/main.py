@@ -182,4 +182,17 @@ async def list_devices(
             "lastSeen": None,
             "group": None,
         })
+    # One mobile tag (no fixedLocation) so discover surfaces a fixed=false entry
+    # alongside the fixed beacons: the editor keeps anchors, asset onboarding
+    # keeps tags.
+    out.append({
+        "deviceId": "D00124B00249TAG01",
+        "deviceType": "tag",
+        "isPositioningActive": True,
+        "fixedLocation": None,
+        "color": "#5dffb0",
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "lastSeen": None,
+        "group": None,
+    })
     return out

@@ -12,6 +12,7 @@ against the same Keycloak realm + required role as the REST endpoints.
 """
 
 import asyncio
+import json
 import logging
 from urllib.parse import urlparse
 
@@ -19,13 +20,48 @@ import websockets
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
-from ..auth import validate_token
+from ..assets import list_assets
+from ..auth import consumer_org, validate_token
 from ..config import get_settings
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["positions-stream"])
 
 _CONNECT_TIMEOUT_S = 5.0
+
+
+def _enrich(raw: str, org: str | None = None) -> str:
+    """Turn the engine's positioning_id-keyed broadcast into the profile's
+    asset-shaped stream: map each item to its asset (assetId + source/kind/org),
+    and DROP items with no registered asset - the private-asset surface never
+    exposes a raw positioning id with no asset behind it. When `org` is set
+    (tenant-scoped token), also drop assets outside that org. `device_id` is
+    kept so existing stream consumers that key on it still work. Non-JSON /
+    unexpected shapes pass through unchanged."""
+    try:
+        items = json.loads(raw)
+    except ValueError:
+        return raw
+    if not isinstance(items, list):
+        return raw
+    by_pid = {a.positioning_id: a for a in list_assets()}
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        asset = by_pid.get(it.get("device_id"))
+        if asset is None:
+            continue
+        if org and asset.org != org:
+            continue
+        out.append({
+            **it,
+            "assetId": asset.asset_id,
+            "source": asset.source,
+            "kind": asset.kind,
+            "org": asset.org,
+        })
+    return json.dumps(out)
 
 
 def _engine_ws_url() -> str:
@@ -42,6 +78,7 @@ def _engine_ws_url() -> str:
 @router.websocket("/positions/stream")
 async def positions_stream(websocket: WebSocket, token: str = Query(default="")):
     claims = await validate_token(token)
+    org = consumer_org(claims)
     if claims is None:
         # 4401 is a custom application-layer close code (4000-4999 range
         # is reserved for app use by the WS spec). Browser EventSource-
@@ -65,7 +102,10 @@ async def positions_stream(websocket: WebSocket, token: str = Query(default=""))
                     if isinstance(message, bytes):
                         await websocket.send_bytes(message)
                     else:
-                        await websocket.send_text(message)
+                        # Enrich engine positioning_id payloads into asset-shaped
+                        # events (assetId + source/kind/org), dropping unregistered
+                        # ids and anything outside the consumer's tenant.
+                        await websocket.send_text(_enrich(message, org))
 
             forward_task = asyncio.create_task(pump_upstream_to_client())
 

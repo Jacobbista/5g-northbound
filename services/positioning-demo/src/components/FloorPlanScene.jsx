@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Edges,
   Grid,
@@ -43,8 +43,29 @@ const DEFAULT_WALL_THICK = 0.2;
 // EMA weight: 0=no update, 1=no smoothing. ~0.35 absorbs ~3 samples worth of jitter.
 const EMA_ALPHA = 0.35;
 
-function toLocal(center) {
+// Project a CAMARA fix (lat, lon) into THE canonical room frame the anchors use:
+// room-local metres, origin top-left, x right, y down (canvas-y). This is the
+// frame the placement editor stores and the engine speaks; the demo renders 3D
+// z = canvas-y directly (no mirror). gpsToFloorPlanLocal yields georef-frame y
+// (lower-left origin, north-up), so convert once: canvas-y = fpH - yFp, then
+// subtract the room base. Uses the blueprint georef, NOT the legacy env
+// GPS_ORIGIN (which pinned the demo to the wrong venue, throwing devices a
+// million metres off-scene).
+function toLocal(center, frame) {
   if (!center) return null;
+  if (frame?.georef) {
+    const { lat0, lon0, az, roomX, roomY, fpH } = frame;
+    const mLat = M_PER_DEG;
+    const mLon = M_PER_DEG * Math.cos((lat0 * Math.PI) / 180);
+    const east = (center.longitude - lon0) * mLon;
+    const north = (center.latitude - lat0) * mLat;
+    const xFp = east * Math.cos(az) - north * Math.sin(az);
+    const yFp = east * Math.sin(az) + north * Math.cos(az);
+    const x = xFp - roomX;
+    const z = (fpH - yFp) - roomY;
+    return { x, z };
+  }
+  // Legacy fallback (no blueprint georef available).
   const x =
     (center.longitude - GPS_ORIGIN_LON) * M_PER_DEG * Math.cos((GPS_ORIGIN_LAT * Math.PI) / 180);
   const z = (center.latitude - GPS_ORIGIN_LAT) * M_PER_DEG;
@@ -590,10 +611,11 @@ function ConnectionLines({ from, aps, color }) {
   if (!from || !aps?.length) return null;
   // Render one faint line per AP; opacity scales inversely with distance so
   // closer APs appear "more involved" without needing per-AP contribution data
-  // from the adapter.
+  // from the adapter. Anchor z = ap.y (room-local canvas-y), the same frame
+  // toLocal puts the device in, so the line lands on the dot.
   return aps.map((ap) => {
-    const d = Math.hypot(ap.x - from.x, ap.y - from.z);
-    const opacity = Math.max(0.08, Math.min(0.6, 4 / (d + 2)));
+    const dist = Math.hypot(ap.x - from.x, ap.y - from.z);
+    const opacity = Math.max(0.08, Math.min(0.6, 4 / (dist + 2)));
     return (
       <Line
         key={ap.id}
@@ -613,7 +635,7 @@ function ConnectionLines({ from, aps, color }) {
   });
 }
 
-function DeviceTracks({ positions, onSelectDevice, aps }) {
+function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
   const trailsRef = useRef({});
   const lastSeenRef = useRef({});
   // Per-device smoothed position (EMA of toLocal output).
@@ -626,7 +648,7 @@ function DeviceTracks({ positions, onSelectDevice, aps }) {
   }, []);
 
   useEffect(() => {
-    const keep = new Set(positions.map((p) => p.device.phoneNumber));
+    const keep = new Set(positions.map((p) => p.device.assetId));
     for (const k of Object.keys(trailsRef.current)) {
       if (!keep.has(k)) {
         delete trailsRef.current[k];
@@ -637,10 +659,10 @@ function DeviceTracks({ positions, onSelectDevice, aps }) {
   }, [positions]);
 
   return positions.map(({ device, position }) => {
-    const raw = toLocal(position?.area?.center);
+    const raw = toLocal(position?.area?.center, frame);
     const radius = position?.area?.radius ?? 0;
     const sources = position?.sources ?? [];
-    const phone = device.phoneNumber;
+    const phone = device.assetId;
 
     if (position?.lastLocationTime) {
       if (lastSeenRef.current[phone] !== position.lastLocationTime) {
@@ -715,6 +737,23 @@ function Scene({ positions, layout, visibleTechs, onSelectDevice, onSelectAp }) 
   const extraW = w + 2 * MARGIN;
   const extraD = d + 2 * MARGIN;
 
+  // Frame for projecting live device fixes (lat/lon) into this same room frame,
+  // using the blueprint's floor-plan georef (shared by the engine/editor).
+  const georef = layout?.floor_plans?.[0]?.georef || null;
+  const frame =
+    georef && georef.latitude != null && georef.longitude != null
+      ? {
+          georef: true,
+          lat0: Number(georef.latitude),
+          lon0: Number(georef.longitude),
+          az: ((Number(georef.azimuth_deg) || 0) * Math.PI) / 180,
+          roomX: Number(room?.x_m) || 0,
+          roomY: Number(room?.y_m) || 0,
+          fpH: Number(georef.height_m) || 0,
+          d,
+        }
+      : null;
+
   return (
     <>
       <color attach="background" args={["#070b18"]} />
@@ -775,13 +814,53 @@ function Scene({ positions, layout, visibleTechs, onSelectDevice, onSelectAp }) 
         />
       ))}
 
-      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} />
+      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} frame={frame} />
     </>
   );
 }
 
+// Smoothly fly the camera back to the home framing (position + room-centre
+// target) on each recenter signal. Tween, not OrbitControls.reset(): reset
+// can restore a target captured before the room-centre prop applied (it
+// snapped to the corner), and it was instant. Drives invalidate() per frame
+// so the demand-mode canvas renders the whole tween at full rate.
+function CameraRig({ homePos, target, signal, controlsRef }) {
+  const { camera, invalidate } = useThree();
+  const anim = useRef(null);
+  const home = useMemo(() => new THREE.Vector3(...homePos), [homePos]);
+  const tgt = useMemo(() => new THREE.Vector3(...target), [target]);
+
+  useEffect(() => {
+    if (!signal) return; // skip the initial mount
+    anim.current = {
+      fromPos: camera.position.clone(),
+      fromTgt: controlsRef.current ? controlsRef.current.target.clone() : tgt.clone(),
+      t: 0,
+    };
+    invalidate();
+  }, [signal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useFrame((_, delta) => {
+    const a = anim.current;
+    if (!a) return;
+    a.t = Math.min(1, a.t + delta / 0.55);
+    const k = 1 - Math.pow(1 - a.t, 3); // easeOutCubic
+    camera.position.lerpVectors(a.fromPos, home, k);
+    const c = controlsRef.current;
+    if (c) {
+      c.target.lerpVectors(a.fromTgt, tgt, k);
+      c.update();
+    }
+    invalidate();
+    if (a.t >= 1) anim.current = null;
+  });
+  return null;
+}
+
 export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDevice, onSelectAp, onLayoutLoaded }) {
   const [layout, setLayout] = useState(null);
+  const controlsRef = useRef();
+  const [recenterAt, setRecenterAt] = useState(0);
 
   // The blueprint comes from the CAMARA gateway (which proxies the engine, the
   // blueprint authority). The demo is a MEC app: it talks only to the gateway,
@@ -814,23 +893,65 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDe
   const span = Math.max(w + 2 * MARGIN, d + 2 * MARGIN);
 
   return (
-    <Canvas
-      dpr={[1, 1.5]}
-      frameloop="demand"
-      camera={{ position: [cx + span * 0.4, span * 0.7, cz + span * 0.85], fov: 50 }}
-      gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
-      style={{ height: "calc(100vh - 140px)", borderRadius: 12, background: "#070b18" }}
-    >
-      <RenderTick fps={12} />
-      <Scene
-        positions={positions}
-        layout={layout}
-        visibleTechs={visibleTechs}
-        onSelectDevice={onSelectDevice}
-        onSelectAp={onSelectAp}
-      />
-      <OrbitControls target={[cx, 0, cz]} enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI / 2.1} />
-    </Canvas>
+    <div style={{ position: "relative", height: "calc(100vh - 140px)" }}>
+      <Canvas
+        dpr={[1, 1.5]}
+        frameloop="demand"
+        camera={{ position: [cx + span * 0.4, span * 0.7, cz + span * 0.85], fov: 50 }}
+        gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
+        style={{ height: "100%", borderRadius: 12, background: "#070b18", touchAction: "none" }}
+        onPointerMissed={() => onSelectDevice?.(null)}
+      >
+        <RenderTick fps={12} />
+        <Scene
+          positions={positions}
+          layout={layout}
+          visibleTechs={visibleTechs}
+          onSelectDevice={onSelectDevice}
+          onSelectAp={onSelectAp}
+        />
+        <CameraRig
+          homePos={[cx + span * 0.4, span * 0.7, cz + span * 0.85]}
+          target={[cx, 0, cz]}
+          signal={recenterAt}
+          controlsRef={controlsRef}
+        />
+        <OrbitControls
+          ref={controlsRef}
+          makeDefault
+          target={[cx, 0, cz]}
+          enableDamping
+          dampingFactor={0.08}
+          maxPolarAngle={Math.PI / 2.1}
+          // Clamp the dolly so the room can't shrink to a dot or fly off.
+          minDistance={span * 0.4}
+          maxDistance={span * 1.9}
+        />
+      </Canvas>
+      <button
+        type="button"
+        onClick={() => setRecenterAt((n) => n + 1)}
+        title="Recenter the view"
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 12,
+          padding: "6px 12px",
+          fontSize: 11,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          fontFamily: "ui-monospace, monospace",
+          color: "#9ec3ff",
+          background: "rgba(10,18,40,0.7)",
+          border: "1px solid rgba(58,130,255,0.35)",
+          borderRadius: 6,
+          cursor: "pointer",
+          backdropFilter: "blur(6px)",
+        }}
+      >
+        ⌖ recenter
+      </button>
+    </div>
   );
 }
 

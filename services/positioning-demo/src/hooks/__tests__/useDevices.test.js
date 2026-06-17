@@ -11,36 +11,38 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function assetMap(assets) {
+  return { ok: true, json: async () => ({ version: 2, assets }) };
+}
+
 describe("useDevices", () => {
-  it("returns the registry list with palette colours assigned", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        devices: [
-          { phoneNumber: "+390111", deviceId: "a", label: "A" },
-          { phoneNumber: "+390222", deviceId: "b", label: "B" },
-        ],
-      }),
-    });
+  it("returns the asset map with palette colours assigned", async () => {
+    fetch.mockResolvedValue(
+      assetMap([
+        { asset_id: "tool-880", positioning_id: "a", kind: "tool", source: "wifi", org: "x", label: "A" },
+        { asset_id: "pkg-4471", positioning_id: "b", kind: "pallet", source: "wittra", org: "x", label: "B" },
+      ])
+    );
 
     const { result } = renderHook(() => useDevices("tok"));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.devices).toHaveLength(2);
     expect(result.current.devices[0]).toMatchObject({
-      phoneNumber: "+390111",
-      deviceId: "a",
+      assetId: "tool-880",
+      positioningId: "a",
+      kind: "tool",
+      source: "wifi",
       label: "A",
     });
     expect(result.current.devices[0].color).toMatch(/^#/);
     expect(result.current.devices[1].color).toMatch(/^#/);
   });
 
-  it("falls back to deviceId when label is missing", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ devices: [{ phoneNumber: "+390111", deviceId: "asset-x" }] }),
-    });
+  it("falls back to asset_id when label is missing", async () => {
+    fetch.mockResolvedValue(
+      assetMap([{ asset_id: "asset-x", positioning_id: "p", kind: "tool", source: "wifi", org: "x" }])
+    );
 
     const { result } = renderHook(() => useDevices("tok"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -64,18 +66,15 @@ describe("useDevices", () => {
   });
 
   it("propagates simulated flag from the gateway response", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        devices: [
-          { phoneNumber: "+390001", deviceId: "real",  label: "Real" },
-          { phoneNumber: "+390002", deviceId: "mocky", label: "Mock", simulated: true },
-        ],
-      }),
-    });
+    fetch.mockResolvedValue(
+      assetMap([
+        { asset_id: "real", positioning_id: "r", kind: "tool", source: "wifi", org: "x", label: "Real" },
+        { asset_id: "mocky", positioning_id: "m", kind: "forklift", source: "mock", org: "x", label: "Mock", simulated: true },
+      ])
+    );
     const { result } = renderHook(() => useDevices("tok"));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    const byId = Object.fromEntries(result.current.devices.map((d) => [d.deviceId, d]));
+    const byId = Object.fromEntries(result.current.devices.map((d) => [d.assetId, d]));
     expect(byId.real.simulated).toBe(false);
     expect(byId.mocky.simulated).toBe(true);
   });

@@ -11,17 +11,22 @@ class Settings(BaseSettings):
     keycloak_realm: str = "5g-testbed"
     # Gateway's own confidential-client secret. MVP does not call Keycloak itself; never log it.
     camara_client_secret: str = "changeme"
-    smf_url: str = "http://smf.5g.svc.cluster.local:9090"
     # Empty -> resolve position with the built-in mock
     positioning_engine_url: str = ""
+    # Optional: the wifi-positioning adapter, proxied for the demo's anchor
+    # panel to read real calibration params (tx_power ref + path-loss n). Empty
+    # -> the /anchors/calibration extension returns nothing (degrades).
+    wifi_positioning_url: str = ""
 
     required_role: str = "camara-location-read"
-    # JSON map: CAMARA device identifier value -> internal device id (fallback used
-    # when device_registry_file is empty or unreadable).
-    device_registry: str = "{}"
-    # Path to a JSON file describing the device registry. Preferred over
-    # device_registry when set. Schema: {"devices": [{"phoneNumber","deviceId","label"}]}.
-    device_registry_file: str = ""
+    # Asset Identity Map. The gateway is the network authority for assets,
+    # exactly as the engine is for the blueprint: it persists the map on a
+    # writable store (PVC) and serves GET/PUT /assets. On first boot the store
+    # is empty, so it seeds once from a committed, read-only seed file.
+    # Conforms to schema/asset.schema.json. No mounted-file-at-runtime path -
+    # authoring is over the network (avoids the file-shadow class of bugs).
+    asset_store_file: str = "/app/data/assets.json"
+    asset_seed_file: str = "/app/config/assets.seed.json"
     skip_auth: bool = False
 
 

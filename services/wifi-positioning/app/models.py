@@ -91,6 +91,14 @@ class WifiConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     room_w: float
     room_h: float
+    # Room origin within the floor plan + floor-plan height, used to lift the
+    # room-local, canvas-y (origin top-left, y down) trilateration result into
+    # the engine's documented `local` frame: floor-plan-local, lower-left
+    # origin, z = north-up. Zero when no georef is known (graceful: the engine
+    # then degrades to (0, 0) WGS84 anyway).
+    base_x: float = 0.0
+    base_y: float = 0.0
+    fp_height_m: float = 0.0
     tx_power: float = -42.0
     path_loss_n: float = 2.7
     gps_origin: Optional[GpsOrigin] = None
@@ -105,8 +113,9 @@ class WifiConfig(BaseModel):
 class Measurement(BaseModel):
     """HTTP response of GET /measurement/{device_id}.
 
-    Same shape consumed by positioning-engine's HttpAdapter. The engine maps
-    `x`,`z` to its local room frame (room y maps to engine z = north).
+    Same shape consumed by positioning-engine's HttpAdapter. `x`,`z` are in the
+    engine's `local` frame: floor-plan-local, lower-left origin, z = north-up
+    (the adapter lifts its room-local fix into this frame before emitting).
     """
 
     source: str = "wifi"

@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # expose them as N URLs; not modelled here yet.
     rest_adapter_url: str = "http://rest-adapter:8080"
 
+    # Base URL of the camara-gateway, the Asset Identity Map authority. The
+    # editor proxies GET/PUT /assets so an onboarding client (the KELT
+    # dashboard) can read + merge the registry over the editor's single
+    # backend. Asset onboarding UI itself is KELT's, not the editor's.
+    camara_gateway_url: str = "http://camara-gateway:8080"
+
 
 @lru_cache
 def get_settings() -> Settings:

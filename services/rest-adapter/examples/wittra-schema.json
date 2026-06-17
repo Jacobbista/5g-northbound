@@ -24,7 +24,7 @@
     "timestamp":  { "path": "-1.location.timestamp", "format": "iso8601" }
   },
   "discover": {
-    "_comment": "Filters out devices without a fixedLocation: those are mobile tags, not anchors. Use the editor's manual placement flow for tags, sync only for beacons that the Wittra portal has positioned.",
+    "_comment": "Returns every device with a `fixed` flag: fixed=true are positioned anchors (fixedLocation present), fixed=false are mobile tags. No server-side filter - each consumer picks: the editor keeps fixed anchors for the blueprint, asset onboarding keeps mobile tags for the registry.",
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
     "list_path": "",
     "path_vars": {
@@ -40,9 +40,6 @@
       "latitude":         { "path": "fixedLocation.latitude" },
       "longitude":        { "path": "fixedLocation.longitude" },
       "height_m":         { "const": 0 }
-    },
-    "filter": {
-      "require_path": "fixedLocation.latitude"
     }
   }
 }

@@ -24,6 +24,10 @@ class RegisterRequest(BaseModel):
     name: str
     base_url: str
     kind: str = "adapter"
+    # Self-advertised positioning traits (frame, streaming, z, accuracy_class,
+    # kinds). Optional: an adapter that omits it contributes no capability
+    # hints to the gateway's GET /capabilities.
+    capabilities: dict = {}
 
 
 @router.get("/adapters")
@@ -39,7 +43,7 @@ async def register_adapter(req: RegisterRequest, request: Request):
     """Register or heartbeat a self-registering adapter. Idempotent: same
     name+base_url just refreshes last_seen."""
     registry = request.app.state.registry
-    orphan = registry.upsert(req.name, req.base_url, req.kind, SELF)
+    orphan = registry.upsert(req.name, req.base_url, req.kind, SELF, req.capabilities)
     registry.persist()
     if orphan is not None:
         await _safe_aclose(orphan)

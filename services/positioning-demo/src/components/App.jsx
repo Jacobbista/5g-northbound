@@ -11,13 +11,41 @@ import { DetailPanel } from "./DetailPanel";
 
 const M_PER_DEG = 111320;
 
-// Convert a (lat, lng) coming back from the gateway into floor-local (x, z)
-// metres relative to the GPS origin. Sidebar uses this so the lat/lon ↔ x/z
-// toggle in the header actually changes what's shown next to each device.
-function gpsToLocal(lat, lon) {
+// Convert a (lat, lng) from the gateway into room-local (x, y) metres for the
+// sidebar's lat/lon <-> x/z toggle. Uses the blueprint's floor-plan georef
+// (passed as `frame`) so it matches the 3D scene and the engine; falls back to
+// the legacy env GPS_ORIGIN only when no blueprint is loaded.
+function gpsToLocal(lat, lon, frame) {
+  if (frame?.georef) {
+    const { lat0, lon0, az, roomX, roomY, fpH } = frame;
+    const east = (lon - lon0) * M_PER_DEG * Math.cos((lat0 * Math.PI) / 180);
+    const north = (lat - lat0) * M_PER_DEG;
+    const xFp = east * Math.cos(az) - north * Math.sin(az);
+    const yFp = east * Math.sin(az) + north * Math.cos(az);
+    // Match the editor / stored anchors (canvas-y, top-left origin): mirror the
+    // georef-frame y about the floor-plan height, then subtract the room base.
+    const x = xFp - roomX;
+    const z = (fpH - yFp) - roomY;
+    return { x, z };
+  }
   const x = (lon - GPS_ORIGIN_LON) * M_PER_DEG * Math.cos((GPS_ORIGIN_LAT * Math.PI) / 180);
   const z = (lat - GPS_ORIGIN_LAT) * M_PER_DEG;
   return { x, z };
+}
+
+// Build the projection frame from the loaded blueprint, or null.
+function frameFromLayout(layout) {
+  const g = layout?.floor_plans?.[0]?.georef;
+  if (!g || g.latitude == null || g.longitude == null) return null;
+  return {
+    georef: true,
+    lat0: Number(g.latitude),
+    lon0: Number(g.longitude),
+    az: ((Number(g.azimuth_deg) || 0) * Math.PI) / 180,
+    roomX: Number(layout?.rooms?.[0]?.x_m) || 0,
+    roomY: Number(layout?.rooms?.[0]?.y_m) || 0,
+    fpH: Number(g.height_m) || 0,
+  };
 }
 
 const TECH_LABEL = { wifi: "WiFi", wittra: "UWB", fiveg: "5G", gnss: "GNSS" };
@@ -347,12 +375,12 @@ const mockPill = {
   fontFamily: "ui-monospace, monospace",
 };
 
-function DeviceItem({ device, state, position, selected, coordMode, onToggle }) {
+function DeviceItem({ device, state, position, selected, coordMode, onToggle, frame }) {
   const center = position?.area?.center;
   const coordStr = center
     ? coordMode === "relative"
       ? (() => {
-          const p = gpsToLocal(center.latitude, center.longitude);
+          const p = gpsToLocal(center.latitude, center.longitude, frame);
           return `x=${p.x.toFixed(2)}  z=${p.z.toFixed(2)}`;
         })()
       : `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`
@@ -360,7 +388,7 @@ function DeviceItem({ device, state, position, selected, coordMode, onToggle }) 
   return (
     <div
       style={deviceRow(selected, device.color)}
-      onClick={() => onToggle(device.phoneNumber)}
+      onClick={() => onToggle(device.assetId)}
       role="checkbox"
       aria-checked={selected}
       tabIndex={0}
@@ -382,6 +410,12 @@ function DeviceItem({ device, state, position, selected, coordMode, onToggle }) 
             </span>
           )}
         </div>
+        <span
+          style={{ fontSize: 9, color: "#5a6987", fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em" }}
+          title="Asset identity (private-asset profile): assetId · kind · source. No MSISDN/subscriber."
+        >
+          {device.assetId} · {device.kind} · {device.source}
+        </span>
         {selected && coordStr && (
           <span style={{ fontSize: 10, color: "#7a8aab", fontFamily: "ui-monospace, monospace" }}>
             {coordStr}
@@ -453,19 +487,19 @@ export function App() {
   const paused = idleState === "standby";
 
   const { devices, error: devicesError, loading: devicesLoading } = useDevices(token);
-  const allPhones = devices.map((d) => d.phoneNumber);
-  const { isSelected, toggle } = useSelection(allPhones);
+  const allAssetIds = devices.map((d) => d.assetId);
+  const { isSelected, toggle } = useSelection(allAssetIds);
   const adapters = useAdapterHealth(token, { paused });
   const { byDeviceId, connected } = usePositionsStream(token, { paused });
 
-  // Index every registered device against the live stream by its internal
-  // deviceId (the WS payload key). Devices without a stream entry get
+  // Index every registered asset against the live stream by its internal
+  // positioningId (the WS payload key). Assets without a stream entry get
   // null position which the rest of the UI renders as "offline".
-  const byPhone = useMemo(() => {
+  const byAsset = useMemo(() => {
     const out = {};
     for (const d of devices) {
-      const streamItem = byDeviceId[d.deviceId];
-      out[d.phoneNumber] = {
+      const streamItem = byDeviceId[d.positioningId];
+      out[d.assetId] = {
         device: d,
         position: adaptStreamItem(streamItem),
       };
@@ -473,25 +507,80 @@ export function App() {
     return out;
   }, [devices, byDeviceId]);
 
+  // Keep the panel content mounted through the close transition so the rail
+  // can slide/fade out instead of vanishing. Cleared after the animation.
+  const [renderedSelection, setRenderedSelection] = useState(null);
+  useEffect(() => {
+    if (selection) {
+      setRenderedSelection(selection);
+      return;
+    }
+    const id = setTimeout(() => setRenderedSelection(null), 260);
+    return () => clearTimeout(id);
+  }, [selection]);
+
   if (authError)
     return <div style={{ ...shell, padding: 24, color: "#ff6b78" }}>{authError}</div>;
   if (!token)
     return <div style={{ ...shell, padding: 24, color: "#7a8aab" }}>Authenticating…</div>;
 
   const scenePositions = devices
-    .filter((d) => isSelected(d.phoneNumber))
+    .filter((d) => isSelected(d.assetId))
     .map((d) => ({
       device: d,
-      position: byPhone[d.phoneNumber]?.position,
+      position: byAsset[d.assetId]?.position,
     }));
   const anyMock = devices.some((d) => d.simulated);
 
+  // Venue metadata, taken from the blueprint (never hardcoded): floor-plan
+  // label = the place, room label + extent, georef lat/lon = the location.
+  const fp0 = layout?.floor_plans?.[0];
+  const room0 = layout?.rooms?.[0];
+  const g0 = fp0?.georef;
+  const venueName = fp0?.label || null;
+  const roomLabel = room0?.label || null;
+  const roomDims = room0?.width_m
+    ? `${Number(room0.width_m).toFixed(1)}×${Number(room0.height_m).toFixed(1)} m`
+    : null;
+  const geoStr =
+    g0?.latitude != null ? `${Number(g0.latitude).toFixed(5)}, ${Number(g0.longitude).toFixed(5)}` : null;
+
   return (
-    <div style={shell}>
+    <div
+      style={{
+        ...shell,
+        // Two columns only: sidebar + full-width scene. The detail panel is a
+        // floating overlay on the scene (see below), so selecting never resizes
+        // the canvas - no demand-mode resize jank, scene always uses full width.
+        gridTemplateColumns: "260px minmax(0, 1fr)",
+      }}
+    >
       <header style={header}>
         <div style={dot("#3a82ff", true)} />
         <h2 style={title}>5G Positioning</h2>
         <span style={subtitle}>· CAMARA · live</span>
+        {venueName && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              color: "#9aa9c4",
+              fontFamily: "ui-monospace, monospace",
+              padding: "2px 8px",
+              borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.03)",
+            }}
+            title={geoStr ? `Location: ${geoStr}` : undefined}
+          >
+            <span style={{ opacity: 0.7 }}>📍</span>
+            <span style={{ color: "#cdd7ea" }}>{venueName}</span>
+            {roomLabel && <span style={{ opacity: 0.6 }}>· {roomLabel}</span>}
+            {roomDims && <span style={{ opacity: 0.5 }}>· {roomDims}</span>}
+          </span>
+        )}
         {anyMock && (
           <span
             style={mockPill}
@@ -562,10 +651,10 @@ export function App() {
           <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>no devices registered</div>
         )}
         {devices.map((d) => {
-          const selected = isSelected(d.phoneNumber);
-          const entry = byPhone[d.phoneNumber];
+          const selected = isSelected(d.assetId);
+          const entry = byAsset[d.assetId];
           return (
-            <div key={d.phoneNumber}>
+            <div key={d.assetId}>
               <DeviceItem
                 device={d}
                 state={selected ? deviceState({ position: entry?.position, connected }) : "offline"}
@@ -573,6 +662,7 @@ export function App() {
                 selected={selected}
                 coordMode={coordMode}
                 onToggle={toggle}
+                frame={frameFromLayout(layout)}
               />
             </div>
           );
@@ -584,19 +674,39 @@ export function App() {
           token={token}
           positions={scenePositions}
           visibleTechs={visibleTechs}
-          onSelectDevice={(d) => setSelection({ kind: "device", device: d })}
+          onSelectDevice={(d) => setSelection(d ? { kind: "device", device: d } : null)}
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
           onLayoutLoaded={setLayout}
         />
+        {/* Floating overlay on the scene - never resizes the canvas. */}
+        <div
+          style={{
+            position: "absolute",
+            top: 28,
+            right: 32,
+            width: 340,
+            maxHeight: "calc(100vh - 200px)",
+            overflowY: "auto",
+            overflowX: "hidden",
+            boxSizing: "border-box",
+            zIndex: 5,
+            opacity: selection ? 1 : 0,
+            transform: selection ? "translateX(0)" : "translateX(20px)",
+            transition: "transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease",
+            pointerEvents: selection ? "auto" : "none",
+          }}
+        >
+          {renderedSelection && (
+            <DetailPanel
+              selection={renderedSelection}
+              token={token}
+              coordMode={coordMode}
+              frame={frameFromLayout(layout)}
+              onClose={() => setSelection(null)}
+            />
+          )}
+        </div>
       </div>
-      <aside style={{ padding: "16px 20px 20px 0" }}>
-        <DetailPanel
-          selection={selection}
-          token={token}
-          coordMode={coordMode}
-          onClose={() => setSelection(null)}
-        />
-      </aside>
       {idleState === "prompting" && (
         <IdlePromptModal remainingMs={promptRemainingMs} onAcknowledge={acknowledge} />
       )}

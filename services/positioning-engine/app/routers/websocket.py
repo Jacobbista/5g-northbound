@@ -59,11 +59,16 @@ async def broadcast_loop(app):
             if isinstance(res, Exception) or res is None:
                 continue
             lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.z, origin)
+            alt = None
+            if res.primary.fused.y is not None:
+                base = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
+                alt = round(base + res.primary.fused.y, 3)
             payload_items.append({
                 "device_id": did,
                 "latitude": lat,
                 "longitude": lon,
                 "accuracy_m": round(res.primary.fused.accuracy_m, 4),
+                "altitude_m": alt,
                 "timestamp": ts_to_iso(res.primary.fused.timestamp),
                 "sources": res.primary.fused.sources,
                 "strategy": res.primary.name,

@@ -34,6 +34,12 @@ async def get_position(
 
         primary = result.primary.fused
         lat, lon = local_to_gps(primary.x, primary.z, origin)
+        # Vertical: fused local height + the origin's altitude when known.
+        # `primary.y` is the height in the local frame; absent height stays 0.
+        altitude_m = None
+        if primary.y is not None:
+            base_alt = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
+            altitude_m = round(base_alt + primary.y, 3)
 
         fusions = None
         if result.compare:
@@ -56,6 +62,7 @@ async def get_position(
             sources=primary.sources,
             strategy=result.primary.name,
             fusions=fusions,
+            altitude_m=altitude_m,
         )
     except HTTPException:
         raise

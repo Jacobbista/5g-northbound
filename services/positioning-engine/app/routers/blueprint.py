@@ -16,7 +16,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..blueprint import floor_plan_from_blueprint, save_blueprint
+from ..blueprint import floor_plan_from_blueprint, save_blueprint, validate_blueprint
 from ..config import settings
 
 log = logging.getLogger(__name__)
@@ -33,6 +33,10 @@ async def get_blueprint(request: Request) -> dict[str, Any]:
 
 @router.put("/blueprint")
 async def put_blueprint(request: Request, raw: dict[str, Any]) -> dict[str, Any]:
+    try:
+        validate_blueprint(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"blueprint schema violation: {exc}") from exc
     try:
         save_blueprint(settings.blueprint_path, raw)
     except OSError as exc:

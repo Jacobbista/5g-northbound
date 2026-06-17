@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/schema/layout.schema.json",
+  "title": "Venue layout / blueprint (v2)",
+  "description": "The blueprint shape the placement-editor authors and the engine serves (GET/PUT /blueprint), consumed by the engine, mock-positioning, wifi-positioning and the demo. Pinned in schema/VERSION. FRAME CONVENTION (the single source of truth, do not reinterpret per consumer): room-local + anchors + walls + calibration samples are in CANVAS-Y - origin top-left, x right, y DOWN. The floor-plan georef is LOWER-LEFT origin with z = NORTH-UP; `azimuth_deg` is the bearing of the floor-plan +z (image vertical) clockwise from true north. Conversion canvas-y -> georef-north-up happens once, at the engine `local` boundary: north_up = height_m - canvas_y. Adapters emit floor-plan-local north-up; the demo inverts the same way to render. Lenient (additionalProperties allowed) so additive editor fields don't break validation; the required keys below are the contract.",
+  "type": "object",
+  "required": ["version", "rooms"],
+  "properties": {
+    "version": { "type": "integer", "const": 2 },
+    "floor_plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "georef": { "$ref": "#/$defs/georef" },
+          "image": { "type": "object" }
+        }
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/room" }
+    }
+  },
+  "$defs": {
+    "georef": {
+      "type": "object",
+      "description": "Links the floor-plan-local frame to WGS84. Lower-left origin, z = north-up, azimuth_deg clockwise from true north.",
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+        "azimuth_deg": { "type": "number" },
+        "width_m": { "type": "number", "exclusiveMinimum": 0 },
+        "height_m": { "type": "number", "exclusiveMinimum": 0, "description": "Floor-plan metric height. The mirror axis for canvas-y <-> north-up." },
+        "altitude_m": { "type": ["number", "null"] }
+      }
+    },
+    "room": {
+      "type": "object",
+      "required": ["x_m", "y_m", "width_m", "height_m"],
+      "description": "Room rectangle placed on the floor plan, in canvas-y (top-left origin). x_m/y_m = top-left corner offset within the floor plan.",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "x_m": { "type": "number" },
+        "y_m": { "type": "number" },
+        "width_m": { "type": "number", "exclusiveMinimum": 0 },
+        "height_m": { "type": "number", "exclusiveMinimum": 0 },
+        "wall_height_m": { "type": "number" },
+        "shape": {
+          "type": "array",
+          "description": "Optional polygon [[x,y],...] in floor-plan canvas-y; overrides the rectangle.",
+          "items": { "type": "array", "items": { "type": "number" }, "minItems": 2 }
+        },
+        "anchors": { "type": "array", "items": { "$ref": "#/$defs/anchor" } },
+        "walls": { "type": "array", "items": { "$ref": "#/$defs/wall" } },
+        "perimeter_openings": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "required": ["id", "x", "y"],
+      "description": "Positioning anchor in ROOM-LOCAL canvas-y (origin top-left, y down). `technology` selects the adapter family.",
+      "properties": {
+        "id": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "height_m": { "type": "number" },
+        "technology": { "type": "string", "enum": ["wifi", "wittra", "fiveg", "gnss"] }
+      }
+    },
+    "wall": {
+      "type": "object",
+      "required": ["x1", "y1", "x2", "y2"],
+      "description": "Wall segment in room-local canvas-y. openings are 1-D pass-through ranges along the segment.",
+      "properties": {
+        "x1": { "type": "number" },
+        "y1": { "type": "number" },
+        "x2": { "type": "number" },
+        "y2": { "type": "number" },
+        "thickness": { "type": "number" },
+        "height_m": { "type": "number" },
+        "openings": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  }
+}

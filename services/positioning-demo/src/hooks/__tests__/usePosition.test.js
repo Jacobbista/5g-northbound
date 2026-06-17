@@ -23,7 +23,7 @@ describe("usePosition", () => {
       json: async () => MOCK_POSITION,
     });
 
-    const { result } = renderHook(() => usePosition("fake-token", "+390111234567"));
+    const { result } = renderHook(() => usePosition("fake-token", "tool-880"));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -31,21 +31,21 @@ describe("usePosition", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("calls the CAMARA v0.5 retrieve route with the given phoneNumber", async () => {
+  it("calls the CAMARA v0.5 retrieve route with the given assetId", async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => MOCK_POSITION });
 
-    renderHook(() => usePosition("fake-token", "+390117654321"));
+    renderHook(() => usePosition("fake-token", "pkg-4471"));
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     const [url, opts] = fetch.mock.calls[0];
     expect(url).toMatch(/\/location-retrieval\/v0\.5\/retrieve$/);
-    expect(JSON.parse(opts.body).device.phoneNumber).toBe("+390117654321");
+    expect(JSON.parse(opts.body).device.assetId).toBe("pkg-4471");
   });
 
   it("sets error on HTTP failure", async () => {
     fetch.mockResolvedValue({ ok: false, status: 502 });
 
-    const { result } = renderHook(() => usePosition("fake-token", "+390111234567"));
+    const { result } = renderHook(() => usePosition("fake-token", "tool-880"));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -54,12 +54,12 @@ describe("usePosition", () => {
   });
 
   it("does not fetch when token is null", () => {
-    const { result } = renderHook(() => usePosition(null, "+390111234567"));
+    const { result } = renderHook(() => usePosition(null, "tool-880"));
     expect(fetch).not.toHaveBeenCalled();
     expect(result.current.loading).toBe(true);
   });
 
-  it("does not fetch when phoneNumber is null", () => {
+  it("does not fetch when assetId is null", () => {
     const { result } = renderHook(() => usePosition("fake-token", null));
     expect(fetch).not.toHaveBeenCalled();
     expect(result.current.loading).toBe(true);

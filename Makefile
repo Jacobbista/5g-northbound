@@ -96,6 +96,19 @@ test:
 env-check:
 	@python3 deploy/tools/contracts.py validate
 
+# Validate the positioning fabric: adapter capabilities (compose vs contract),
+# and every asset's source/kind is served by some adapter. Static, no stack.
+.PHONY: positioning-check
+positioning-check:
+	@python3 deploy/tools/positioning_check.py
+
+# Contract hygiene + the machine-readable sensitivity manifest KELT consumes
+# (var -> tier -> Secret/ConfigMap + provenance). Lint fails on hard problems.
+.PHONY: contracts
+contracts:
+	@python3 deploy/tools/contracts.py lint
+	@python3 deploy/tools/contracts.py sensitivity-manifest
+
 logs:
 	$(COMPOSE) logs -f --tail=100
 

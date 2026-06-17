@@ -3,16 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDeviceDetails } from "../useDeviceDetails";
 
 const MOCK_DETAILS = {
-  phoneNumber: "+390111234567",
-  deviceId: "wifi-asset-01",
-  label: "WiFi asset 01",
+  asset_id: "pkg-4471",
+  positioning_id: "wittra-tag-01",
+  kind: "pallet",
+  source: "wittra",
+  org: "fiskarheden",
+  label: "Wittra tag 01",
   telemetry: {
     latitude: 45.064,
     longitude: 7.659,
     accuracy_m: 2.4,
+    altitude: 1.2,
     lastLocationTime: "2026-06-03T12:00:00Z",
     strategy: "weighted_avg",
-    sources: ["wifi", "mock"],
+    sources: ["wittra"],
   },
 };
 
@@ -29,25 +33,24 @@ describe("useDeviceDetails", () => {
   it("returns details after a successful fetch", async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => MOCK_DETAILS });
 
-    const { result } = renderHook(() => useDeviceDetails("tok", "+390111234567"));
+    const { result } = renderHook(() => useDeviceDetails("tok", "pkg-4471"));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.details).toEqual(MOCK_DETAILS);
-    expect(result.current.details.telemetry.sources).toEqual(["wifi", "mock"]);
+    expect(result.current.details.telemetry.sources).toEqual(["wittra"]);
   });
 
-  it("URL-encodes the phoneNumber so + survives the round-trip", async () => {
+  it("hits the /assets/{assetId}/details route", async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => MOCK_DETAILS });
 
-    renderHook(() => useDeviceDetails("tok", "+390111234567"));
+    renderHook(() => useDeviceDetails("tok", "pkg-4471"));
     await waitFor(() => expect(fetch).toHaveBeenCalled());
 
     const [url] = fetch.mock.calls[0];
-    expect(url).toContain(encodeURIComponent("+390111234567"));
-    expect(url).toMatch(/\/details$/);
+    expect(url).toContain("/assets/pkg-4471/details");
   });
 
-  it("does not fetch when phoneNumber is null", () => {
+  it("does not fetch when assetId is null", () => {
     renderHook(() => useDeviceDetails("tok", null));
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -55,7 +58,7 @@ describe("useDeviceDetails", () => {
   it("treats 404 as offline (no fix), not error", async () => {
     fetch.mockResolvedValue({ ok: false, status: 404 });
 
-    const { result } = renderHook(() => useDeviceDetails("tok", "+390111234567"));
+    const { result } = renderHook(() => useDeviceDetails("tok", "pkg-4471"));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.error).toBeNull();
@@ -65,7 +68,7 @@ describe("useDeviceDetails", () => {
   it("sets error on non-404 HTTP failure", async () => {
     fetch.mockResolvedValue({ ok: false, status: 500 });
 
-    const { result } = renderHook(() => useDeviceDetails("tok", "+390111234567"));
+    const { result } = renderHook(() => useDeviceDetails("tok", "pkg-4471"));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.error).toMatch(/500/);
@@ -73,7 +76,7 @@ describe("useDeviceDetails", () => {
   });
 
   it("does not poll when paused", () => {
-    renderHook(() => useDeviceDetails("tok", "+390111234567", { paused: true }));
+    renderHook(() => useDeviceDetails("tok", "pkg-4471", { paused: true }));
     expect(fetch).not.toHaveBeenCalled();
   });
 });

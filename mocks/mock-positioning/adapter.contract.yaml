@@ -1,0 +1,14 @@
+# Adapter capability contract for mock-positioning.
+# Declarative source of truth for what this adapter can locate and how. The
+# runtime value travels in ADAPTER_CAPABILITIES (JSON, set by compose / KELT);
+# `make positioning-check` asserts the two agree. The engine stores the
+# advertised capabilities; the gateway aggregates them into GET /capabilities.
+adapter: mock
+description: Synthetic waypoint walker for demos. Never shipped to production.
+capabilities:
+  source: mock          # modality tag surfaced on fixes
+  kinds: [forklift, asset]   # asset kinds this adapter can locate
+  frame: local          # Measurement frame it emits (floor-plan-local, north-up)
+  streaming: false      # pull-only (no push channel)
+  z: true               # provides a vertical (height) component
+  accuracy_class: coarse  # coarse | metre | sub-metre

@@ -40,15 +40,19 @@ _PERSISTED_VIA = {SEED, MANUAL}
 
 
 class _Entry:
-    __slots__ = ("name", "base_url", "kind", "registered_via", "last_seen", "adapter")
+    __slots__ = ("name", "base_url", "kind", "registered_via", "last_seen", "adapter", "capabilities")
 
-    def __init__(self, name, base_url, kind, registered_via, last_seen, adapter):
+    def __init__(self, name, base_url, kind, registered_via, last_seen, adapter, capabilities=None):
         self.name = name
         self.base_url = base_url
         self.kind = kind
         self.registered_via = registered_via
         self.last_seen = last_seen
         self.adapter = adapter
+        # Self-advertised positioning traits (frame, streaming, z, accuracy
+        # class, kinds). Drives the gateway's GET /capabilities so the profile
+        # surface reflects what the live deployment can actually do.
+        self.capabilities = capabilities or {}
 
 
 class AdapterRegistry:
@@ -72,22 +76,25 @@ class AdapterRegistry:
     #     persist() and closes any returned orphan client afterwards, so no
     #     await ever lands mid read-modify-write) -----------------------------
 
-    def upsert(self, name: str, base_url: str, kind: str, via: str) -> Optional[HttpAdapter]:
+    def upsert(self, name: str, base_url: str, kind: str, via: str,
+               capabilities: Optional[dict] = None) -> Optional[HttpAdapter]:
         """Register or heartbeat. Returns an orphaned HttpAdapter to close when
         an existing entry's endpoint changed, else None."""
         now = self._clock()
         existing = self._entries.get(name)
         if existing is not None and existing.base_url == base_url:
             # Same endpoint: a heartbeat. Keep the HttpAdapter (and its cooldown
-            # state); refresh last_seen. Allow self -> seed/manual promotion,
-            # never demote a declared entry back to self.
+            # state); refresh last_seen + capabilities. Allow self -> seed/manual
+            # promotion, never demote a declared entry back to self.
             existing.last_seen = now
+            if capabilities:
+                existing.capabilities = capabilities
             if existing.registered_via == SELF and via in _PERSISTED_VIA:
                 existing.registered_via = via
             return None
         orphan = existing.adapter if existing is not None else None
         adapter = HttpAdapter(name=name, base_url=base_url, **adapter_options(name))
-        self._entries[name] = _Entry(name, base_url, kind, via, now, adapter)
+        self._entries[name] = _Entry(name, base_url, kind, via, now, adapter, capabilities)
         self.adapters[name] = adapter
         return orphan
 
@@ -119,7 +126,7 @@ class AdapterRegistry:
     def persist(self) -> None:
         keep = [
             {"name": e.name, "base_url": e.base_url, "kind": e.kind,
-             "registered_via": e.registered_via}
+             "registered_via": e.registered_via, "capabilities": e.capabilities}
             for e in self._entries.values()
             if e.registered_via in _PERSISTED_VIA
         ]
@@ -144,7 +151,7 @@ class AdapterRegistry:
             via = d.get("registered_via") or MANUAL
             if via not in _PERSISTED_VIA:
                 continue
-            self.upsert(d["name"], d["base_url"], d.get("kind") or "adapter", via)
+            self.upsert(d["name"], d["base_url"], d.get("kind") or "adapter", via, d.get("capabilities"))
         return len(self._entries)
 
     def is_empty(self) -> bool:
@@ -170,6 +177,7 @@ class AdapterRegistry:
                 registered_via=e.registered_via,
                 last_seen_s_ago=round(now - e.last_seen, 1),
                 state=self._state(e, now),
+                capabilities=e.capabilities,
             )
             out.append(st)
         return out

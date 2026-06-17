@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 
 import httpx
 
+from .assets import Asset, asset_by_id
 from .config import get_settings
 from .errors import CamaraError
 from .models import Device
-from .registry import phone_to_device_id
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +32,8 @@ class Position:
     longitude: float
     radius_m: float
     last_location_time: datetime
+    altitude_m: float | None = None
+    vertical_accuracy_m: float | None = None
 
 
 @dataclass
@@ -48,29 +50,50 @@ class PositionDetails:
     last_location_time: datetime
     strategy: str
     sources: list[str]
+    altitude_m: float | None = None
 
 
-def resolve_device_id(device: Device) -> str:
-    """Map a CAMARA device identifier to an internal device id.
+def _asset_id_from_nai(nai: str) -> str | None:
+    """Parse the asset-alias NAI scheme `<asset_id>@<org>.assets`.
 
-    The mapping is config-driven (device_registry_file or DEVICE_REGISTRY env).
-    For MVP an unmapped identifier falls back to its own value so the mock
-    still returns a position.
+    Returns the asset_id when the suffix matches, else None (so a stray NAI
+    doesn't accidentally resolve). The scheme is the optional CAMARA-stock
+    carrier; `device.assetId` is the first-class path.
     """
-    registry = phone_to_device_id()
-    candidates = [
-        device.phoneNumber,
-        device.networkAccessIdentifier,
-        device.ipv4Address.publicAddress if device.ipv4Address else None,
-        device.ipv6Address,
-    ]
-    for key in candidates:
-        if key and key in registry:
-            return registry[key]
-    for key in candidates:
-        if key:
-            return key
-    raise CamaraError(404, "IDENTIFIER_NOT_FOUND", "Device identifier not found.")
+    local, sep, domain = nai.partition("@")
+    if sep and domain.endswith(".assets") and local:
+        return local
+    return None
+
+
+def resolve_asset(device: Device) -> Asset:
+    """Resolve a CAMARA device identifier to an asset. No subscriber lookup.
+
+    `assetId` is first-class; `networkAccessIdentifier` is accepted only via
+    the `<asset_id>@<org>.assets` alias scheme. An unknown asset is a 404 -
+    there is no "fall back to the raw value" path (that was the public-network
+    assumption this profile rejects).
+    """
+    asset_id = device.assetId
+    if not asset_id and device.networkAccessIdentifier:
+        asset_id = _asset_id_from_nai(device.networkAccessIdentifier)
+    if not asset_id:
+        raise CamaraError(422, "MISSING_IDENTIFIER", "The asset cannot be identified.")
+    asset = asset_by_id(asset_id)
+    if asset is None:
+        raise CamaraError(404, "IDENTIFIER_NOT_FOUND", "Asset not found.")
+    return asset
+
+
+def authorize_asset(asset: Asset, claims: dict | None) -> None:
+    """Tenant gate (gap 3, 2-legged): when the token carries an `org` claim it
+    must match the asset's org. No claim (dev SKIP_AUTH / untenanted token)
+    passes - production issues per-consumer tokens scoped with `org`. A
+    cross-tenant asset is reported as not-found, not forbidden, so a consumer
+    cannot probe the existence of other tenants' assets."""
+    org = (claims or {}).get("org")
+    if org and asset.org != org:
+        raise CamaraError(404, "IDENTIFIER_NOT_FOUND", "Asset not found.")
 
 
 async def _engine_get(path: str, *, timeout: float = _ENGINE_REQUEST_TIMEOUT_S) -> dict:
@@ -139,6 +162,8 @@ async def get_position(device_id: str) -> Position:
         longitude=d["longitude"],
         radius_m=d.get("accuracy_m", _MOCK_RADIUS_M),
         last_location_time=datetime.fromisoformat(d["timestamp"]),
+        altitude_m=d.get("altitude_m"),
+        vertical_accuracy_m=d.get("vertical_accuracy_m"),
     )
 
 
@@ -163,6 +188,7 @@ async def get_position_details(device_id: str) -> PositionDetails | None:
         last_location_time=datetime.fromisoformat(d["timestamp"]),
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),
+        altitude_m=d.get("altitude_m"),
     )
 
 
@@ -206,6 +232,24 @@ async def get_blueprint() -> dict | None:
         return None
     except Exception as exc:
         log.warning("engine /blueprint unreachable (%s)", exc)
+        return None
+
+
+async def get_wifi_calibration() -> dict | None:
+    """Vendor extension: proxy wifi-positioning's per-AP calibration params
+    (real tx_power ref + path-loss n) so the demo's anchor panel shows measured
+    RF instead of nominal placeholders. Returns the {id: {...}} map, or None
+    when wifi-positioning is not configured / unreachable (demo degrades)."""
+    url = get_settings().wifi_positioning_url.rstrip("/")
+    if not url:
+        return None
+    try:
+        async with httpx.AsyncClient(base_url=url) as client:
+            resp = await client.get("/calibration/params", timeout=_ADAPTERS_REQUEST_TIMEOUT_S)
+            resp.raise_for_status()
+            return resp.json().get("params", {})
+    except Exception as exc:
+        log.warning("wifi calibration unreachable (%s)", exc)
         return None
 
 

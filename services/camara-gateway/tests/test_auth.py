@@ -1,6 +1,6 @@
 ROLE = "camara-location-read"
 RETRIEVE = "/location-retrieval/v0.5/retrieve"
-BODY = {"device": {"phoneNumber": "+123456789"}}
+BODY = {"device": {"assetId": "tool-880"}}
 
 
 async def test_missing_token_401(client):

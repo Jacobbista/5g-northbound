@@ -153,6 +153,21 @@ async def proxy_vendor_discover(request: Request) -> Response:
     return await _proxy(base, "/discover", request, "rest-adapter")
 
 
+# --- Asset Identity Map proxy ----------------------------------------------
+#
+# GET/PUT /assets on the camara-gateway (the asset authority). The editor only
+# proxies; asset onboarding (importing discovered tags) is the KELT dashboard's
+# job, per the ownership split. PUT replaces the whole map, so a caller must
+# GET, merge additively, then PUT - never blind-write.
+@app.api_route(
+    "/api/assets",
+    methods=["GET", "PUT"],
+)
+async def proxy_assets(request: Request) -> Response:
+    base = get_settings().camara_gateway_url
+    return await _proxy(base, "/assets", request, "camara-gateway")
+
+
 @app.api_route(
     "/api/vendor/schema",
     methods=["GET"],

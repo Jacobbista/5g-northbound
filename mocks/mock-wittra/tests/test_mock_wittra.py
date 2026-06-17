@@ -67,14 +67,15 @@ async def test_list_devices_returns_raw_array(client):
     r = await client.get(_LIST, headers={"Authorization": _basic("demo-org", "demo-key")})
     assert r.status_code == 200
     body = r.json()
-    # Wittra v4 returns the device array directly, no envelope.
+    # Wittra v4 returns the device array directly, no envelope: two fixed
+    # beacons (fixedLocation set) + one mobile tag (fixedLocation None), so a
+    # discover consumer can tell anchors from tags.
     assert isinstance(body, list)
-    assert len(body) == 2
-    ids = sorted(d["deviceId"] for d in body)
-    assert ids == ["wittra-tag-01", "wittra-tag-02"]
-    first = body[0]
-    assert "fixedLocation" in first
-    assert "latitude" in first["fixedLocation"]
+    assert len(body) == 3
+    by_id = {d["deviceId"]: d for d in body}
+    assert set(by_id) == {"wittra-tag-01", "wittra-tag-02", "D00124B00249TAG01"}
+    assert by_id["wittra-tag-01"]["fixedLocation"]["latitude"] is not None
+    assert by_id["D00124B00249TAG01"]["fixedLocation"] is None
 
 
 async def test_list_devices_unauthorised(client):

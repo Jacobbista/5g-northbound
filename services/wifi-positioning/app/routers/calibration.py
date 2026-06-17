@@ -160,3 +160,23 @@ async def apply(body: ApplyRequest, request: Request) -> dict:
     request.app.state.adapter.reload(new_cfg)
 
     return {"status": "ok", "applied": overrides, "samples": len(store.all_samples())}
+
+
+@router.get("/params")
+async def calibration_params(request: Request):
+    """Per-AP RF model params the engine actually uses: the calibration-derived
+    tx_power reference + path-loss n when /derive + /apply have run, else the
+    global fallback. BSSIDs are NEVER included (sensitive). Keyed by anchor id
+    so a UI can show real RF instead of the blueprint's nominal placeholders."""
+    cfg = request.app.state.wifi_config
+    if cfg is None:
+        return {"params": {}}
+    out = {}
+    for r in cfg.routers:
+        calibrated = r.tx_power is not None
+        out[r.id] = {
+            "tx_power_ref_dbm": r.tx_power if calibrated else cfg.tx_power,
+            "path_loss_n": r.path_loss_n if calibrated else cfg.path_loss_n,
+            "calibrated": calibrated,
+        }
+    return {"params": out}

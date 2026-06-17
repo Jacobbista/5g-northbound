@@ -4,13 +4,13 @@ import { CAMARA_API_BASE } from "../config";
 const POLL_INTERVAL_MS = 2000;
 const RETRIEVE_PATH = "/location-retrieval/v0.5/retrieve";
 
-export function usePosition(token, phoneNumber) {
+export function usePosition(token, assetId) {
   const [position, setPosition] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token || !phoneNumber) return;
+    if (!token || !assetId) return;
 
     const poll = async () => {
       try {
@@ -20,7 +20,7 @@ export function usePosition(token, phoneNumber) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ device: { phoneNumber } }),
+          body: JSON.stringify({ device: { assetId } }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
@@ -36,7 +36,7 @@ export function usePosition(token, phoneNumber) {
     poll();
     const id = setInterval(poll, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [token, phoneNumber]);
+  }, [token, assetId]);
 
   return { position, error, loading };
 }

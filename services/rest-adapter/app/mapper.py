@@ -122,6 +122,11 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
           longitude:   float|None,
           height_m:    float|None }
 
+    `fixed` is True when the entry resolved a position (a fixed-location
+    anchor) and False otherwise (a mobile tag). A single discover list carries
+    both; each consumer filters - the editor keeps fixed anchors for the
+    blueprint, asset onboarding keeps mobile tags for the registry.
+
     Returns None when the entry has no `vendor_device_id` (skipped silently
     so a sparse list element does not break the whole sync).
     """
@@ -129,10 +134,13 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
     if raw_id is None or str(raw_id).strip() == "":
         return None
     label_val = _resolve_optional(mapping.label, entry)
+    lat = _coerce_float(_resolve_optional(mapping.latitude, entry))
+    lon = _coerce_float(_resolve_optional(mapping.longitude, entry))
     return {
         "vendor_device_id": str(raw_id),
         "label": str(label_val) if label_val is not None else None,
-        "latitude": _coerce_float(_resolve_optional(mapping.latitude, entry)),
-        "longitude": _coerce_float(_resolve_optional(mapping.longitude, entry)),
+        "latitude": lat,
+        "longitude": lon,
         "height_m": _coerce_float(_resolve_optional(mapping.height_m, entry)),
+        "fixed": lat is not None and lon is not None,
     }

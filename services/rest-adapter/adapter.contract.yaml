@@ -1,0 +1,14 @@
+# Adapter capability contract for rest-adapter (Wittra UWB cloud).
+# Declarative source of truth; runtime value travels in ADAPTER_CAPABILITIES
+# (JSON). `make positioning-check` asserts the two agree. The vendor is
+# schema-driven (examples/wittra-schema.json); these capabilities describe the
+# positioning traits the engine/gateway reason about.
+adapter: wittra
+description: Schema-driven REST bridge to a vendor positioning cloud (Wittra UWB).
+capabilities:
+  source: wittra
+  kinds: [pallet, uwb-tag, asset]
+  frame: wgs84          # vendor returns WGS84; engine inverts to local
+  streaming: false      # REST pull (vendor recommends MQTT; out of scope)
+  z: true               # UWB reports height
+  accuracy_class: sub-metre

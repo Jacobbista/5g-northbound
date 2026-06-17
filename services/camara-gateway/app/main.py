@@ -12,9 +12,11 @@ from .errors import (
 )
 from .routers import (
     adapters,
+    anchors,
+    assets,
     blueprint,
+    capabilities,
     contract,
-    devices,
     health,
     positions_stream,
     retrieval,
@@ -45,7 +47,9 @@ app.include_router(health.router)
 app.include_router(contract.router)
 app.include_router(retrieval.router)
 app.include_router(verification.router)
-app.include_router(devices.router)
+app.include_router(assets.router)
+app.include_router(capabilities.router)
+app.include_router(anchors.router)
 app.include_router(adapters.router)
 app.include_router(blueprint.router)
 app.include_router(positions_stream.router)

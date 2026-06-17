@@ -1,11 +1,14 @@
 import json
 import logging
 import math
+import os
 import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+import httpx
 
 from .config import Settings
 
@@ -89,17 +92,12 @@ def _crossing_blocked(dist_along: float, ranges: list[tuple[float, float]]) -> b
     return True
 
 
-def _load_segments_from_layout(path: Path) -> tuple[list[_Segment], Optional[tuple[float, float]]]:
-    """Parse the placement-editor layout JSON and pull inner walls + the
-    room footprint for the first room. Returns (segments, (w_m, d_m)).
-    A missing / unparseable layout returns ([], None) so the walker falls
-    back to the configured AABB without crashing the service.
+def _load_segments_from_data(data: dict) -> tuple[list[_Segment], Optional[tuple[float, float]]]:
+    """Parse a placement-editor layout / blueprint dict and pull inner walls +
+    the room footprint for the first room. Returns (segments, (w_m, d_m)).
+    Empty / malformed input returns ([], None) so the walker falls back to the
+    configured AABB without crashing the service.
     """
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError) as exc:
-        log.warning("mock-positioning: cannot read layout %s: %s", path, exc)
-        return [], None
     rooms = data.get("rooms") or []
     room = rooms[0] if rooms else None
     if room is None:
@@ -229,11 +227,34 @@ class WaypointWalker:
     the AABB defined by `width_m` × `depth_m`.
     """
 
-    def __init__(self, cfg: Settings, segments: Optional[list[_Segment]] = None):
+    def __init__(
+        self,
+        cfg: Settings,
+        segments: Optional[list[_Segment]] = None,
+        base_x: float = 0.0,
+        base_y: float = 0.0,
+        fp_height_m: float = 0.0,
+    ):
         self._cfg = cfg
         self._state: dict[str, _State] = {}
         self._rngs: dict[str, random.Random] = {}
         self._segments: list[_Segment] = segments or []
+        # Room origin within the floor plan + floor-plan height, used to lift
+        # the walker's room-local, canvas-y (origin top-left, y down) position
+        # into the engine's documented `local` frame: floor-plan-local, origin
+        # lower-left, z = north-up. The engine projects THAT to WGS84.
+        self._base_x = base_x
+        self._base_y = base_y
+        self._fp_height_m = fp_height_m
+
+    def project_to_floor_plan(self, x: float, z: float) -> tuple[float, float]:
+        """Room-local (canvas-y) -> floor-plan-local (north-up). When no
+        floor-plan height is known (no georef), the walker has no frame to
+        mirror about, so it falls back to the room-local value unchanged;
+        the engine degrades to (0, 0) WGS84 in that case anyway."""
+        if self._fp_height_m > 0:
+            return self._base_x + x, self._fp_height_m - (self._base_y + z)
+        return self._base_x + x, self._base_y + z
 
     @staticmethod
     def _clamp(v: float, lo: float, hi: float) -> float:
@@ -344,28 +365,70 @@ class WaypointWalker:
 RandomWalker = WaypointWalker
 
 
-def build_walker(cfg: Settings) -> WaypointWalker:
-    """Construct the walker, loading wall geometry from the configured
-    layout path when available. Bounds in the layout override the env
-    defaults so the mock matches the room the user actually drew."""
-    segments: list[_Segment] = []
+def _load_layout_data(cfg: Settings) -> Optional[dict]:
+    """Get the room geometry the demo also renders. The engine is the
+    blueprint authority, so prefer GET {POSITIONING_ENGINE_URL}/blueprint -
+    this keeps the walker's walls in sync with what the operator drew (the
+    mounted seed file goes stale once they edit in the placement editor).
+    Falls back to the mounted layout file, then to None (AABB-only)."""
+    engine = os.environ.get("POSITIONING_ENGINE_URL", "").rstrip("/")
+    if engine:
+        try:
+            resp = httpx.get(f"{engine}/blueprint", timeout=5.0)
+            if resp.status_code == 200:
+                log.info("mock-positioning: loaded blueprint from engine %s", engine)
+                return resp.json()
+            log.warning("mock-positioning: engine /blueprint -> %s; falling back to file", resp.status_code)
+        except Exception as exc:  # network / parse - degrade to the seed file
+            log.warning("mock-positioning: engine blueprint fetch failed (%s); falling back to file", exc)
     if cfg.layout_path:
         path = Path(cfg.layout_path)
         if path.is_file():
-            segments, bounds = _load_segments_from_layout(path)
-            if bounds:
-                # Patch the AABB so waypoints are sampled inside the
-                # operator's actual room, not whatever defaults config had.
-                w, d = bounds
-                cfg.width_m = w
-                cfg.depth_m = d
-                log.info(
-                    "mock-positioning: loaded layout %s - bounds=%.1fx%.1f, %d walls",
-                    path,
-                    w,
-                    d,
-                    len(segments),
-                )
+            try:
+                return json.loads(path.read_text())
+            except (OSError, ValueError) as exc:
+                log.warning("mock-positioning: cannot read layout %s: %s", path, exc)
         else:
             log.warning("mock-positioning: layout path %s not found", path)
-    return WaypointWalker(cfg, segments=segments)
+    return None
+
+
+def _frame_from_data(data: dict) -> tuple[float, float, float]:
+    """Pull (room.x_m, room.y_m, floor_plan.georef.height_m) so the walker can
+    lift room-local positions into the floor-plan frame the engine projects to
+    WGS84. Missing fields yield zeros (graceful)."""
+    room = (data.get("rooms") or [{}])[0] or {}
+    fp = (data.get("floor_plans") or [{}])[0] or {}
+    georef = fp.get("georef") or {}
+    return (
+        float(room.get("x_m") or 0),
+        float(room.get("y_m") or 0),
+        float(georef.get("height_m") or 0),
+    )
+
+
+def build_walker(cfg: Settings) -> WaypointWalker:
+    """Construct the walker, loading wall geometry from the engine blueprint
+    (authority) or the mounted layout file. Bounds override the env defaults so
+    the mock matches the room the user actually drew."""
+    segments: list[_Segment] = []
+    base_x = base_y = fp_height_m = 0.0
+    data = _load_layout_data(cfg)
+    if data is not None:
+        segments, bounds = _load_segments_from_data(data)
+        base_x, base_y, fp_height_m = _frame_from_data(data)
+        if bounds:
+            # Patch the AABB so waypoints are sampled inside the operator's
+            # actual room, not whatever defaults config had.
+            cfg.width_m, cfg.depth_m = bounds
+            log.info(
+                "mock-positioning: bounds=%.1fx%.1f, %d walls, base=(%.1f,%.1f) fpH=%.1f",
+                cfg.width_m, cfg.depth_m, len(segments), base_x, base_y, fp_height_m,
+            )
+    return WaypointWalker(
+        cfg,
+        segments=segments,
+        base_x=base_x,
+        base_y=base_y,
+        fp_height_m=fp_height_m,
+    )

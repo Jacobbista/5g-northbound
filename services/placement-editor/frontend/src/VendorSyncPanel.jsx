@@ -89,7 +89,10 @@ export function VendorSyncPanel({
       const schema = await fetchVendorSchema().catch(() => null);
       setVendor(schema?.vendor || null);
       const out = await discoverDevices();
-      setDevices(out?.devices || []);
+      // Anchors only here: the discover list now carries mobile tags too
+      // (fixed=false), but those are onboarded as assets by the KELT
+      // dashboard, not placed as anchors. Keep fixed anchors for the editor.
+      setDevices((out?.devices || []).filter((d) => d.fixed !== false));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -108,12 +111,21 @@ export function VendorSyncPanel({
     if (!floorPlan || !room) return [];
     const baseX = Number(room.x_m) || 0;
     const baseY = Number(room.y_m) || 0;
+    // Floor-plan extent height, used to mirror the y axis (see below).
+    const fpH = Number(floorPlan?.georef?.height_m) || 0;
     return devices.map((d) => {
       let local = null;
       if (d.latitude != null && d.longitude != null) {
         const fp = gpsToFloorPlanLocal(d.latitude, d.longitude, floorPlan);
         if (fp != null) {
-          local = { x: fp.x - baseX, y: fp.y - baseY };
+          // gpsToFloorPlanLocal returns floor-plan-local coords in the georef
+          // frame: origin at the lower-left, y growing NORTH (up). The plan /
+          // room canvas and the hand-placed anchors use the image/SVG frame:
+          // origin top-left, y growing DOWN. Convert by mirroring y about the
+          // floor-plan height (fpH - fp.y), THEN subtract the room's top-left
+          // origin. x shares the same direction in both frames, so it only
+          // needs the room-base offset.
+          local = { x: fp.x - baseX, y: (fpH - fp.y) - baseY };
         }
       }
       return { ...d, local };

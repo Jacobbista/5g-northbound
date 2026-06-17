@@ -15,12 +15,41 @@ stored and served verbatim.
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
 from .models import Floor, FloorPlan, GpsOrigin
 
 log = logging.getLogger(__name__)
+
+
+def validate_blueprint(raw: dict) -> None:
+    """Best-effort validation against schema/layout.schema.json (the versioned
+    layout contract). No-op when jsonschema or the schema file is unavailable -
+    the engine degrades rather than blocking authoring. Raises ValueError with a
+    one-line reason on a genuine violation; the PUT handler maps it to 422."""
+    try:
+        import jsonschema
+    except ImportError:
+        return
+    candidates = [os.environ.get("LAYOUT_SCHEMA_PATH"), "/app/schema/layout.schema.json"]
+    # Repo-root fallback for running outside a container (tests). Guarded:
+    # in-container __file__ has fewer than 4 parents, so index defensively.
+    parents = Path(__file__).resolve().parents
+    if len(parents) > 3:
+        candidates.append(str(parents[3] / "schema" / "layout.schema.json"))
+    schema_path = next((c for c in candidates if c and Path(c).is_file()), None)
+    if not schema_path:
+        return
+    try:
+        schema = json.loads(Path(schema_path).read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    try:
+        jsonschema.validate(raw, schema)
+    except jsonschema.ValidationError as exc:
+        raise ValueError(exc.message) from exc
 
 # Engine still works with no blueprint at all: it degrades to lat/lon 0 with a
 # warning (see geo.py), which is the documented "no GPS reference yet" state.

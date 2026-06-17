@@ -56,6 +56,8 @@ class Var:
     description: str
     runtime_layer: str | None
     example: str | None
+    set_by: str | None = None      # compose | secret | operator
+    consumed_by: list | None = None
 
 
 @dataclass
@@ -64,6 +66,8 @@ class Contract:
     description: str
     path: Path
     vars: list[Var]
+    kind: str = "internal"             # ui | api | internal
+    external_origin: str | None = None  # VAR name KELT routes a public origin to, or None
 
 
 def load_contracts() -> list[Contract]:
@@ -81,6 +85,8 @@ def load_contracts() -> list[Contract]:
                     description=entry.get("description", ""),
                     runtime_layer=entry.get("runtime_layer"),
                     example=entry.get("example"),
+                    set_by=entry.get("set_by"),
+                    consumed_by=entry.get("consumed_by"),
                 )
             )
         for entry in raw.get("optional") or []:
@@ -93,6 +99,8 @@ def load_contracts() -> list[Contract]:
                     description=entry.get("description", ""),
                     runtime_layer=entry.get("runtime_layer"),
                     example=entry.get("example"),
+                    set_by=entry.get("set_by"),
+                    consumed_by=entry.get("consumed_by"),
                 )
             )
         out.append(
@@ -101,6 +109,8 @@ def load_contracts() -> list[Contract]:
                 description=raw.get("description", ""),
                 path=path,
                 vars=vars_,
+                kind=raw.get("kind", "internal"),
+                external_origin=raw.get("external_origin"),
             )
         )
     return out
@@ -272,9 +282,109 @@ def cmd_render_k8s(args: argparse.Namespace) -> int:
     return 0
 
 
+def _looks_like_committed_secret(default: str | None) -> bool:
+    """A sensitive var should ship without a real value. Empty or an obvious
+    placeholder is fine; anything else is a committed-secret smell."""
+    if not default:
+        return False
+    return "change" not in default.lower() and "example" not in default.lower()
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    """Static contract hygiene. Errors fail CI; warnings are advisory.
+
+      ERROR  same var name, conflicting `sensitive` across services
+      ERROR  sensitive var carries a real (non-placeholder) default
+      WARN   api/ui service without external_origin (KELT can't route it)
+      WARN   var without set_by (dashboard wizard hides/derives from it)
+    """
+    contracts = load_contracts()
+    errors: list[str] = []
+    warns: list[str] = []
+
+    sensitivity_by_name: dict[str, set[bool]] = {}
+    for c in contracts:
+        for v in c.vars:
+            sensitivity_by_name.setdefault(v.name, set()).add(v.sensitive)
+            if v.sensitive and _looks_like_committed_secret(v.default):
+                errors.append(f"{c.service}.{v.name}: sensitive var has a real default ('{v.default}') - use a placeholder")
+            # set_by defaults to 'compose' (internal, hidden from the dashboard
+            # wizard). Only operator-provided vars need it explicit - and a
+            # sensitive var MUST say where its value comes from (secret|operator).
+            if v.sensitive and v.set_by is None:
+                warns.append(f"{c.service}.{v.name}: sensitive but no set_by (secret|operator)")
+        if c.kind in ("api", "ui") and not c.external_origin:
+            warns.append(f"{c.service}: kind={c.kind} but no external_origin (KELT reachability needs it)")
+
+    for name, flags in sensitivity_by_name.items():
+        if len(flags) > 1:
+            errors.append(f"var '{name}': inconsistent `sensitive` across services {flags} - one name, one meaning")
+
+    for w in warns:
+        print(f"\033[33m⚠\033[0m  {w}")
+    for e in errors:
+        print(f"\033[31m✗\033[0m  {e}")
+    if errors:
+        print(f"\n\033[31m✗\033[0m contracts lint: {len(errors)} error(s), {len(warns)} warning(s)")
+        return 1
+    print(f"\n\033[32m✓\033[0m contracts lint: clean ({len(warns)} warning(s))")
+    return 0
+
+
+def cmd_sensitivity_manifest(args: argparse.Namespace) -> int:
+    """Emit the machine-readable sensitivity manifest KELT consumes: every env
+    var -> tier -> Secret/ConfigMap routing + provenance. CI and the dashboard
+    both read this instead of re-deriving sensitivity by hand."""
+    contracts = load_contracts()
+    by_name: dict[str, dict] = {}
+    for c in contracts:
+        for v in c.vars:
+            rec = by_name.setdefault(v.name, {
+                "name": v.name,
+                "sensitive": v.sensitive,
+                "tier": "secret" if v.sensitive else "configmap",
+                "routes_to": "Secret" if v.sensitive else "ConfigMap",
+                "set_by": v.set_by or "compose",
+                "consumed_by": set(),
+                "services": set(),
+            })
+            rec["services"].add(c.service)
+            for cb in (v.consumed_by or [c.service]):
+                rec["consumed_by"].add(cb)
+
+    manifest = {
+        "generated_from": "services/*/env.contract.yaml",
+        "tiers": {"configmap": "Tier-0 (committable config)", "secret": "Tier-1 (sensitive; never committed)"},
+        "services": [
+            {"service": c.service, "kind": c.kind, "external_origin": c.external_origin}
+            for c in contracts
+        ],
+        "vars": sorted(
+            (
+                {**r, "consumed_by": sorted(r["consumed_by"]), "services": sorted(r["services"])}
+                for r in by_name.values()
+            ),
+            key=lambda r: r["name"],
+        ),
+    }
+    out_path = REPO_ROOT / "deploy" / "contracts" / "sensitivity-manifest.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    secrets = [v["name"] for v in manifest["vars"] if v["sensitive"]]
+    print(f"\033[32m✓\033[0m wrote {out_path.relative_to(REPO_ROOT)}")
+    print(f"   {len(manifest['vars'])} vars · {len(secrets)} secret(s): {', '.join(secrets) or '(none)'}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_lint = sub.add_parser("lint", help="Static contract hygiene (naming, sensitivity, external_origin)")
+    p_lint.set_defaults(func=cmd_lint)
+
+    p_sens = sub.add_parser("sensitivity-manifest", help="Emit deploy/contracts/sensitivity-manifest.json")
+    p_sens.set_defaults(func=cmd_sensitivity_manifest)
 
     p_list = sub.add_parser("list", help="Print every var from every contract")
     p_list.add_argument("--service", help="Only show one service")

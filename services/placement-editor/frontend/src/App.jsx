@@ -896,12 +896,8 @@ export function App() {
           vendor: "",
           model: "",
         };
-        // WiFi keeps its legacy RF fields so old consumers still see them.
-        if (tech === "wifi") {
-          anchor.band = "5GHz";
-          anchor.channel = 36;
-          anchor.tx_power_dbm = 20;
-        }
+        // No invented RF defaults: vendor/model/band/channel/tx are left unset
+        // and only filled if the operator types them, or derived by calibration.
         return { ...r, anchors: [...(r.anchors || []), anchor] };
       });
       selectAp(id);
@@ -1318,11 +1314,8 @@ export function App() {
           vendor: "",
           model: "",
         };
-        if (tech === "wifi") {
-          anchor.band = "5GHz";
-          anchor.channel = 36;
-          anchor.tx_power_dbm = 20;
-        }
+        // No invented RF defaults (see addAnchor): only operator-typed or
+        // calibration-derived RF lives on the anchor.
         return { ...r, anchors: [...(r.anchors || []), anchor] };
       });
       selectAp(id);

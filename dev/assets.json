@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "assets": [
+    {
+      "asset_id": "tool-880",
+      "positioning_id": "wifi-asset-01",
+      "kind": "tool",
+      "source": "wifi",
+      "org": "fiskarheden",
+      "label": "WiFi asset 01",
+      "simulated": false,
+      "metadata": { "floor": 0 }
+    },
+    {
+      "asset_id": "forklift-7",
+      "positioning_id": "mock-demo-01",
+      "kind": "forklift",
+      "source": "mock",
+      "org": "fiskarheden",
+      "label": "Mock demo 01",
+      "simulated": true,
+      "metadata": { "floor": 0 }
+    },
+    {
+      "asset_id": "pkg-4471",
+      "positioning_id": "wittra-tag-01",
+      "kind": "pallet",
+      "source": "wittra",
+      "org": "fiskarheden",
+      "label": "Wittra tag 01",
+      "simulated": true,
+      "metadata": { "floor": 0, "note": "Timber bundle" }
+    }
+  ]
+}

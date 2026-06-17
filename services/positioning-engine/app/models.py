@@ -97,3 +97,8 @@ class EnginePosition(BaseModel):
     sources: list[str]
     strategy: str = "weighted_avg"
     fusions: Optional[dict[str, FusionOutput]] = None
+    # Third dimension for the CAMARA private-asset profile (multi-floor /
+    # stacked storage). `altitude_m` is the fused vertical position; absent
+    # when the engine has no height estimate. The gateway exposes it as the
+    # profile `altitude` extension. CAMARA's 2D Circle drops this.
+    altitude_m: Optional[float] = None
