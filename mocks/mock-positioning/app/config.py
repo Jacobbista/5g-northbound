@@ -6,6 +6,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Reported source tag on every measurement.
     source: str = "mock"
+    # Device ids this mock serves (CSV). The walker can synthesise a position
+    # for ANY id, so without this it would answer for every device and pollute
+    # fusion when the engine fans out (no DEVICE_MAP). Empty = serve all (legacy
+    # / standalone). Set it so the mock 404s for devices it does not own, making
+    # capability-style fan-out routing safe.
+    device_ids: str = ""
     # Floor bounds (metres); positions are clamped inside the box. If a
     # layout file is configured, its room bounds override these at startup.
     width_m: float = 20.0

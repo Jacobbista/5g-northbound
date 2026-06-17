@@ -25,7 +25,7 @@ async def retrieve(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(asset.positioning_id)
+    pos = await get_position(asset.positioning_id, asset.source)
     return Location(
         lastLocationTime=_rfc3339(pos.last_location_time),
         area=Circle(

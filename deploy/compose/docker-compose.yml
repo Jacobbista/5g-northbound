@@ -169,6 +169,9 @@ services:
       ADAPTER_NAME: "mock"
       ADAPTER_KIND: "mock"
       ADAPTER_BASE_URL: "http://mock-positioning:8080"
+      # The walker can synthesise a position for any id; scope it so it 404s for
+      # devices it does not own, keeping engine fan-out (no DEVICE_MAP) clean.
+      DEVICE_IDS: "mock-demo-01"
       ADAPTER_CAPABILITIES: '{"source":"mock","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse"}'
     depends_on:
       positioning-engine:
@@ -203,17 +206,12 @@ services:
       BLUEPRINT_SEED_PATH: "/app/config/seed-blueprint.json"
       DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
       # No ADAPTER_URLS: adapters self-register with the engine (POST /adapters)
-      # and heartbeat. ADAPTER_URLS stays supported as a cold-start seed for
-      # deployments that prefer it, but the dev stack exercises the real
-      # self-registration model. See docs/adapter-registry.md.
-      # Per-device routing: each device is pinned to a single adapter so the
-      # demo can show real "online vs offline" semantics. mock-demo-01 always
-      # has a fix (synthetic walker); wifi-asset-01 stays offline until a real
-      # WiFi scan is pushed to the wifi adapter - the demo will render the
-      # device as offline in the meantime instead of falling back to mock.
-      # wittra-tag-01 routes to the rest-adapter, which translates Wittra's
-      # cloud REST shape into the engine's Measurement contract.
-      DEVICE_MAP: "mock-demo-01=mock,wifi-asset-01=wifi,wittra-tag-01=wittra"
+      # and heartbeat. See docs/adapter-registry.md.
+      # No DEVICE_MAP: routing is capability-driven. The CAMARA gateway passes
+      # the asset's source (?source=) so the engine polls that adapter directly;
+      # the stream fans out to all adapters and each 404s for devices it does
+      # not serve (the mock is scoped via DEVICE_IDS). DEVICE_MAP is still
+      # honoured if set, as a cold-start override.
       # Fusion strategy applied to the merged measurements (see docs/fusion-strategies.md).
       FUSION_STRATEGY: "weighted_avg"
       # WebSocket broadcast cadence. The demo does not subscribe so the loop is

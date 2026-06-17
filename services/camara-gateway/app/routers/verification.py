@@ -34,7 +34,7 @@ async def verify(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(asset.positioning_id)
+    pos = await get_position(asset.positioning_id, asset.source)
 
     distance = _haversine_m(
         pos.latitude, pos.longitude, body.area.center.latitude, body.area.center.longitude

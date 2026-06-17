@@ -55,18 +55,30 @@ class PositionService:
         so the new georef takes effect without restarting the engine."""
         self._floor_plan = floor_plan
 
-    def _select_adapters(self, device_id: str) -> list[Adapter]:
+    def _select_adapters(self, device_id: str, source: Optional[str] = None) -> list[Adapter]:
+        """Pick which adapters to poll for a device. Priority:
+          1. `source` hint (the gateway knows the asset's source/adapter) -
+             route straight to that adapter. Capability-style routing, no
+             manual map.
+          2. legacy DEVICE_MAP entry, if configured.
+          3. fan out to all adapters - safe because each adapter 404s for
+             devices it does not serve.
+        """
+        if source:
+            adapter = self._adapters.get(source)
+            if adapter is not None:
+                return [adapter]
+            log.warning("source '%s' has no registered adapter; falling back", source)
         target = self._device_map.get(device_id)
-        if target is None:
-            return list(self._adapters.values())
-        adapter = self._adapters.get(target)
-        if adapter is None:
+        if target is not None:
+            adapter = self._adapters.get(target)
+            if adapter is not None:
+                return [adapter]
             log.warning(
                 "device_map routes %s to unknown adapter '%s'; falling back to all",
                 device_id, target,
             )
-            return list(self._adapters.values())
-        return [adapter]
+        return list(self._adapters.values())
 
     def _normalise(self, m: Measurement) -> Measurement:
         if m.frame == "local":
@@ -81,8 +93,8 @@ class PositionService:
             timestamp=m.timestamp,
         )
 
-    async def get_position(self, device_id: str) -> Optional[PositionResult]:
-        adapters = self._select_adapters(device_id)
+    async def get_position(self, device_id: str, source: Optional[str] = None) -> Optional[PositionResult]:
+        adapters = self._select_adapters(device_id, source)
         if not adapters:
             log.warning("no adapters configured for %s", device_id)
             return None

@@ -34,6 +34,34 @@ async def test_device_map_routes_to_named_adapter(floor_plan):
 
 
 @pytest.mark.asyncio
+async def test_source_hint_routes_to_matching_adapter(floor_plan):
+    """Capability routing: a `source` hint (from the gateway, which knows the
+    asset's source) routes straight to that adapter - no DEVICE_MAP needed."""
+    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    b = _StaticAdapter(Measurement(source="b", x=9.0, y=0.0, z=9.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    svc = PositionService(
+        adapters={"a": a, "b": b}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    result = await svc.get_position("dev1", source="b")
+    assert result is not None
+    assert result.primary.fused.sources == ["b"]
+    assert result.primary.fused.x == 9.0
+
+
+@pytest.mark.asyncio
+async def test_unknown_source_falls_back_to_fan_out(floor_plan):
+    a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    svc = PositionService(
+        adapters={"a": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    result = await svc.get_position("dev1", source="nonesuch")
+    assert result is not None
+    assert result.primary.fused.sources == ["a"]
+
+
+@pytest.mark.asyncio
 async def test_device_without_map_uses_all_adapters(floor_plan):
     a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy_m=1.0, confidence=1.0, frame="local"))
     b = _StaticAdapter(Measurement(source="b", x=4.0, y=0.0, z=4.0, accuracy_m=1.0, confidence=1.0, frame="local"))

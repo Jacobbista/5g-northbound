@@ -134,7 +134,13 @@ async def _engine_get(path: str, *, timeout: float = _ENGINE_REQUEST_TIMEOUT_S) 
     raise last_exc
 
 
-async def get_position(device_id: str) -> Position:
+def _position_path(device_id: str, source: str | None) -> str:
+    # Pass the asset's source so the engine routes straight to that adapter
+    # (capability routing) instead of fanning out to every adapter.
+    return f"/position/{device_id}" + (f"?source={source}" if source else "")
+
+
+async def get_position(device_id: str, source: str | None = None) -> Position:
     """Single seam between the gateway and the position source.
 
     When POSITIONING_ENGINE_URL is set, the engine is the source of truth:
@@ -148,7 +154,7 @@ async def get_position(device_id: str) -> Position:
     if not url:
         return _mock_position()
     try:
-        d = await _engine_get(f"/position/{device_id}")
+        d = await _engine_get(_position_path(device_id, source))
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             raise CamaraError(404, "NOT_FOUND", "No position fix for this device.") from exc
@@ -167,7 +173,7 @@ async def get_position(device_id: str) -> Position:
     )
 
 
-async def get_position_details(device_id: str) -> PositionDetails | None:
+async def get_position_details(device_id: str, source: str | None = None) -> PositionDetails | None:
     """Vendor extension: full engine payload for the side-panel UI.
 
     Returns None when the engine has no fix (or is unreachable). The demo
@@ -177,7 +183,7 @@ async def get_position_details(device_id: str) -> PositionDetails | None:
     if not url:
         return None
     try:
-        d = await _engine_get(f"/position/{device_id}")
+        d = await _engine_get(_position_path(device_id, source))
     except Exception as exc:
         log.warning("engine details unreachable (%s)", exc)
         return None

@@ -19,10 +19,11 @@ router = APIRouter(prefix="/position", tags=["position"])
 async def get_position(
     device_id: str,
     request: Request,
+    source: str | None = None,
     svc: PositionService = Depends(get_position_service),
 ):
     try:
-        result = await svc.get_position(device_id)
+        result = await svc.get_position(device_id, source)
         origin = request.app.state.floor_plan.gps_origin
         if origin is None:
             log.warning("floor plan has no gps_origin; returning 0,0 for %s", device_id)

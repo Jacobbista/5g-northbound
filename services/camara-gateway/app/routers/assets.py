@@ -80,7 +80,7 @@ async def asset_details(
         raise CamaraError(404, "IDENTIFIER_NOT_FOUND", "Asset not found.")
     authorize_asset(asset, claims)  # cross-tenant -> 404 (no existence leak)
 
-    details = await get_position_details(asset.positioning_id)
+    details = await get_position_details(asset.positioning_id, asset.source)
     telemetry = None
     if details is not None:
         telemetry = AssetTelemetry(
