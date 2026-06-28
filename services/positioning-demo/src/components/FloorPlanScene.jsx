@@ -893,7 +893,7 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDe
   const span = Math.max(w + 2 * MARGIN, d + 2 * MARGIN);
 
   return (
-    <div style={{ position: "relative", height: "calc(100vh - 140px)" }}>
+    <div style={{ position: "relative", height: "100%", minHeight: 0 }}>
       <Canvas
         dpr={[1, 1.5]}
         frameloop="demand"

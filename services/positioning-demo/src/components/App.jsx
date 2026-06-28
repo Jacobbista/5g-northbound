@@ -98,8 +98,11 @@ const header = {
   gridColumn: "1 / -1",
   display: "flex",
   alignItems: "center",
-  gap: 12,
-  padding: "14px 20px",
+  gap: 10,
+  // Single row that never wraps into extra height. No overflow:hidden here -
+  // it would clip the adapter-health dropdown that opens below the header.
+  flexWrap: "nowrap",
+  padding: "12px 18px",
   borderBottom: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(10,18,40,0.6)",
   backdropFilter: "blur(8px)",
@@ -201,32 +204,69 @@ const adapterBadge = (state) => {
   };
 };
 
+const adapterDropdown = {
+  position: "absolute",
+  top: "calc(100% + 6px)",
+  left: 0,
+  minWidth: 180,
+  padding: 6,
+  borderRadius: 8,
+  background: "rgba(10,18,40,0.97)",
+  border: "1px solid rgba(58,130,255,0.3)",
+  boxShadow: "0 8px 28px rgba(0,0,0,0.5)",
+  zIndex: 20,
+  backdropFilter: "blur(8px)",
+};
+const adapterRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "5px 8px",
+  fontSize: 11,
+  fontFamily: "ui-monospace, monospace",
+};
+
+// Engine registry per-adapter `state`: live / unreachable (polls failing) /
+// stale (stopped heartbeating). The badge summarises; clicking opens a panel
+// naming each adapter + its state, so "1/3 degraded" says which and why.
 function AdapterHealthBadge({ adapters }) {
+  const [open, setOpen] = useState(false);
   if (!adapters || adapters.length === 0) {
-    return <span style={adapterBadge("unknown")} title="adapter health unknown">adapters n/a</span>;
+    return <span style={adapterBadge("unknown")}>adapters n/a</span>;
   }
-  // The engine's registry reports a per-adapter `state`: live / unreachable
-  // (polls failing) / stale (stopped heartbeating). Anything not live is a
-  // problem worth surfacing. Fall back to in_cooldown for older engines.
-  const notLive = adapters.filter((a) =>
-    a.state ? a.state !== "live" : a.in_cooldown
-  );
-  if (notLive.length === 0) {
-    return (
-      <span
-        style={adapterBadge("ok")}
-        title={adapters.map((a) => `${a.name} [${a.state || "ok"}]`).join("\n")}
-      >
-        {adapters.length} adapter{adapters.length === 1 ? "" : "s"} ok
-      </span>
-    );
-  }
-  const detail = notLive
-    .map((a) => `${a.name}: ${a.state || (a.in_cooldown ? "unreachable" : "?")}`)
-    .join("\n");
+  const notLive = adapters.filter((a) => (a.state ? a.state !== "live" : a.in_cooldown));
+  const ok = notLive.length === 0;
   return (
-    <span style={adapterBadge("degraded")} title={detail}>
-      {notLive.length}/{adapters.length} degraded
+    <span style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...adapterBadge(ok ? "ok" : "degraded"), cursor: "pointer" }}
+        title="Per-adapter detail"
+      >
+        {ok
+          ? `${adapters.length} adapter${adapters.length === 1 ? "" : "s"} ok`
+          : `${notLive.length}/${adapters.length} degraded`}
+        <span style={{ marginLeft: 5, opacity: 0.65 }}>{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div style={adapterDropdown}>
+          {adapters.map((a) => {
+            const live = a.state ? a.state === "live" : !a.in_cooldown;
+            const state = a.state || (a.in_cooldown ? "unreachable" : "live");
+            const c = live ? "#5dffb0" : "#ff6b78";
+            return (
+              <div key={a.name} style={adapterRow}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />
+                <span style={{ color: "#e6edf7", fontWeight: 600 }}>{a.name}</span>
+                <span style={{ marginLeft: "auto", color: c, textTransform: "uppercase", fontSize: 9, letterSpacing: "0.06em" }}>
+                  {state}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </span>
   );
 }
@@ -234,6 +274,11 @@ function AdapterHealthBadge({ adapters }) {
 const sceneWrap = {
   padding: "16px 20px 20px",
   position: "relative",
+  // Fill the grid cell exactly (the row is 1fr); minHeight:0 lets it shrink
+  // instead of overflowing the page when the header height varies.
+  height: "100%",
+  minHeight: 0,
+  boxSizing: "border-box",
   userSelect: "none",
   WebkitUserSelect: "none",
 };
@@ -623,7 +668,7 @@ export function App() {
             );
           })}
         </div>
-        <div style={coordToggle}>
+        <div style={{ ...coordToggle, marginLeft: "auto" }}>
           <button
             style={coordBtn(coordMode === "absolute")}
             onClick={() => setCoordMode("absolute")}
