@@ -79,14 +79,28 @@ blueprint unauthenticated in-cluster).
 
 ## Wiring
 
-Each adapter sets `POSITIONING_ENGINE_URL`, `ADAPTER_NAME` (matching the
-engine's `DEVICE_MAP`), `ADAPTER_BASE_URL` (its own in-cluster Service URL the
-engine polls), and optionally `ADAPTER_KIND`. With those set the adapter
-self-registers; unset, it runs standalone and the engine only knows it via an
-`ADAPTER_URLS` seed.
+Each adapter sets `POSITIONING_ENGINE_URL`, `ADAPTER_NAME` (the routing key, see
+below), `ADAPTER_BASE_URL` (its own in-cluster Service URL the engine polls), and
+optionally `ADAPTER_KIND`. With those set the adapter self-registers; unset, it
+runs standalone and the engine only knows it via an `ADAPTER_URLS` seed.
 
 The engine persists the registry on the same writable volume as the blueprint
 (`ADAPTER_REGISTRY_PATH`, default `/app/data/adapters.json`). No extra PVC.
+
+## Routing: which adapter serves a device
+
+Capability-driven, no manual map needed. When the gateway asks for a position it
+passes the asset's `source` (`GET /position/{positioning_id}?source=<source>`),
+and the engine polls the adapter whose **`ADAPTER_NAME` equals that source**. So
+the one convention is `asset.source` == `ADAPTER_NAME` (e.g. both `wittra`).
+
+Fallback order in the engine (`position_service._select_adapters`): `source`
+hint → `DEVICE_MAP` → fan out to all registered adapters and fuse. `DEVICE_MAP`
+(engine env, `positioning_id=adapter_name` CSV) is an **optional cold-start
+override**, normally unset; a device it does not list is polled against every
+adapter, and each adapter 404s for devices it does not serve. The full
+identifier chain (assetId → positioning_id → adapter → vendor) is in
+[integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md).
 
 ## Relationship to the blueprint
 

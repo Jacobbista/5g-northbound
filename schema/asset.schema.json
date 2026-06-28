@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Jacobbista/5g-northbound/schema/asset.schema.json",
   "title": "Asset Identity Map",
-  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked thing (UWB tag, tool, pallet, forklift), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. The gateway resolves a CAMARA `device.assetId` to one of these entries and routes to the positioning source by `positioning_id`. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod.",
+  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked thing (UWB tag, tool, pallet, forklift), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. The gateway resolves a CAMARA `device.assetId` to one of these entries and routes to the positioning source by `positioning_id`. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod. Full resolution chain (assetId -> positioning_id -> adapter -> vendor): see docs/integrating-a-vendor-rest-api.md.",
   "type": "object",
   "required": ["version", "assets"],
   "additionalProperties": false,

@@ -27,6 +27,41 @@ The Wittra REST API recommends MQTT for sensor data, but REST is enough for a de
 
 The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. Switching from `mock-wittra` (dev) to `api.wittra.se` (prod) is a single env-var change.
 
+## Identity & resolution: from a CAMARA `assetId` to a vendor fix
+
+One request crosses three identifier spaces. The full chain, with the owner of
+each hop:
+
+```
+consumer → camara-gateway   POST /location-retrieval/v0.5/retrieve { "device": { "assetId": "pkg-4471" } }
+  │  Asset Identity Map (GET/PUT /assets, gateway): assetId → positioning_id + source
+  │  org claim gated against asset.org; kind/source are descriptive profile fields
+  ▼
+camara-gateway → positioning-engine   GET /position/{positioning_id}?source=wittra
+  │  routing: source → adapter whose ADAPTER_NAME == source
+  │  (else DEVICE_MAP override; else fan out to all registered adapters + fuse)
+  ▼
+positioning-engine → rest-adapter("wittra")   GET /measurement/{positioning_id}
+  │  positioning_id substituted VERBATIM into the vendor path (?deviceId={device_id})
+  ▼
+rest-adapter → vendor cloud (api.wittra.se)   → Measurement → fused → WGS84 → CAMARA Location
+```
+
+The two contracts an operator must get right (see step 5):
+
+- **`positioning_id` == the vendor-native device id.** It is the live telemetry
+  key, substituted verbatim. (`discover.vendor_device_id` is the same value but a
+  separate code path, used only by the editor's vendor-sync.)
+- **`asset.source` == the adapter's `ADAPTER_NAME`.** This is what routes the
+  request to the right adapter.
+
+| identifier | space | owner | authored at |
+|------------|-------|-------|-------------|
+| `assetId` | business / CAMARA `device` | gateway Asset Identity Map | `PUT /assets` (schema/asset.schema.json) |
+| `positioning_id` | internal routing + vendor key | gateway map → engine → adapter | same `/assets` entry |
+| `source` | modality / adapter selector | gateway map → engine routing | same `/assets` entry; must match `ADAPTER_NAME` |
+| vendor device id | vendor cloud | the vendor | == `positioning_id` |
+
 ## Operator workflow
 
 1. **Provision Secrets.** Create a Kubernetes `Secret` carrying the vendor credentials, for Wittra: `organisationId`, `apiKey`, `projectId`.
@@ -50,7 +85,7 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
        valueFrom: { secretKeyRef: { name: wittra-credentials, key: api-key } }
    ```
 
-3. **Load the schema.** From the testbed dashboard's **Vendor integrations** view (or by `PUT`ing it from a `curl` in dev):
+3. **Load the schema.** PUT the schema to the adapter (from the dashboard's adapter view, or a `curl` in dev). Set `ADAPTER_NAME=wittra` on the adapter — it is the routing key (see step 4):
 
    ```bash
    curl -X PUT http://rest-adapter-wittra:8080/schema \
@@ -60,17 +95,26 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
 
    The pod persists the schema to the PVC, so subsequent restarts boot configured.
 
-4. **Wire the engine.** Append the new adapter to `ADAPTER_URLS` and pin the affected device IDs in `DEVICE_MAP`:
+4. **Routing is capability-driven — no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
 
-   ```yaml
-   env:
-     - name: ADAPTER_URLS
-       value: "wittra=http://rest-adapter-wittra:8080,wifi=http://wifi-positioning:8080"
-     - name: DEVICE_MAP
-       value: "wittra-tag-01=wittra,wifi-asset-01=wifi"
+5. **Register the asset.** PUT an entry into the gateway's Asset Identity Map (`GET/PUT /assets`; fixture `dev/assets.json`). The fields that matter:
+
+   - `asset_id` — the business identifier the consumer queries (`device.assetId`). **Not** a phone number.
+   - `positioning_id` — **must equal the vendor-native device id**: it is substituted verbatim into the vendor telemetry path (`?deviceId={device_id}`), so it is the key the vendor cloud knows. (The editor's vendor-sync reads `discover.vendor_device_id` separately — same value, different code path.)
+   - `source` — **must equal the adapter's `ADAPTER_NAME`** (drives routing, step 4).
+   - `org` — tenant; the gateway gates consumers by it.
+   - `kind` — asset class (`uwb-tag`/`pallet`/…), descriptive.
+
+   ```json
+   {
+     "asset_id": "pkg-4471",
+     "positioning_id": "D00124B00249ECBB2",
+     "source": "wittra",
+     "org": "fiskarheden",
+     "kind": "pallet",
+     "label": "Timber bundle 01"
+   }
    ```
-
-5. **Add to the device registry.** Append a `{phoneNumber, deviceId, label}` entry to the gateway's `devices.json` (committed in this repo as `dev/devices.json` for the demo; backed by a ConfigMap in production) so the device appears in the demo UI and CAMARA `Location` lookups work.
 
 ## Schema fields, briefly
 
@@ -162,7 +206,7 @@ curl http://localhost:8092/measurement/wittra-tag-01 | jq .
 curl -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
   -H "Authorization: Bearer dev-token" \
   -H "Content-Type: application/json" \
-  -d '{"device":{"phoneNumber":"+390119876543"}}'
+  -d '{"device":{"assetId":"pkg-4471"}}'
 ```
 
 `mock-wittra` is **not** included in production deployments. It exists so a fresh clone of the repo can demonstrate the full chain without an internet round-trip.
