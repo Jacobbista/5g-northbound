@@ -1,0 +1,58 @@
+site_name: 5G Northbound
+site_description: Open positioning stack exposing device location via the CAMARA APIs
+site_url: https://jacobbista.github.io/5g-northbound/
+repo_url: https://github.com/Jacobbista/5g-northbound
+repo_name: Jacobbista/5g-northbound
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - search.suggest
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+nav:
+  - Home: README.md
+  - Architecture: architecture.md
+  - Data contracts: data-contracts.md
+  - API reference: api-reference.md
+  - Adapters:
+      - Overview: adapters.md
+      - Adapter registry & routing: adapter-registry.md
+      - Integrating a vendor REST API: integrating-a-vendor-rest-api.md
+  - Positioning:
+      - Fusion strategies: fusion-strategies.md
+      - Georeferencing: georeferencing.md
+      - Blueprint vs bindings: blueprint-vs-bindings.md
+  - Deployment: deployment.md
+  - CAMARA private-asset profile: https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md
