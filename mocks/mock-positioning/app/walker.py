@@ -246,12 +246,45 @@ class WaypointWalker:
         self._base_x = base_x
         self._base_y = base_y
         self._fp_height_m = fp_height_m
+        self._frame_attempt = 0.0
+
+    def reload_layout(self) -> bool:
+        """(Re)load room bounds + walls + floor-plan frame from the engine
+        blueprint (or the mounted file). Returns True once a usable frame
+        (fp_height > 0) is loaded. Idempotent - safe to call repeatedly."""
+        data = _load_layout_data(self._cfg)
+        if data is None:
+            return False
+        segments, bounds = _load_segments_from_data(data)
+        self._segments = segments
+        if bounds:
+            self._cfg.width_m, self._cfg.depth_m = bounds
+        self._base_x, self._base_y, self._fp_height_m = _frame_from_data(data)
+        return self._fp_height_m > 0
+
+    def _ensure_frame(self) -> None:
+        """Self-heal a missing frame: if the engine blueprint was unreachable
+        at boot (startup race), the projection would emit room-local coords and
+        the device lands off-scene. Retry the load - throttled - until the frame
+        is known, then stop."""
+        if self._fp_height_m > 0:
+            return
+        now = time.time()
+        if now - self._frame_attempt < 10.0:
+            return
+        self._frame_attempt = now
+        if self.reload_layout():
+            log.info(
+                "mock-positioning: blueprint frame loaded late - base=(%.1f,%.1f) fpH=%.1f",
+                self._base_x, self._base_y, self._fp_height_m,
+            )
 
     def project_to_floor_plan(self, x: float, z: float) -> tuple[float, float]:
         """Room-local (canvas-y) -> floor-plan-local (north-up). When no
         floor-plan height is known (no georef), the walker has no frame to
         mirror about, so it falls back to the room-local value unchanged;
         the engine degrades to (0, 0) WGS84 in that case anyway."""
+        self._ensure_frame()
         if self._fp_height_m > 0:
             return self._base_x + x, self._fp_height_m - (self._base_y + z)
         return self._base_x + x, self._base_y + z
@@ -408,27 +441,16 @@ def _frame_from_data(data: dict) -> tuple[float, float, float]:
 
 
 def build_walker(cfg: Settings) -> WaypointWalker:
-    """Construct the walker, loading wall geometry from the engine blueprint
-    (authority) or the mounted layout file. Bounds override the env defaults so
-    the mock matches the room the user actually drew."""
-    segments: list[_Segment] = []
-    base_x = base_y = fp_height_m = 0.0
-    data = _load_layout_data(cfg)
-    if data is not None:
-        segments, bounds = _load_segments_from_data(data)
-        base_x, base_y, fp_height_m = _frame_from_data(data)
-        if bounds:
-            # Patch the AABB so waypoints are sampled inside the operator's
-            # actual room, not whatever defaults config had.
-            cfg.width_m, cfg.depth_m = bounds
-            log.info(
-                "mock-positioning: bounds=%.1fx%.1f, %d walls, base=(%.1f,%.1f) fpH=%.1f",
-                cfg.width_m, cfg.depth_m, len(segments), base_x, base_y, fp_height_m,
-            )
-    return WaypointWalker(
-        cfg,
-        segments=segments,
-        base_x=base_x,
-        base_y=base_y,
-        fp_height_m=fp_height_m,
-    )
+    """Construct the walker and load room geometry + the floor-plan frame from
+    the engine blueprint (authority) or the mounted layout file. If the engine
+    is not yet reachable at boot, the walker starts frameless and self-heals on
+    the next measurements (see _ensure_frame)."""
+    walker = WaypointWalker(cfg)
+    if walker.reload_layout():
+        log.info(
+            "mock-positioning: bounds=%.1fx%.1f, base=(%.1f,%.1f) fpH=%.1f",
+            cfg.width_m, cfg.depth_m, walker._base_x, walker._base_y, walker._fp_height_m,
+        )
+    else:
+        log.warning("mock-positioning: no blueprint frame at boot; will retry on demand")
+    return walker
