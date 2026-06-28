@@ -43,6 +43,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter",
         "wifi-positioning"
@@ -58,6 +59,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -71,6 +73,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter",
         "wifi-positioning"
@@ -86,6 +89,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter",
         "wifi-positioning"
@@ -101,6 +105,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": true,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -114,6 +119,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -127,6 +133,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -140,6 +147,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -153,6 +161,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": true,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -166,6 +175,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": true,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -179,6 +189,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -192,6 +203,7 @@
       "tier": "secret",
       "routes_to": "Secret",
       "set_by": "secret",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -205,6 +217,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "placement-editor"
       ],
@@ -218,6 +231,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -231,6 +245,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -244,6 +259,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -257,6 +273,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -270,6 +287,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -283,6 +301,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -296,6 +315,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "wifi-positioning"
       ],
@@ -309,6 +329,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway",
         "placement-editor",
@@ -328,6 +349,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -341,6 +363,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter"
       ],
@@ -354,6 +377,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "placement-editor"
       ],
@@ -367,6 +391,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": true,
       "consumed_by": [
         "rest-adapter"
       ],
@@ -380,6 +405,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -393,6 +419,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -406,6 +433,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -419,6 +447,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -432,6 +461,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -445,6 +475,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -458,6 +489,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -471,6 +503,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -484,6 +517,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -497,6 +531,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-demo"
       ],
@@ -510,6 +545,7 @@
       "tier": "secret",
       "routes_to": "Secret",
       "set_by": "operator",
+      "writable": false,
       "consumed_by": [
         "placement-editor"
       ],
@@ -523,6 +559,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -536,6 +573,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": true,
       "consumed_by": [
         "wifi-positioning"
       ],
@@ -549,6 +587,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "wifi-positioning"
       ],
@@ -562,6 +601,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "camara-gateway",
         "placement-editor"
@@ -577,6 +617,7 @@
       "tier": "secret",
       "routes_to": "Secret",
       "set_by": "secret",
+      "writable": false,
       "consumed_by": [
         "rest-adapter"
       ],
@@ -590,6 +631,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter"
       ],
@@ -603,6 +645,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter"
       ],
@@ -616,6 +659,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
+      "writable": false,
       "consumed_by": [
         "rest-adapter"
       ],

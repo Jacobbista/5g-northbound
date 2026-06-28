@@ -58,6 +58,7 @@ class Var:
     example: str | None
     set_by: str | None = None      # compose | secret | operator
     consumed_by: list | None = None
+    writable: bool = False         # path the service WRITES at runtime -> needs a PVC, not a read-only mount
 
 
 @dataclass
@@ -87,6 +88,7 @@ def load_contracts() -> list[Contract]:
                     example=entry.get("example"),
                     set_by=entry.get("set_by"),
                     consumed_by=entry.get("consumed_by"),
+                    writable=bool(entry.get("writable", False)),
                 )
             )
         for entry in raw.get("optional") or []:
@@ -101,6 +103,7 @@ def load_contracts() -> list[Contract]:
                     example=entry.get("example"),
                     set_by=entry.get("set_by"),
                     consumed_by=entry.get("consumed_by"),
+                    writable=bool(entry.get("writable", False)),
                 )
             )
         out.append(
@@ -345,9 +348,11 @@ def cmd_sensitivity_manifest(args: argparse.Namespace) -> int:
                 "tier": "secret" if v.sensitive else "configmap",
                 "routes_to": "Secret" if v.sensitive else "ConfigMap",
                 "set_by": v.set_by or "compose",
+                "writable": v.writable,
                 "consumed_by": set(),
                 "services": set(),
             })
+            rec["writable"] = rec.get("writable", False) or v.writable
             rec["services"].add(c.service)
             for cb in (v.consumed_by or [c.service]):
                 rec["consumed_by"].add(cb)
