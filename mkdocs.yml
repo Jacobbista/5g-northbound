@@ -24,6 +24,7 @@ theme:
         name: Switch to dark mode
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
     - navigation.tracking
     - content.code.copy
@@ -38,21 +39,27 @@ markdown_extensions:
       permalink: true
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
   - Home: README.md
-  - Architecture: architecture.md
-  - Data contracts: data-contracts.md
-  - API reference: api-reference.md
-  - Adapters:
-      - Overview: adapters.md
-      - Adapter registry & routing: adapter-registry.md
-      - Integrating a vendor REST API: integrating-a-vendor-rest-api.md
-  - Positioning:
-      - Fusion strategies: fusion-strategies.md
-      - Georeferencing: georeferencing.md
+  - Overview: overview.md
+  - Concepts:
+      - Architecture: architecture.md
       - Blueprint vs bindings: blueprint-vs-bindings.md
-  - Deployment: deployment.md
+      - Georeferencing: georeferencing.md
+  - Guides:
+      - Adapters: adapters.md
+      - Integrating a vendor REST API: integrating-a-vendor-rest-api.md
+      - Adapter registry & routing: adapter-registry.md
+      - Fusion strategies: fusion-strategies.md
+      - Deployment: deployment.md
+  - Reference:
+      - Data contracts: data-contracts.md
+      - API reference: api-reference.md
   - CAMARA private-asset profile: https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md

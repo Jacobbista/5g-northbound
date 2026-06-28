@@ -1,6 +1,6 @@
 # Integrating a vendor's REST positioning API
 
-This guide walks through plugging a third-party RTLS / positioning cloud into the stack via the [`rest-adapter`](../services/rest-adapter/) image. The worked example is Wittra; the same flow applies to any vendor whose public REST API returns a polished positioning fix per device.
+This guide walks through plugging a third-party RTLS / positioning cloud into the stack via the [`rest-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/) image. The worked example is Wittra; the same flow applies to any vendor whose public REST API returns a polished positioning fix per device.
 
 ## When this is the right pattern
 
@@ -193,7 +193,7 @@ The full HTTP surface is `GET /discover` on the rest-adapter, proxied by the pla
 
 ## Local dev: end-to-end with `mock-wittra`
 
-`make demo` brings up [`mock-wittra`](../mocks/mock-wittra/), the rest-adapter, and the rest of the stack. The compose file pre-loads the example schema and points the adapter at the mock:
+`make demo` brings up [`mock-wittra`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-wittra/), the rest-adapter, and the rest of the stack. The compose file pre-loads the example schema and points the adapter at the mock:
 
 ```bash
 make demo

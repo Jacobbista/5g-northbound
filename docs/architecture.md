@@ -57,7 +57,7 @@ flowchart LR
 
 `positioning-demo` is the **end-user / CAMARA consumer**. `placement-editor` is the **operator-facing** sibling that writes the layout JSON those consumers read; the two never talk to each other directly, only through the shared file artefact.
 
-Devices are generic assets: UWB tags, WiFi clients, 5G UEs, anything with a stable identifier. Each positioning *technology* is its own pod that speaks a single HTTP contract; the engine fuses whichever adapter URLs are listed in its configuration. `ADAPTER_URLS` is a comma-separated list of `name=url` entries; `DEVICE_MAP` optionally pins a device to one named adapter. With no adapters configured, the engine produces no measurements. Deploy at least one adapter (the [`mock-positioning`](../mocks/mock-positioning/) reference is the simplest path for development).
+Devices are generic assets: UWB tags, WiFi clients, 5G UEs, anything with a stable identifier. Each positioning *technology* is its own pod that speaks a single HTTP contract; the engine fuses whichever adapter URLs are listed in its configuration. `ADAPTER_URLS` is a comma-separated list of `name=url` entries; `DEVICE_MAP` optionally pins a device to one named adapter. With no adapters configured, the engine produces no measurements. Deploy at least one adapter (the [`mock-positioning`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) reference is the simplest path for development).
 
 ### Request flow: one CAMARA call, end to end
 
@@ -109,14 +109,14 @@ flowchart TD
 
 | Service              | Role                                                                  | Repository path                          |
 |----------------------|-----------------------------------------------------------------------|------------------------------------------|
-| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; cross-technology device-identity mapping | [`services/camara-gateway/`](../services/camara-gateway/) |
-| `positioning-engine` | Fuses measurements from configured adapters; runs the selected fusion strategy; converts local coordinates to WGS84; serves the northbound contract consumed by the gateway | [`services/positioning-engine/`](../services/positioning-engine/) |
-| `wifi-positioning`   | Reference positioning adapter: WiFi RSSI multilateration over a fixed AP map; receives scans on the 5G data network                            | [`services/wifi-positioning/`](../services/wifi-positioning/) |
-| `mock-positioning`   | Reference positioning adapter: synthetic random walk inside the floor bounds. Produces continuous motion without a real measurement source, used by the local demo and as a generic adapter template | [`mocks/mock-positioning/`](../mocks/mock-positioning/) |
-| `positioning-demo`   | Browser MEC application. Keycloak PKCE login, polls the CAMARA gateway (`/devices` for discovery, `/devices/{id}/details` per device), renders them on a 3D floor plan. Read-only consumer; never mutates server state | [`services/positioning-demo/`](../services/positioning-demo/) |
-| `placement-editor`   | Operator-facing service, reads/writes the floor-plan / AP layout JSON via `GET/PUT /api/layout`. Runs alongside (not inside) the demo and is the artefact pulled by the testbed dashboard. Distinct realm role (`placement-admin`) when auth is wired in | [`services/placement-editor/`](../services/placement-editor/) |
+| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; cross-technology device-identity mapping | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/) |
+| `positioning-engine` | Fuses measurements from configured adapters; runs the selected fusion strategy; converts local coordinates to WGS84; serves the northbound contract consumed by the gateway | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/) |
+| `wifi-positioning`   | Reference positioning adapter: WiFi RSSI multilateration over a fixed AP map; receives scans on the 5G data network                            | [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/) |
+| `mock-positioning`   | Reference positioning adapter: synthetic random walk inside the floor bounds. Produces continuous motion without a real measurement source, used by the local demo and as a generic adapter template | [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) |
+| `positioning-demo`   | Browser MEC application. Keycloak PKCE login, polls the CAMARA gateway (`/devices` for discovery, `/devices/{id}/details` per device), renders them on a 3D floor plan. Read-only consumer; never mutates server state | [`services/positioning-demo/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-demo/) |
+| `placement-editor`   | Operator-facing service, reads/writes the floor-plan / AP layout JSON via `GET/PUT /api/layout`. Runs alongside (not inside) the demo and is the artefact pulled by the testbed dashboard. Distinct realm role (`placement-admin`) when auth is wired in | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) |
 
-Edge clients (for example, the Raspberry Pi WiFi scanner; see [`edge/wifi-scanner/README.md`](../edge/wifi-scanner/README.md) for the deploy flow) are not deployed by Kubernetes. They run on the device and reach the cluster over the 5G data network.
+Edge clients (for example, the Raspberry Pi WiFi scanner; see [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md) for the deploy flow) are not deployed by Kubernetes. They run on the device and reach the cluster over the 5G data network.
 
 ## Mapping to 3GPP and CAMARA reference architecture
 

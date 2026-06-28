@@ -15,7 +15,7 @@ A compact endpoint-by-endpoint reference (one row per route) is available in [`a
 
 ## CAMARA Device Location API
 
-The gateway implements two distinct CAMARA APIs, pinned to meta-release **r3.2** (commit `bc17ceeb4ee34929d5f65b8851d99d4dda4c5af1`). The pinned OpenAPI documents in [`camara-gateway/spec/`](../services/camara-gateway/spec/) are the source of truth, the examples below are illustrative.
+The gateway implements two distinct CAMARA APIs, pinned to meta-release **r3.2** (commit `bc17ceeb4ee34929d5f65b8851d99d4dda4c5af1`). The pinned OpenAPI documents in [`camara-gateway/spec/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/spec/) are the source of truth, the examples below are illustrative.
 
 ### Device identifier
 
@@ -269,7 +269,7 @@ curl http://localhost:8081/adapters
 
 ## Adapter contract
 
-Adapter pods expose the following endpoint, consumed by the engine via [`HttpAdapter`](../services/positioning-engine/app/adapters/http.py):
+Adapter pods expose the following endpoint, consumed by the engine via [`HttpAdapter`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-engine/app/adapters/http.py):
 
 ```
 GET /measurement/{device_id}  → 200 OK
@@ -289,7 +289,7 @@ GET /measurement/{device_id}  → 200 OK
 
 ## Device registry file
 
-Loaded by the gateway at startup from the path in `DEVICE_REGISTRY_FILE` (default unset; in compose `/app/config/devices.json` is mounted from [`dev/devices.json`](../dev/devices.json)). Edit + restart the gateway to register new devices.
+Loaded by the gateway at startup from the path in `DEVICE_REGISTRY_FILE` (default unset; in compose `/app/config/devices.json` is mounted from [`dev/devices.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/devices.json)). Edit + restart the gateway to register new devices.
 
 ```json
 {
@@ -352,11 +352,11 @@ Loaded at engine startup from `/app/config/floor-plan.json` (mounted in producti
 | `azimuth_deg` | no (0)   | Bearing of the local +z axis (the SVG "up") clockwise from true north. 0 means the room is north-aligned; 30 means the room is rotated 30° east of north |
 | `altitude_m`  | no       | Altitude of the origin above sea level. Carried for completeness, not used in the 2D projection |
 
-`gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](../dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available.
+`gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available.
 
 ## Placement-editor API
 
-Standalone operator-facing service that owns the floor-plan / AP layout JSON. Lives in [`services/placement-editor/`](../services/placement-editor/) and ships as its own image. The demo and the engine both consume the same layout file the editor writes (today via shared volume; in Kubernetes via a ConfigMap or PVC mounted on both sides).
+Standalone operator-facing service that owns the floor-plan / AP layout JSON. Lives in [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) and ships as its own image. The demo and the engine both consume the same layout file the editor writes (today via shared volume; in Kubernetes via a ConfigMap or PVC mounted on both sides).
 
 ### `GET /health`
 
@@ -448,7 +448,7 @@ Auth: not yet wired in (`v0.0.1` scaffold). When wired, the realm role will be `
 
 ## SMF session info
 
-Consumed by the gateway from the Open5GS SMF management API (mocked by [`dev/mock_smf.py`](../dev/mock_smf.py)).
+Consumed by the gateway from the Open5GS SMF management API (mocked by [`dev/mock_smf.py`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/mock_smf.py)).
 
 `GET /session-info`:
 

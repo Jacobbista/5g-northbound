@@ -204,7 +204,7 @@ LAYOUT_PATH set + readable?
                  single-file demos.
 ```
 
-See [`services/wifi-positioning/app/assemble.py`](../services/wifi-positioning/app/assemble.py)
+See [`services/wifi-positioning/app/assemble.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/assemble.py)
 for the exact code.
 
 ## Deploying to Kubernetes

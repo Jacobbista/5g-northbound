@@ -8,13 +8,13 @@ Seven images are built and published by CI on every `v*` tag:
 
 | Image                                                              | Source path                                    | Default port |
 |--------------------------------------------------------------------|------------------------------------------------|--------------|
-| `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](../services/camara-gateway/)        | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](../services/positioning-engine/)| 8080         |
-| `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`services/wifi-positioning/`](../services/wifi-positioning/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](../services/placement-editor/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`services/positioning-demo/`](../services/positioning-demo/)    | 80           |
-| `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`              | [`services/rest-adapter/`](../services/rest-adapter/)            | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](../mocks/mock-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/)        | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/)| 8080         |
+| `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`services/positioning-demo/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-demo/)    | 80           |
+| `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`              | [`services/rest-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/)            | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/)    | 8080         |
 
 `mock-positioning` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-wittra` is **not** published: it is a local fake of the Wittra cloud used only by `make demo` (compose builds it from source); in the testbed `rest-adapter` points at the real vendor cloud.
 
@@ -26,7 +26,7 @@ GitHub Packages defaults each new package to private. They must be flipped to **
 
 ## CI
 
-[`.github/workflows/test.yml`](../.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds and pushes the seven published images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
+[`.github/workflows/test.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/build.yml) builds and pushes the seven published images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
 
 To cut a release:
 
@@ -63,7 +63,7 @@ and let the entrypoint render the file. (In local `docker compose` the file is
 bind-mounted for hot-editing convenience; that is a dev affordance, not the
 cluster pattern.)
 
-The worked example [`deploy/k8s/examples/placement-editor.yaml`](../../deploy/k8s/examples/placement-editor.yaml)
+The worked example [`deploy/k8s/examples/placement-editor.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/k8s/examples/placement-editor.yaml)
 follows this exactly: `envFrom` a ConfigMap + a Secret, no file-mounted
 `env-config.js`. Copy it; do not reintroduce the file mount.
 
@@ -81,7 +81,7 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skelet
 
 `sensitive: true` in a contract means the value belongs in a `Secret`; `false` means a `ConfigMap`. `runtime_layer: window.__ENV__` flags a browser variable that the container's `entrypoint.sh` renders into `env-config.js` at start, so it is still supplied as a normal pod env var.
 
-**2. Copy the manifest pattern.** [`deploy/k8s/examples/placement-editor.yaml`](../../deploy/k8s/examples/placement-editor.yaml) is a complete worked example: ConfigMap + Secret + Deployment (`envFrom` both, `fsGroup` for the writable PVC) + PVC + Service. Replicate it per service, filling values from that service's contract. The per-variable tables below add the cross-service context (which URL points where) that does not fit a contract field.
+**2. Copy the manifest pattern.** [`deploy/k8s/examples/placement-editor.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/k8s/examples/placement-editor.yaml) is a complete worked example: ConfigMap + Secret + Deployment (`envFrom` both, `fsGroup` for the writable PVC) + PVC + Service. Replicate it per service, filling values from that service's contract. The per-variable tables below add the cross-service context (which URL points where) that does not fit a contract field.
 
 **3. Carry the data that never enters the repo.** These are gitignored locally and become cluster resources:
 
@@ -200,7 +200,7 @@ The editor's drag-drop UI is not implemented yet (`v0.0.1` is a scaffold). The H
 
 Runtime configuration is injected through `/usr/share/nginx/html/env-config.js`, served `Cache-Control: no-cache`. The image's `entrypoint.sh` regenerates this file from container env vars at every pod start, so a Secret / ConfigMap update only needs a `kubectl rollout restart`. The image build itself does not bake any of these values in.
 
-Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/positioning-demo/env.contract.yaml`](../services/positioning-demo/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
+Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/positioning-demo/env.contract.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-demo/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
 
 ## Health probes
 
@@ -229,7 +229,7 @@ Devices are listed in a JSON file the gateway loads at startup. The file lives o
 
 | Environment | Source                                                                                  |
 |-------------|------------------------------------------------------------------------------------------|
-| compose     | [`dev/devices.json`](../dev/devices.json), mounted via `volumes:` into `/app/config/devices.json` |
+| compose     | [`dev/devices.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/devices.json), mounted via `volumes:` into `/app/config/devices.json` |
 | Kubernetes  | ConfigMap, mounted on the gateway pod at `/app/config/devices.json` (set `DEVICE_REGISTRY_FILE` to that path) |
 | Tests / CI  | `DEVICE_REGISTRY` env fallback (flat JSON map) for inline fixtures                       |
 
@@ -245,4 +245,4 @@ The adapter contract is documented in full in [`adapters.md`](adapters.md).
 
 ## Local development
 
-The host-level quick start (`docker compose up --build`, port table, CAMARA call example) lives in the top-level [README](../README.md). This document covers the producer-side contract: images, environment variables, ConfigMap shape, health probes. Anything that differs between *what the image expects* and *how a local compose run wires it up* is intentional, the compose file is one consumer of this contract; Kubernetes is the other.
+The host-level quick start (`docker compose up --build`, port table, CAMARA call example) lives in the top-level [README](https://github.com/Jacobbista/5g-northbound/blob/main/README.md). This document covers the producer-side contract: images, environment variables, ConfigMap shape, health probes. Anything that differs between *what the image expects* and *how a local compose run wires it up* is intentional, the compose file is one consumer of this contract; Kubernetes is the other.
