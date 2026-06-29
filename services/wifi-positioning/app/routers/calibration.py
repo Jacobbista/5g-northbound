@@ -119,6 +119,8 @@ async def derive(request: Request) -> dict:
     before pressing apply."""
     store = request.app.state.calibration
     cfg = request.app.state.wifi_config
+    if cfg is None:
+        raise HTTPException(503, "wifi config not loaded yet (blueprint still loading)")
     return {"per_anchor": store.derive_params(cfg)}
 
 
@@ -136,6 +138,8 @@ async def apply(body: ApplyRequest, request: Request) -> dict:
     blueprint (positions) is not touched."""
     store = request.app.state.calibration
     cfg = request.app.state.wifi_config
+    if cfg is None:
+        raise HTTPException(503, "wifi config not loaded yet (blueprint still loading)")
     derived = body.per_anchor or store.derive_params(cfg)
     # Filter: only entries with non-null params are written. Anchors with
     # too few samples are simply skipped so the previous calibration (if

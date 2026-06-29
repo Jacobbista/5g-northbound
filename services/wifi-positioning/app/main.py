@@ -73,62 +73,87 @@ async def lifespan(app: FastAPI):
     app.state.ready = False
     app.state.config_error = None
     app.state.adapter = None
+    app.state.wifi_config = None
 
-    blueprint = await _fetch_blueprint()
+    # The calibration store depends only on the bindings file (persisted
+    # samples), NOT on the blueprint, so wire it unconditionally and FIRST.
+    # Capture / state must answer even while the blueprint is still loading,
+    # otherwise a degraded boot leaves request.app.state.calibration unset and
+    # every calibration route 500s with AttributeError.
+    samples = _load_persisted_samples(bindings_path)
+    store = CalibrationStore(samples=samples)
+    app.state.calibration = store
+    app.state.persist_calibration = lambda overrides, samples: persist_calibration(
+        bindings_path, overrides, samples
+    )
 
-    def _reload() -> "WifiConfig":  # noqa: F821
-        # Calibration reloads re-read the bindings file (tx_power, samples);
-        # the blueprint geometry is the one fetched at boot. A re-authored
-        # venue propagates on the next restart/rollout.
-        return load_wifi_config(
-            bindings_path=bindings_path,
-            blueprint_path=blueprint_path,
-            blueprint=blueprint,
-        )
+    # Auto-persist samples after every capture / delete / clear so the operator
+    # cannot lose survey data between runs. Path-loss overrides are NOT touched
+    # here; they are written only on explicit apply.
+    def _persist_samples_only(current_samples):
+        try:
+            persist_calibration(bindings_path, overrides={}, samples=current_samples)
+        except Exception as exc:
+            log.warning("auto-persist of calibration samples failed: %s", exc)
 
-    try:
+    store.on_samples_changed = _persist_samples_only
+
+    async def _load_config() -> None:
+        """Fetch the blueprint from the engine and assemble the live wifi
+        config. Raises until the engine has a blueprint (engine <-> adapter
+        boot is mutually dependent); the self-heal loop keeps retrying."""
+        blueprint = await _fetch_blueprint()
+
+        def _reload() -> "WifiConfig":  # noqa: F821
+            # Calibration reloads re-read the bindings file (tx_power, samples);
+            # the blueprint geometry is the one fetched here.
+            return load_wifi_config(
+                bindings_path=bindings_path,
+                blueprint_path=blueprint_path,
+                blueprint=blueprint,
+            )
+
         wifi_cfg = _reload()
         app.state.wifi_config = wifi_cfg
         app.state.adapter = WifiAdapter(wifi_cfg)
-
-        samples = _load_persisted_samples(bindings_path)
-        store = CalibrationStore(samples=samples)
-        app.state.calibration = store
         app.state.adapter.on_ingest = store.on_ingest
-
-        # Closures over the resolved paths so the calibration router does not
-        # need to know about config / settings plumbing.
         app.state.reload_wifi_config = _reload
-        app.state.persist_calibration = lambda overrides, samples: persist_calibration(
-            bindings_path, overrides, samples
-        )
-
-        # Auto-persist samples after every capture / delete / clear so the
-        # operator cannot lose survey data between runs. Path-loss overrides
-        # are NOT touched here; they are written only on explicit apply.
-        def _persist_samples_only(current_samples):
-            try:
-                persist_calibration(bindings_path, overrides={}, samples=current_samples)
-            except Exception as exc:
-                log.warning("auto-persist of calibration samples failed: %s", exc)
-
-        store.on_samples_changed = _persist_samples_only
+        app.state.config_error = None
         app.state.ready = True
-
         log.info(
             "wifi-positioning: %d routers, room %g x %g m, algo=%s, calibration samples=%d",
             len(wifi_cfg.routers), wifi_cfg.room_w, wifi_cfg.room_h, wifi_cfg.algorithm,
             len(samples),
         )
+
+    async def _self_heal() -> None:
+        # Mirror the mock's self-heal: keep retrying the blueprint-dependent
+        # config load so wifi recovers once the engine is up, without a restart.
+        delay = max(settings.blueprint_fetch_backoff_s * 2, 5.0)
+        while not app.state.ready:
+            await asyncio.sleep(delay)
+            try:
+                await _load_config()
+            except Exception as exc:
+                app.state.config_error = str(exc)
+                log.warning("wifi-positioning: config not ready yet, retrying (%s)", exc)
+
+    # Fast path inline; if the engine is not ready, self-heal in the background.
+    try:
+        await _load_config()
     except Exception as exc:
         app.state.config_error = str(exc)
         log.error(
-            "wifi-positioning: config load failed, serving in not-ready mode: %s", exc
+            "wifi-positioning: initial config load failed, self-healing in background: %s", exc
         )
+
+    heal_task = asyncio.create_task(_self_heal()) if not app.state.ready else None
     # Announce ourselves to the engine's adapter registry + heartbeat.
     reg_task = asyncio.create_task(register.heartbeat_loop())
     yield
     reg_task.cancel()
+    if heal_task is not None:
+        heal_task.cancel()
     await register.deregister()
 
 
