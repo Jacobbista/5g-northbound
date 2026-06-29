@@ -22,10 +22,13 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 |--------------------------------------------------------|------------------------------|------------------------------------------------------------------------|
 | `GET    /health`                                       | `{"status":"ok"}`            | Liveness; no auth                                                      |
 | `GET    /contract`                                     | env contract (JSON)          | No auth. This service's `env.contract.yaml` as JSON (schema only, sensitive values redacted). See [Conventions](#conventions-across-services) |
-| `POST   /location-retrieval/v0.5/retrieve`             | `Location` (CAMARA)          | CAMARA Device Location Retrieval r3.2                                  |
+| `POST   /location-retrieval/v0.5/retrieve`             | `Location` (CAMARA)          | CAMARA Device Location Retrieval r3.2. `device.assetId` (private-asset profile) |
 | `POST   /location-verification/v3/verify`              | `VerifyLocationResponse`     | CAMARA Device Location Verification r3.2                               |
-| `GET    /devices`                                      | `{"devices":[…]}`            | **Vendor extension**: list registered devices for the demo UI         |
-| `GET    /devices/{phoneNumber}/details`                | `{"phoneNumber",…,"telemetry":…}` | **Vendor extension**: registry entry + engine telemetry. `telemetry: null` when offline |
+| `GET    /assets`                                       | `{"assets":[…]}`             | **Vendor extension**: the caller's tenant assets (Asset Identity Map), `org`-filtered |
+| `PUT    /assets`                                       | `{"status":"ok",…}`          | **Vendor extension**: replace the asset map (operator; conforms to `schema/asset.schema.json`) |
+| `GET    /assets/{assetId}/details`                     | `{…,"telemetry":…}`          | **Vendor extension**: asset entry + engine telemetry. `telemetry: null` when offline; `404` for a missing or cross-tenant id |
+| `GET    /capabilities`                                 | `{"adapters","sources","kinds"}` | **Vendor extension**: live adapter capabilities + the tenant's asset sources/kinds |
+| `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-positioning. No BSSIDs. Empty when `WIFI_POSITIONING_URL` unset |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
 | `GET    /blueprint`                                    | blueprint JSON               | **Vendor extension**: read-only proxy of the engine's blueprint so the demo (MEC: gateway only) can render the venue. `404` when the engine has none |
 | `WS     /positions/stream?token=<jwt>`                 | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated browser clients. Token is supplied as a query parameter because browsers cannot set `Authorization` on a WebSocket handshake. Closes with code 4401 on auth failure, 1011 on upstream failure |
@@ -39,13 +42,13 @@ No auth (cluster-internal). Mounts:
 | Method · path                          | Returns            | Notes                                                                            |
 |----------------------------------------|--------------------|----------------------------------------------------------------------------------|
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
-| `GET    /position/{device_id}`         | `EnginePosition`   | Fuses every configured adapter that reports a measurement for `device_id`. `404` when no adapter has a fix (legitimate "offline") |
+| `GET    /position/{positioning_id}?source=` | `EnginePosition` | Routes by `?source=` (adapter whose `ADAPTER_NAME` matches); else `DEVICE_MAP`; else fan out to all adapters + fuse. `404` when no adapter has a fix (legitimate "offline") |
 | `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
 | `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
 | `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `base_url`, `kind`, `registered_via`, `last_seen_s_ago`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
 | `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, base_url, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
 | `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
-| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS` |
+| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, altitude_m, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS`. `device_id` is the `positioning_id`; the gateway enriches it to asset shape downstream |
 
 ## Adapter contract (consumed by the engine)
 

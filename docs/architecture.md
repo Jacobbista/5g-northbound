@@ -30,34 +30,31 @@ flowchart LR
     WITTRA[("Wittra cloud<br/>api.wittra.se")]
   end
 
-  subgraph identity["Identity / 5G core"]
+  subgraph identity["Identity"]
     KC[("Keycloak<br/>OIDC + JWKS")]
-    SMF[("Open5GS SMF<br/>session state")]
   end
 
   BR -- "PKCE login" --> KC
   BR -- "CAMARA REST<br/>(Bearer JWT)" --> DEMO
   DEMO -- "POST /location-retrieval/v0.5/retrieve" --> GW
   GW -- "JWKS validate" --> KC
-  GW -- "GET /position/{id}" --> ENG
-  GW -. "session lookup" .-> SMF
-  ENG -- "GET /measurement/{id}<br/>ADAPTER_URLS" --> WIFI
-  ENG -- "GET /measurement/{id}<br/>ADAPTER_URLS" --> MOCK
-  ENG -- "GET /measurement/{id}<br/>ADAPTER_URLS" --> REST
-  ENG -- "GET /measurement/{id}<br/>ADAPTER_URLS" --> VENDOR
+  GW -- "GET /position/{id}?source=" --> ENG
+  GW -. "GET /blueprint (proxy)" .-> ENG
+  ENG -- "GET /measurement/{id}<br/>self-registered" --> WIFI
+  ENG -- "GET /measurement/{id}<br/>self-registered" --> MOCK
+  ENG -- "GET /measurement/{id}<br/>self-registered" --> REST
+  ENG -- "GET /measurement/{id}<br/>self-registered" --> VENDOR
   REST -- "GET /v1/.../devices/{id}<br/>(per schema)" --> WITTRA
   REST -. "demo only" .-> MWIT
   EDGE -- "POST /ingest/wifi-scan<br/>(5G data network)" --> WIFI
 
-  LAYOUT[("layout.json<br/>shared volume / ConfigMap")]
-  EDIT -- "PUT /api/layout" --> LAYOUT
-  LAYOUT -. "GET /layout.json" .-> DEMO
-  LAYOUT -. "floor plan ConfigMap" .-> ENG
+  EDIT -- "PUT /blueprint<br/>(engine = authority)" --> ENG
+  GW -. "blueprint proxy" .-> DEMO
 ```
 
 `positioning-demo` is the **end-user / CAMARA consumer**. `placement-editor` is the **operator-facing** sibling that writes the layout JSON those consumers read; the two never talk to each other directly, only through the shared file artefact.
 
-Devices are generic assets: UWB tags, WiFi clients, 5G UEs, anything with a stable identifier. Each positioning *technology* is its own pod that speaks a single HTTP contract; the engine fuses whichever adapter URLs are listed in its configuration. `ADAPTER_URLS` is a comma-separated list of `name=url` entries; `DEVICE_MAP` optionally pins a device to one named adapter. With no adapters configured, the engine produces no measurements. Deploy at least one adapter (the [`mock-positioning`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) reference is the simplest path for development).
+The tracked entities are **assets** (tools, tags, pallets, forklifts), each with a business `assetId` the gateway resolves to a `positioning_id` and a `source` via the Asset Identity Map. Each positioning *technology* is its own pod speaking a single HTTP contract; adapters self-register with the engine (`ADAPTER_URLS` is only a cold-start seed). The engine routes a request to the adapter whose `ADAPTER_NAME` equals the asset's `source`, falling back to the optional `DEVICE_MAP` pin and then to fan-out-and-fuse across all adapters. With no adapters configured the engine produces no measurements. Deploy at least one (the [`mock-positioning`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) reference is the simplest path for development).
 
 ### Request flow: one CAMARA call, end to end
 
@@ -71,22 +68,22 @@ sequenceDiagram
   participant A1 as wifi-positioning
   participant A2 as mock-positioning
 
-  App->>GW: POST /location-retrieval/v0.5/retrieve<br/>{ device.phoneNumber }
+  App->>GW: POST /location-retrieval/v0.5/retrieve<br/>{ device.assetId }
   GW->>KC: GET JWKS (cached)
   KC-->>GW: keys
-  GW->>GW: validate JWT + role<br/>map phoneNumber → device_id
-  GW->>ENG: GET /position/{device_id}
+  GW->>GW: validate JWT + role<br/>resolve assetId → positioning_id + source<br/>(asset map; gate org claim vs asset.org)
+  GW->>ENG: GET /position/{positioning_id}?source=…
 
-  par fan-out (concurrent)
-    ENG->>A1: GET /measurement/{device_id}
+  alt source matches a registered adapter
+    ENG->>A1: GET /measurement/{positioning_id}
     A1-->>ENG: 200 Measurement (local)<br/>or 404
-  and
-    ENG->>A2: GET /measurement/{device_id}
+  else no source / no match → fan out + fuse
+    ENG->>A2: GET /measurement/{positioning_id}
     A2-->>ENG: 200 Measurement (local)<br/>or 404
   end
 
   ENG->>ENG: normalise wgs84→local if needed<br/>run FUSION_STRATEGY<br/>local→WGS84 via gps_origin
-  ENG-->>GW: EnginePosition (lat/lon, accuracy, strategy)
+  ENG-->>GW: EnginePosition (lat/lon, altitude, accuracy, strategy)
   GW-->>App: CAMARA Location { area.center, radius }
 ```
 
@@ -94,9 +91,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-  REQ([GET /position/device_id]) --> Q{device_id<br/>in DEVICE_MAP?}
-  Q -- yes --> ONE[poll the single named adapter only]
-  Q -- no  --> ALL[poll every adapter in ADAPTER_URLS]
+  REQ([GET /position/positioning_id?source=]) --> Q{source matches a<br/>registered ADAPTER_NAME?}
+  Q -- yes --> ONE[poll that single adapter]
+  Q -- "no / unset" --> D{positioning_id<br/>in DEVICE_MAP?}
+  D -- yes --> ONE
+  D -- no  --> ALL[fan out to every registered adapter]
   ONE --> COLLECT[collect responses · 404 = drop · timeout = drop]
   ALL --> COLLECT
   COLLECT --> NORM[normalise WGS84 replies → local frame<br/>via floor_plan.gps_origin]
@@ -109,11 +108,11 @@ flowchart TD
 
 | Service              | Role                                                                  | Repository path                          |
 |----------------------|-----------------------------------------------------------------------|------------------------------------------|
-| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; cross-technology device-identity mapping | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/) |
+| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; Asset Identity Map authority (`assetId` → `positioning_id` + `source`) and per-tenant authorization | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/) |
 | `positioning-engine` | Fuses measurements from configured adapters; runs the selected fusion strategy; converts local coordinates to WGS84; serves the northbound contract consumed by the gateway | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/) |
 | `wifi-positioning`   | Reference positioning adapter: WiFi RSSI multilateration over a fixed AP map; receives scans on the 5G data network                            | [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/) |
 | `mock-positioning`   | Reference positioning adapter: synthetic random walk inside the floor bounds. Produces continuous motion without a real measurement source, used by the local demo and as a generic adapter template | [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) |
-| `positioning-demo`   | Browser MEC application. Keycloak PKCE login, polls the CAMARA gateway (`/devices` for discovery, `/devices/{id}/details` per device), renders them on a 3D floor plan. Read-only consumer; never mutates server state | [`services/positioning-demo/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-demo/) |
+| `positioning-demo`   | Browser MEC application. Keycloak PKCE login, polls the CAMARA gateway (`/assets` for discovery, `/assets/{assetId}/details` per asset), renders them on a 3D floor plan. Read-only consumer; never mutates server state | [`services/positioning-demo/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-demo/) |
 | `placement-editor`   | Operator-facing service, reads/writes the floor-plan / AP layout JSON via `GET/PUT /api/layout`. Runs alongside (not inside) the demo and is the artefact pulled by the testbed dashboard. Distinct realm role (`placement-admin`) when auth is wired in | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) |
 
 Edge clients (for example, the Raspberry Pi WiFi scanner; see [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md) for the deploy flow) are not deployed by Kubernetes. They run on the device and reach the cluster over the 5G data network.
@@ -131,10 +130,10 @@ This stack collapses that chain to fit a research testbed where Open5GS does not
 | 3GPP / CAMARA role              | This repository                                            | Notes |
 |---------------------------------|------------------------------------------------------------|-------|
 | Application (API consumer)      | `positioning-demo` (any CAMARA client also works)          | PKCE login, polls `POST /location-retrieval/v0.5/retrieve` |
-| CAMARA Gateway + NEF            | `camara-gateway`                                           | Single service: CAMARA REST surface, JWT, device-identity mapping. Geometry-agnostic |
+| CAMARA Gateway + NEF            | `camara-gateway`                                           | Single service: CAMARA REST surface, JWT, Asset Identity Map + tenant authz. Geometry-agnostic |
 | LMF                             | `positioning-engine`                                       | Thin fusion of 3GPP and non-3GPP sources via the HTTP adapter contract; fusion strategy is pluggable (see [`fusion-strategies.md`](fusion-strategies.md), baseline is `weighted_avg`); normalises to WGS84 |
 | RAN / UE measurements           | Adapter pods (`wifi-positioning` in repo; vendor adapters as private images) | Each adapter is its own pod implementing `GET /measurement/{id}`: see [`adapters.md`](adapters.md) |
-| AMF / SMF session state         | Open5GS SMF (mocked locally by `dev/mock_smf.py`)          | Provides UE session info (IMSI, IPv4, `up_cnx_state`) for cross-tech identity resolution |
+| AMF / SMF session state         | out of scope                                               | The private-asset profile addresses assets by `assetId`, not by subscriber/session identity, so the gateway resolves identity from the Asset Identity Map, not from SMF. 3GPP network-based positioning is a component-bound future direction (see the [profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md)) |
 
 The external contracts (CAMARA REST) are standard; the internal decomposition is a deployment choice and can be re-split into separate NEF and LMF services later without breaking northbound consumers.
 

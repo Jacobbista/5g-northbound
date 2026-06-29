@@ -91,7 +91,7 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skelet
 | Bindings (BSSIDs, calib.)   | `dev/wifi-config.local.json`              | writable PVC on wifi-positioning                  |
 | Vendor credentials          | `services/rest-adapter/.env`              | `Secret` (names come from the active vendor schema) |
 | Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
-| Device registry             | `dev/devices.json`                        | `ConfigMap` (`DEVICE_REGISTRY_FILE`)              |
+| Asset Identity Map          | `dev/assets.json`                         | **PVC** (`ASSET_STORE_FILE`) seeded from `ASSET_SEED_FILE` |
 | Engine floor-plan georef    | `dev/floor-plan.json`                     | `ConfigMap` (`FLOOR_PLAN_PATH`)                   |
 
 The blueprint/bindings split and its cluster mounts are detailed in [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md); the georef workflow, if you re-calibrate for a new venue, in [`georeferencing.md`](georeferencing.md).
@@ -121,26 +121,26 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # preview a ConfigMap + Sec
 | `KEYCLOAK_URL`            | `http://keycloak.iam.svc.cluster.local:8080`           | Full base URL including any path prefix |
 | `KEYCLOAK_REALM`          | `5g-testbed`                                           | |
 | `REQUIRED_ROLE`           | `camara-location-read`                                 | Realm role required to call CAMARA endpoints |
-| `POSITIONING_ENGINE_URL`  | empty (mock fallback)                                  | Engine base URL; gateway calls `GET /position/{id}` |
-| `SMF_URL`                 | `http://smf.5g.svc.cluster.local:9090`                 | Open5GS SMF management API for cross-tech identity |
-| `DEVICE_REGISTRY_FILE`    | empty                                                  | Path to a JSON file describing the device registry. Preferred over `DEVICE_REGISTRY`. Schema: `{"devices":[{"phoneNumber","deviceId","label"}]}`. Mount the file via a volume (compose) or ConfigMap (K8s) and edit it without rebuilding the image |
-| `DEVICE_REGISTRY`         | `{}`                                                   | Flat JSON map `{phoneNumber: deviceId}` used as a fallback when `DEVICE_REGISTRY_FILE` is empty or unreadable. Kept for back-compat; new deployments should prefer the file form so labels are available to the discovery endpoint |
+| `POSITIONING_ENGINE_URL`  | empty (mock fallback)                                  | Engine base URL; gateway calls `GET /position/{positioning_id}?source=` |
+| `WIFI_POSITIONING_URL`    | empty                                                  | wifi-positioning base URL, proxied by `/anchors/calibration` so the demo reads real per-AP RF. Empty disables that extension |
+| `ASSET_STORE_FILE`        | `/app/data/assets.json`                                | **Writable** Asset Identity Map store. Back it with a **PVC** (not a read-only ConfigMap) so `PUT /assets` survives restart/upgrade. Content is tenant inventory (Tier-1): never committed |
+| `ASSET_SEED_FILE`         | `/app/config/assets.seed.json`                         | Read-only seed copied into the store once on first boot when it is empty. Conforms to `schema/asset.schema.json` |
 | `SKIP_AUTH`               | `false`                                                | Development override only, bypasses JWT validation for every endpoint except `/health` |
 
-The gateway also exposes two **vendor-extension** endpoints used by the demo UI (not part of CAMARA): `GET /devices` and `GET /devices/{phoneNumber}/details`. Auth and error envelope are identical to the CAMARA routes. See [`data-contracts.md`](data-contracts.md#vendor-extensions-on-the-gateway).
+The gateway also exposes **vendor-extension** endpoints used by the demo UI (not part of CAMARA): `GET /assets`, `GET /assets/{assetId}/details`, `GET /capabilities`, `GET /anchors/calibration`. Auth and error envelope are identical to the CAMARA routes, and all are `org`-scoped. See [`data-contracts.md`](data-contracts.md#vendor-extensions-on-the-gateway).
 
 ### positioning-engine
 
 | Variable                | Default                              | Notes |
 |-------------------------|--------------------------------------|-------|
 | `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-positioning:8080,mock=http://mock-positioning:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
-| `DEVICE_MAP`            | empty                                | Comma-separated `device_id=adapter_name` entries. When set, the listed device is polled only against the named adapter; unlisted devices hit every adapter and are fused |
+| `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the asset's `source` (adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
 | `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
 | `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
 | `FLOOR_PLAN_PATH`       | `/app/config/floor-plan.json`        | Mounted from `positioning-floor-plan` ConfigMap |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
 | `DEVICE_IDS`            | `uwb-tag-001`                        | Comma-separated devices broadcast on the WebSocket |
-| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine--external-adapter) |
+| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
 
@@ -206,34 +206,33 @@ Full variable list (names, required vs optional, sensitivity, defaults) lives in
 
 Every service exposes `GET /health` returning `200 {"status": "ok"}` with no authentication. Use it for both `readinessProbe` and `livenessProbe`. Initial delays should account for the startup work: floor plan loading, JWKS fetch, AP map parsing.
 
-## Registering a new device
+## Registering an asset
 
-Devices are listed in a JSON file the gateway loads at startup. The file lives outside the image so an operator can register devices without rebuilding anything.
+Assets live in the gateway's **Asset Identity Map**, a writable JSON store the gateway is the authority for (`GET/PUT /assets`). Unlike the old device registry, it is mutated at runtime, not edited-and-restarted.
 
-### File shape
+### Entry shape
 
 ```json
 {
-  "devices": [
-    { "phoneNumber": "+390111234567", "deviceId": "wifi-asset-01", "label": "WiFi asset 01" },
-    { "phoneNumber": "+390117654321", "deviceId": "mock-demo-01",  "label": "Mock demo 01" }
-  ]
+  "asset_id":       "pkg-4471",
+  "positioning_id": "wittra-tag-01",
+  "source":         "wittra",
+  "kind":           "pallet",
+  "org":            "fiskarheden",
+  "label":          "Timber bundle 01"
 }
 ```
 
-- `phoneNumber`: the CAMARA identifier the consumer sends in `device.phoneNumber`.
-- `deviceId`: the internal id the engine fuses on (matches the key in the engine's `DEVICE_MAP`).
-- `label`: human-readable name shown in the demo's device sidebar. Optional; falls back to `deviceId`.
+Full field reference and the schema (`schema/asset.schema.json`) are in [`data-contracts.md`](data-contracts.md#asset-identity-map). The two contracts that must hold: `positioning_id` == the vendor-native device id, and `source` == the adapter's `ADAPTER_NAME`.
 
 ### How it is consumed
 
 | Environment | Source                                                                                  |
 |-------------|------------------------------------------------------------------------------------------|
-| compose     | [`dev/devices.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/devices.json), mounted via `volumes:` into `/app/config/devices.json` |
-| Kubernetes  | ConfigMap, mounted on the gateway pod at `/app/config/devices.json` (set `DEVICE_REGISTRY_FILE` to that path) |
-| Tests / CI  | `DEVICE_REGISTRY` env fallback (flat JSON map) for inline fixtures                       |
+| compose     | [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json) seed → persisted to the writable store on first boot |
+| Kubernetes  | `ASSET_SEED_FILE` (ConfigMap) seeds a **PVC** at `ASSET_STORE_FILE` once; thereafter the store is the source of truth |
 
-Editing the file requires a gateway restart (or rollout) to take effect; the file is parsed at boot. The demo discovers the resulting list via `GET /devices` and renders one toggleable entry per device, no front-end rebuild needed.
+Register or update an asset at runtime with `PUT /assets` (the placement-editor proxies it via `/api/assets`), no restart. The demo discovers the tenant's assets via `GET /assets`. Because the store is a PVC, runtime changes survive restart and upgrade.
 
 ## Adding a new adapter to a running cluster
 

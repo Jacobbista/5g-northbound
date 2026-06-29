@@ -3,13 +3,12 @@
 This document is the source of truth for the data contracts between the components in this repository and any external consumer.
 
 - [CAMARA Device Location API](#camara-device-location-api): northbound, consumed by browsers and any third-party CAMARA client.
-- [Vendor extensions on the gateway](#vendor-extensions-on-the-gateway): non-CAMARA endpoints used by the demo UI (`/devices`, `/devices/{phoneNumber}/details`, `/adapters`, `/positions/stream` WebSocket).
+- [Vendor extensions on the gateway](#vendor-extensions-on-the-gateway): non-CAMARA endpoints used by the demo UI (`/assets`, `/assets/{assetId}/details`, `/capabilities`, `/anchors/calibration`, `/adapters`, `/positions/stream` WebSocket).
 - [Engine northbound contract](#engine-northbound-contract): internal, between `camara-gateway` and `positioning-engine`.
 - [Adapter contract](#adapter-contract): internal, between `positioning-engine` and adapter pods (see [`adapters.md`](adapters.md) for the full implementer's guide).
-- [Device registry file](#device-registry-file): registered devices consumed by the gateway.
+- [Asset Identity Map](#asset-identity-map): the assets the gateway resolves and serves.
 - [Floor plan](#floor-plan): loaded by the engine at startup.
 - [Placement-editor API](#placement-editor-api): operator-facing service that owns the floor-plan / AP layout JSON.
-- [SMF session info](#smf-session-info): consumed by the gateway for cross-technology identity resolution.
 
 A compact endpoint-by-endpoint reference (one row per route) is available in [`api-reference.md`](api-reference.md). This document explains the *contracts*; the reference is the *index*.
 
@@ -19,32 +18,24 @@ The gateway implements two distinct CAMARA APIs, pinned to meta-release **r3.2**
 
 ### Device identifier
 
-All requests carry a `device` object following the CAMARA Commonalities schema. At least one identifier MUST be present:
+This is the **private-asset profile** of the CAMARA `device` object: the tracked entity is an **asset** with a business id, not a phone subscriber. Every request carries a `device` object with an `assetId`:
 
 ```json
-{
-  "phoneNumber":              "+390111234567",
-  "networkAccessIdentifier":  "user@example.com",
-  "ipv4Address": {
-    "publicAddress": "203.0.113.1",
-    "privateAddress": "10.0.0.1",
-    "publicPort": 443
-  },
-  "ipv6Address":              "2001:db8::1"
-}
+{ "assetId": "pkg-4471" }
 ```
 
-The gateway maps the CAMARA identifier to an internal device id via the `DEVICE_REGISTRY` configuration (a JSON object). There is no `deviceId` field and no `extensions` block in the contract.
+`networkAccessIdentifier` (NAI) is accepted as an alias for `assetId` so off-the-shelf CAMARA clients that only emit NAI still work; it is treated as the asset id verbatim. `phoneNumber`, `ipv4Address`, and `ipv6Address` are **not** part of this profile, a private venue does not address assets by MSISDN or IP. See [the private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) for the rationale.
+
+The gateway resolves `assetId` to a positioning source and tenant via the [Asset Identity Map](#asset-identity-map).
 
 Errors use the CAMARA envelope `{status, code, message}`. Standard codes:
 
 | HTTP | `code`                  | When                                              |
 |------|-------------------------|---------------------------------------------------|
-| 400  | `INVALID_ARGUMENT`      | Malformed identifier (e.g, phone fails E.164 regex) |
 | 401  | `UNAUTHENTICATED`       | Missing or invalid JWT                            |
 | 403  | `PERMISSION_DENIED`     | JWT lacks the `camara-location-read` realm role   |
-| 404  | `IDENTIFIER_NOT_FOUND`  | Identifier not in the device registry             |
-| 404  | `NOT_FOUND`             | Identifier exists but the engine has no fix       |
+| 404  | `IDENTIFIER_NOT_FOUND`  | `assetId` not in the asset map, **or** it belongs to another tenant (cross-tenant lookups 404 rather than leaking existence) |
+| 404  | `NOT_FOUND`             | Asset exists but the engine has no fix            |
 | 422  | `MISSING_IDENTIFIER`    | `device` body is absent                           |
 | 502  | `BAD_GATEWAY`           | Engine reachable but returned 5xx                 |
 | 503  | `SERVICE_UNAVAILABLE`   | Engine unreachable (network / DNS / timeout)      |
@@ -56,7 +47,7 @@ Errors use the CAMARA envelope `{status, code, message}`. Standard codes:
 Request:
 
 ```json
-{ "device": { "phoneNumber": "+390111234567" }, "maxAge": 120 }
+{ "device": { "assetId": "pkg-4471" }, "maxAge": 120 }
 ```
 
 Response (`Location`):
@@ -68,11 +59,15 @@ Response (`Location`):
     "areaType": "CIRCLE",
     "center":   { "latitude": 45.064312, "longitude": 7.659154 },
     "radius":   50.0
-  }
+  },
+  "source":           "wittra",
+  "kind":             "pallet",
+  "altitude":         240.4,
+  "verticalAccuracy": 2.0
 }
 ```
 
-`area` is either a `CIRCLE` (centre + radius ≥ 1 m) or, per spec, a `POLYGON`. `radius` is in metres. `device` is mandatory; absence yields `422 MISSING_IDENTIFIER`.
+`area` is either a `CIRCLE` (centre + radius ≥ 1 m) or, per spec, a `POLYGON`. `radius` is in metres. `source`, `kind`, `altitude`, and `verticalAccuracy` are private-profile additions: descriptive fields the demo surfaces; a plain CAMARA client ignores them. `device` is mandatory; absence yields `422 MISSING_IDENTIFIER`.
 
 ### Location Verification v3
 
@@ -82,7 +77,7 @@ Request:
 
 ```json
 {
-  "device": { "phoneNumber": "+390111234567" },
+  "device": { "assetId": "pkg-4471" },
   "area":   { "areaType": "CIRCLE", "center": { "latitude": 45.064312, "longitude": 7.659154 }, "radius": 5000 },
   "maxAge": 120
 }
@@ -106,51 +101,86 @@ The gateway validates `Authorization: Bearer <jwt>` against the JWKS at:
 
 `KEYCLOAK_URL` is taken verbatim and already contains any path prefix (such as `/auth`). The token must carry the `camara-location-read` realm role in `realm_access.roles`. `GET /health` is exempt from authentication.
 
+The token's `org` claim is the tenant. The gateway joins it against each asset's `org`: a consumer sees and resolves only its own assets. A token with **no** `org` claim is treated as an operator and bypasses the tenant filter (fail-open for single-tenant / debug deployments). See [the profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) for the authorization model.
+
 ## Vendor extensions on the gateway
 
-These endpoints live on the same gateway service but are **not part of CAMARA Device Location**. They exist to support the demo UI (and any other consumer that needs to enumerate or inspect devices). They share the same authentication: `Authorization: Bearer <jwt>` with the `camara-location-read` realm role. `GET /health` is exempt; everything else requires a valid token.
+These endpoints live on the same gateway service but are **not part of CAMARA Device Location**. They support the demo UI (and any consumer that needs to enumerate or inspect assets). They share the same authentication: `Authorization: Bearer <jwt>` with the `camara-location-read` realm role, and the same `org`-scoping. `GET /health` is exempt; everything else requires a valid token.
 
-### Device discovery
+### Asset discovery
 
-`GET /devices` → list every registered device.
+`GET /assets` → every asset the caller's tenant owns.
 
 ```json
 {
-  "devices": [
-    { "phoneNumber": "+390111234567", "deviceId": "wifi-asset-01", "label": "WiFi asset 01", "simulated": false },
-    { "phoneNumber": "+390117654321", "deviceId": "mock-demo-01",  "label": "Mock demo 01",  "simulated": true  }
+  "assets": [
+    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "fiskarheden", "label": "Cordless drill 880", "simulated": false },
+    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "fiskarheden", "label": "Timber bundle 01",  "simulated": false }
   ]
 }
 ```
 
-The list is read from the [device registry file](#device-registry-file). Order matches the file. Empty list (`{"devices": []}`) is returned when the registry is empty, not a 404.
+The list is read from the [Asset Identity Map](#asset-identity-map) and filtered to the caller's `org`. Order matches the store. Empty list (`{"assets": []}`) when the tenant owns nothing, not a 404.
 
-`simulated` is `true` when the device is wired to a synthetic data source (`mock-positioning`, `mock-wittra`, or any future demo fixture). The UI renders a `MOCK` badge so operators can tell at a glance which devices come from a fake. Real deployments simply omit the field (it defaults to `false`).
+`simulated` is `true` when the asset is wired to a synthetic source (`mock-positioning`, `mock-wittra`, or any demo fixture). The UI renders a `MOCK` badge. Real assets omit the field (defaults to `false`).
 
-### Device details
+`PUT /assets` replaces the map (operator action; the editor proxies it). Body is `{"assets":[…]}` conforming to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json).
 
-`GET /devices/{phoneNumber}/details` → registry entry + engine telemetry.
+### Asset details
+
+`GET /assets/{assetId}/details` → asset entry + engine telemetry.
 
 ```json
 {
-  "phoneNumber": "+390117654321",
-  "deviceId":    "mock-demo-01",
-  "label":       "Mock demo 01",
+  "asset_id":       "pkg-4471",
+  "positioning_id": "wittra-tag-01",
+  "source":         "wittra",
+  "kind":           "pallet",
+  "org":            "fiskarheden",
+  "label":          "Timber bundle 01",
   "telemetry": {
     "latitude":         45.064547,
     "longitude":        7.659272,
+    "altitude_m":       240.4,
     "accuracy_m":       1.5,
     "lastLocationTime": "2026-06-03T14:36:17Z",
     "strategy":         "weighted_avg",
-    "sources":          ["mock"]
+    "sources":          ["wittra"]
   }
 }
 ```
 
-- `phoneNumber` is URL-encoded (`%2B` for the leading `+`).
-- `telemetry` is `null` when the engine has no fix for the device, the device is **registered but offline**, not an error.
-- `phoneNumber` not in the registry → `404 IDENTIFIER_NOT_FOUND`.
-- Surfaces engine fields (`strategy`, `sources`) intentionally hidden by the CAMARA `Location` response. Schema and field names match the engine's `EnginePosition` to make the boundary obvious.
+- `telemetry` is `null` when the engine has no fix, the asset is **registered but offline**, not an error.
+- `assetId` not in the caller's tenant → `404 IDENTIFIER_NOT_FOUND` (a cross-tenant id is indistinguishable from a missing one).
+- Surfaces engine fields (`strategy`, `sources`, `altitude_m`) intentionally hidden by the CAMARA `Location` response. Field names match the engine's `EnginePosition` to make the boundary obvious.
+
+### Capabilities
+
+`GET /capabilities` → what this deployment can do, aggregated live from the registered adapters and the tenant's assets.
+
+```json
+{
+  "adapters":  [ { "name": "wifi", "kind": "wifi", "capabilities": { "modalities": ["wifi"], "fixed": false } } ],
+  "sources":   ["wifi", "wittra"],
+  "kinds":     ["tool", "pallet"]
+}
+```
+
+`sources` and `kinds` are derived from the caller's own assets; `adapters` mirrors the engine's live registry (see [adapter-registry.md](adapter-registry.md)). The editor uses this to offer a `source` picker bound to adapters that actually exist.
+
+### Anchor calibration
+
+`GET /anchors/calibration` → real per-AP RF parameters, proxied from wifi-positioning's `/calibration/params`.
+
+```json
+{
+  "anchors": [
+    { "id": "AP07", "tx_power_ref_dbm": -39.0, "path_loss_n": 2.1, "calibrated": true }
+  ]
+}
+```
+
+Exposes the *measured* RF (from the calibration tool, persisted in the bindings) so the demo shows true radio parameters instead of the editor's placeholder defaults. No BSSIDs cross this boundary. Empty / disabled when `WIFI_POSITIONING_URL` is unset.
 
 ### Adapter health
 
@@ -159,20 +189,8 @@ The list is read from the [device registry file](#device-registry-file). Order m
 ```json
 {
   "adapters": [
-    {
-      "name": "wifi",
-      "base_url": "http://wifi-positioning:8080",
-      "fail_count": 0,
-      "in_cooldown": false,
-      "cooldown_seconds_remaining": 0.0
-    },
-    {
-      "name": "wittra",
-      "base_url": "https://api.wittra.example.com",
-      "fail_count": 5,
-      "in_cooldown": true,
-      "cooldown_seconds_remaining": 23.5
-    }
+    { "name": "wifi",   "base_url": "http://wifi-positioning:8080",   "fail_count": 0, "in_cooldown": false, "cooldown_seconds_remaining": 0.0 },
+    { "name": "wittra", "base_url": "https://api.wittra.example.com", "fail_count": 5, "in_cooldown": true,  "cooldown_seconds_remaining": 23.5 }
   ]
 }
 ```
@@ -189,17 +207,22 @@ The list is read from the [device registry file](#device-registry-file). Order m
 ws://<gateway>/positions/stream?token=<jwt>
 ```
 
-Token is supplied as a query parameter because browsers cannot set `Authorization` headers on a WebSocket handshake. The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload. Each payload is a JSON array, one object per device with at least a fix:
+Token is supplied as a query parameter because browsers cannot set `Authorization` headers on a WebSocket handshake. The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload after **enriching it from the asset map** (the engine broadcasts `positioning_id`; the gateway maps each to its asset and drops unregistered or cross-tenant entries). Each payload is a JSON array, one object per asset with at least a fix:
 
 ```json
 [
   {
-    "device_id":       "mock-demo-01",
+    "asset_id":        "pkg-4471",
+    "positioning_id":  "wittra-tag-01",
+    "source":          "wittra",
+    "kind":            "pallet",
+    "org":             "fiskarheden",
     "latitude":        45.064547,
     "longitude":       7.659272,
+    "altitude_m":      240.4,
     "accuracy_m":      1.5,
     "timestamp":       "2026-06-10T07:36:01Z",
-    "sources":         ["mock"],
+    "sources":         ["wittra"],
     "strategy":        "weighted_avg"
   }
 ]
@@ -219,29 +242,32 @@ The cadence is set by the engine's `WEBSOCKET_INTERVAL_MS` (default 500 ms). The
 
 The boundary between `camara-gateway` and any positioning engine is this REST contract. Any engine that honours it is a drop-in replacement; the gateway stays geometry-agnostic.
 
-`GET /position/{device_id}` → `EnginePosition`:
+`GET /position/{positioning_id}?source=<source>` → `EnginePosition`:
 
 ```json
 {
   "device_id":  "wifi-asset-01",
   "latitude":   45.064581,
   "longitude":  7.659408,
+  "altitude_m": 240.4,
   "accuracy_m": 0.3,
   "timestamp":  "2024-01-01T12:00:00Z",
-  "sources":    ["uwb", "wifi"],
+  "sources":    ["wifi"],
   "strategy":   "weighted_avg",
   "fusions":    null
 }
 ```
 
-The engine owns its native coordinate frame and normalises to WGS84 at this boundary. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
+The path id is the asset's `positioning_id` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude_m` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
+
+**Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the asset's `source`, so steady-state routing is single-adapter; fan-out is the no-source fallback (e.g. the broadcast stream). See [adapter-registry.md](adapter-registry.md).
 
 Status codes the engine returns:
 
 | HTTP | When                                                                                              |
 |------|---------------------------------------------------------------------------------------------------|
 | 200  | At least one adapter returned a measurement and fusion succeeded                                  |
-| 404  | No adapter has a fix for this device (legitimate "offline", not an error)                         |
+| 404  | No adapter has a fix for this id (legitimate "offline", not an error)                             |
 | 500  | Fusion or projection raised an unexpected exception                                               |
 
 The gateway propagates these:
@@ -253,7 +279,7 @@ The gateway propagates these:
 | 5xx                      | 502 `BAD_GATEWAY` (after one short retry)          |
 | network error / timeout  | 503 `SERVICE_UNAVAILABLE` (after one short retry)  |
 
-Transient engine failures (`5xx`, connect errors, read timeouts) are retried once after a 200 ms backoff before the gateway gives up, most pod restarts and brief blips clear within that window. `404` is **not** retried (it's a legitimate "no fix", not a failure to reach the engine).
+Transient engine failures (`5xx`, connect errors, read timeouts) are retried once after a 200 ms backoff before the gateway gives up. `404` is **not** retried (it's a legitimate "no fix", not a failure to reach the engine).
 
 When `POSITIONING_ENGINE_URL` is **unset** the gateway falls back to a built-in mock position so the system degrades gracefully in dev. As soon as the env var points at a real engine, the engine is the only source of truth, no silent mock fallback.
 
@@ -285,40 +311,42 @@ GET /measurement/{device_id}  → 200 OK
 }
 ```
 
-`404 Not Found` indicates no measurement for the device. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the room-local frame defined by the floor plan (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using `gps_origin` before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
+`{device_id}` here is the asset's `positioning_id`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the floor-plan-local frame (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using the georeference before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 
-## Device registry file
+## Asset Identity Map
 
-Loaded by the gateway at startup from the path in `DEVICE_REGISTRY_FILE` (default unset; in compose `/app/config/devices.json` is mounted from [`dev/devices.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/devices.json)). Edit + restart the gateway to register new devices.
+The gateway is the **network authority for asset identity**, mirroring the way the engine owns the blueprint. It serves the map over [`GET/PUT /assets`](#asset-discovery) and persists it to a writable store.
+
+| Path | Role |
+|------|------|
+| `ASSET_STORE_FILE` (`/app/data/assets.json`, PVC) | the live, writable map |
+| `ASSET_SEED_FILE` (`/app/config/assets.seed.json`) | read-only seed, copied to the store once on first boot when it is empty |
+
+The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json). The store content is tenant inventory (Tier-1): gitignored in dev, never committed, PVC-backed in prod. Each entry conforms to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json):
 
 ```json
 {
-  "devices": [
-    { "phoneNumber": "+390111234567", "deviceId": "wifi-asset-01", "label": "WiFi asset 01" },
-    { "phoneNumber": "+390117654321", "deviceId": "mock-demo-01",  "label": "Mock demo 01", "simulated": true }
-  ]
+  "asset_id":       "pkg-4471",
+  "positioning_id": "wittra-tag-01",
+  "source":         "wittra",
+  "kind":           "pallet",
+  "org":            "fiskarheden",
+  "label":          "Timber bundle 01",
+  "simulated":      false
 }
 ```
 
-- `phoneNumber`: the CAMARA identifier consumers send in `device.phoneNumber`. Must be E.164-shaped (`+` followed by 8–15 digits).
-- `deviceId`: the internal id the engine fuses on; matches the keys used by the engine's `DEVICE_MAP`.
-- `label`: human-readable name surfaced by the demo's discovery endpoint. Optional; defaults to `deviceId`.
-- `simulated`: optional boolean (default `false`). Set to `true` for devices wired to a fixture (`mock-positioning`, `mock-wittra`, …) so the UI can render a `MOCK` badge and a global "demo build" indicator. Real deployments leave it off.
-
-When `DEVICE_REGISTRY_FILE` is unset (or unreadable), the gateway falls back to the legacy `DEVICE_REGISTRY` env (`{"+390...":"deviceId"}` flat JSON map), kept for back-compat with the original v0 layout. New deployments should use the file form so labels propagate through `/devices`.
-
-## Blueprint vs bindings
-
-Venue config splits into two files, geometry (portable, no secrets) and
-per-venue bindings (BSSIDs / MACs / vendor IDs, never committed). The
-wifi-positioning service joins them on anchor `id` at startup. The full
-rationale, layout, and deployment flow live in
-[`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md); read that once,
-then the rest of this document makes sense.
+- `asset_id`: the business identifier the consumer sends in `device.assetId`. **Not** a phone number.
+- `positioning_id`: the internal id the engine fuses on. For a vendor adapter it **must equal the vendor-native device id** (substituted verbatim into the vendor path). See [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix).
+- `source`: **must equal the adapter's `ADAPTER_NAME`**, it is the routing key (see [Engine northbound contract](#engine-northbound-contract)).
+- `kind`: asset class (`tool` / `pallet` / `forklift` / `uwb-tag` / …), descriptive.
+- `org`: tenant; the gateway gates consumers by it.
+- `label`: human-readable name surfaced by the demo. Optional; defaults to `asset_id`.
+- `simulated`: optional boolean (default `false`). `true` for assets wired to a fixture, so the UI can render a `MOCK` badge.
 
 ## Floor plan
 
-Loaded at engine startup from `/app/config/floor-plan.json` (mounted in production from the `positioning-floor-plan` Kubernetes ConfigMap).
+Loaded at engine startup from `/app/config/floor-plan.json` (mounted in production from the `positioning-floor-plan` Kubernetes ConfigMap). In steady state the placement-editor PUTs the blueprint over HTTP; this file is the cold-start seed.
 
 ```json
 {
@@ -343,20 +371,20 @@ Loaded at engine startup from `/app/config/floor-plan.json` (mounted in producti
 }
 ```
 
-`gps_origin` is the **single georeference** that links the local floor-plan frame (metres, lower-left origin, +x east-ish / +z north-ish) to WGS84. Survey it once for a venue; every anchor and device position is then carried in local metres and projected to lat/lon at the engine boundary. This bounds positioning error by *one* calibration instead of letting it accumulate per AP.
+`gps_origin` is the **single georeference** that links the local floor-plan frame (metres, lower-left origin, +x east-ish / +z north-ish) to WGS84. Survey it once for a venue; every anchor and asset position is then carried in local metres and projected to lat/lon at the engine boundary. This bounds positioning error by *one* calibration instead of letting it accumulate per AP.
 
 | Field         | Required | Notes                                                                       |
 |---------------|----------|-----------------------------------------------------------------------------|
 | `latitude`    | yes      | Latitude of the floor-plan origin (lower-left corner of the room)          |
 | `longitude`   | yes      | Longitude of the floor-plan origin                                          |
 | `azimuth_deg` | no (0)   | Bearing of the local +z axis (the SVG "up") clockwise from true north. 0 means the room is north-aligned; 30 means the room is rotated 30° east of north |
-| `altitude_m`  | no       | Altitude of the origin above sea level. Carried for completeness, not used in the 2D projection |
+| `altitude_m`  | no       | Altitude of the origin above sea level. Added to the local vertical to produce `altitude_m` on the fix |
 
-`gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available.
+`gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available. The full georeference model (datums, tile drift, N-point calibration) is in [`georeferencing.md`](georeferencing.md).
 
 ## Placement-editor API
 
-Standalone operator-facing service that owns the floor-plan / AP layout JSON. Lives in [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) and ships as its own image. The demo and the engine both consume the same layout file the editor writes (today via shared volume; in Kubernetes via a ConfigMap or PVC mounted on both sides).
+Standalone operator-facing service that owns the floor-plan / AP layout JSON. Lives in [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) and ships as its own image. The demo and the engine both consume the same layout the editor writes (the engine is the blueprint authority; the editor PUTs to it).
 
 ### `GET /health`
 
@@ -398,7 +426,7 @@ The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys p
     "height_m":      32.0,
     "rotation_deg":  0.0,
     "anchors": [
-      { "id": "AP07",  "technology": "wifi",   "x": 11.5, "y": 28, "height_m": 2.7, "coverage_m": 30, "band": "5GHz", "channel": 36, "tx_power_dbm": 20 },
+      { "id": "AP07",  "technology": "wifi",   "x": 11.5, "y": 28, "height_m": 2.7, "coverage_m": 30 },
       { "id": "UWB01", "technology": "wittra", "x": 1.5,  "y": 4,  "height_m": 3.0, "coverage_m": 15 }
     ],
     "walls": []
@@ -430,7 +458,8 @@ The `aps[]` array (legacy mirror of `rooms[0].anchors`) carries every anchor / r
 | `x`, `y`       | yes      | Position in metres, local frame (`y` is depth on the SVG / +z in 3D)                                          |
 | `height_m`     | no       | Mounting height in metres. Per-technology defaults: WiFi 2.7, UWB 3.0, 5G 10.0, GNSS 0.0                      |
 | `coverage_m`   | no       | Visual coverage hint (dashed ring in the editor). Per-technology defaults: WiFi 30, UWB 15, 5G 500, GNSS 0    |
-| WiFi-specific  | no       | `band`, `channel`, `tx_power_dbm`, `vendor`, `model`: only meaningful for `technology = "wifi"`              |
+
+Real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) is **not** authored here, it is measured by the calibration tool and lives in the bindings, surfaced via [`/anchors/calibration`](#anchor-calibration). See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).
 
 `gps_origin` here is the same one-time-survey record as in the floor plan: when the editor saves it, downstream consumers (engine, demo) pick it up without a backend change.
 
@@ -446,25 +475,6 @@ Overwrite the layout. Body is the new full JSON (no patching). Unknown top-level
 
 Auth: not yet wired in (`v0.0.1` scaffold). When wired, the realm role will be `placement-admin`: distinct from the CAMARA consumer role so a positioning client cannot mutate placement.
 
-## SMF session info
+## Blueprint vs bindings
 
-Consumed by the gateway from the Open5GS SMF management API (mocked by [`dev/mock_smf.py`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/mock_smf.py)).
-
-`GET /session-info`:
-
-```json
-{
-  "sessions": [
-    {
-      "imsi":          "001010123456786",
-      "dnn":           "internet",
-      "ipv4":          "10.45.0.3",
-      "ipv6":          "",
-      "snssai":        { "sst": 1, "sd": "000001" },
-      "up_cnx_state":  "ACTIVATED"
-    }
-  ]
-}
-```
-
-`up_cnx_state` is `"ACTIVATED"` or `"DEACTIVATED"`. Any value other than `"DEACTIVATED"` is treated as active for defensive handling.
+Venue config splits into two files, geometry (portable, no secrets) and per-venue bindings (BSSIDs / MACs / vendor IDs, never committed). The wifi-positioning service joins them on anchor `id` at startup. The full rationale, layout, and deployment flow live in [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).
