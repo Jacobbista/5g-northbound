@@ -14,13 +14,10 @@ two edges: the **georef** of each floor plan (which pins the local frame onto
 the Earth), and the **CAMARA northbound** (which converts a local fix to
 WGS84 for API consumers). One transform in, one transform out.
 
-```
-vendor cloud (lat/lon) ──┐
-                         ▼
-                inverse georef            forward georef
-  lat/lon  ────────────────────►  local metres  ────────────────►  lat/lon
-                                  (everything                     (CAMARA
-                                   happens here)                   northbound)
+```mermaid
+flowchart LR
+    V["vendor cloud<br/>(lat/lon)"] -->|inverse georef| L["local metres<br/><i>(everything happens here)</i>"]
+    L -->|forward georef| OUT["lat/lon<br/>(CAMARA northbound)"]
 ```
 
 This is the same pattern professional surveying uses. Stockholm has ST74

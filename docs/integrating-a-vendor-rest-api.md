@@ -15,14 +15,12 @@ The Wittra REST API recommends MQTT for sensor data, but REST is enough for a de
 
 ## Architecture in one picture
 
-```
-  +-------------+                  +------------------+                    +--------------------+
-  |  engine     |  GET /measurement/{device_id}        |     +---- HTTPS GET (Basic auth) ---->|  Wittra cloud      |
-  |             |--------------------------------------|---->| rest-adapter (this image)        |  (api.wittra.se)   |
-  +-------------+                                      |     +----------------------------------+--------------------+
-        ^                                              |                ^
-        |  Measurement                                 |                |  schema.json (PUT at runtime
-        +----------------------------------------------+                |  by the testbed dashboard)
+```mermaid
+flowchart LR
+    ENG["positioning-engine"] -->|"GET /measurement/{positioning_id}"| RA["rest-adapter<br/>(this image)"]
+    RA -->|"HTTPS GET (Basic auth)"| W[("Wittra cloud<br/>api.wittra.se")]
+    RA -.->|Measurement| ENG
+    DASH["testbed dashboard"] -.->|"PUT schema.json (runtime)"| RA
 ```
 
 The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. Switching from `mock-wittra` (dev) to `api.wittra.se` (prod) is a single env-var change.
@@ -32,19 +30,13 @@ The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. 
 One request crosses three identifier spaces. The full chain, with the owner of
 each hop:
 
-```
-consumer → camara-gateway   POST /location-retrieval/v0.5/retrieve { "device": { "assetId": "pkg-4471" } }
-  │  Asset Identity Map (GET/PUT /assets, gateway): assetId → positioning_id + source
-  │  org claim gated against asset.org; kind/source are descriptive profile fields
-  ▼
-camara-gateway → positioning-engine   GET /position/{positioning_id}?source=wittra
-  │  routing: source → adapter whose ADAPTER_NAME == source
-  │  (else DEVICE_MAP override; else fan out to all registered adapters + fuse)
-  ▼
-positioning-engine → rest-adapter("wittra")   GET /measurement/{positioning_id}
-  │  positioning_id substituted VERBATIM into the vendor path (?deviceId={device_id})
-  ▼
-rest-adapter → vendor cloud (api.wittra.se)   → Measurement → fused → WGS84 → CAMARA Location
+```mermaid
+flowchart TD
+    C["consumer"] -->|"POST /location-retrieval/v0.5/retrieve<br/>{ device.assetId: pkg-4471 }"| GW["camara-gateway"]
+    GW -->|"Asset Identity Map: assetId → positioning_id + source<br/>org claim gated vs asset.org"| ENG["positioning-engine"]
+    ENG -->|"GET /position/{positioning_id}?source=wittra<br/>route: source → ADAPTER_NAME<br/>(else DEVICE_MAP, else fan-out + fuse)"| RA["rest-adapter (wittra)"]
+    RA -->|"GET /measurement/{positioning_id}<br/>id substituted verbatim → ?deviceId="| V[("vendor cloud<br/>api.wittra.se")]
+    V -.->|"Measurement → fused → WGS84 → CAMARA Location"| C
 ```
 
 The two contracts an operator must get right (see step 5):

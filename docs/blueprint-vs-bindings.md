@@ -6,28 +6,13 @@ makes sense without the distinction.
 
 ## The two files
 
-```
-┌─────────────────────────────┐        ┌────────────────────────────────┐
-│ blueprint                   │        │ bindings (per-venue, secret)   │
-│ ───────────                 │        │ ──────────────────────────     │
-│ rooms, walls, openings,     │  + ──▶ │ id → BSSID(s),                 │
-│ anchor id + x/y/z + tech,   │        │ tx_power, path_loss_n,         │
-│ georef (lat/lon)            │        │ algorithm, smoothing tunables, │
-│                             │        │ per-AP calibration overrides,  │
-│                             │        │ calibration samples            │
-│ portable, geometry only     │        │ rotates with hardware,         │
-│ committable? **only the     │        │ never committed                │
-│ placeholder is**            │        │                                │
-└─────────────────────────────┘        └────────────────────────────────┘
-        │                                       │  (read AND write:
-        │                                       │   calibration writes
-        ▼                                       ▼   back here)
-┌────────────────────────────────────────────────────────────────────────┐
-│ wifi-positioning service                                               │
-│ joins blueprint + bindings on anchor `id` at startup,                  │
-│ exposes the standard `GET /measurement/{device_id}` adapter contract,  │
-│ exposes calibration tool that persists samples + per-AP params         │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    BP["<b>blueprint</b><br/>rooms, walls, openings<br/>anchor id + x/y/z + tech<br/>georef (lat/lon)<br/><i>portable, geometry only — only the placeholder is committable</i>"]
+    BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware — never committed</i>"]
+    WIFI["<b>wifi-positioning service</b><br/>joins blueprint + bindings on anchor id at startup<br/>exposes GET /measurement/{positioning_id}<br/>calibration tool persists samples + per-AP params"]
+    BP --> WIFI
+    BN -->|"read AND write<br/>(calibration writes back here)"| WIFI
 ```
 
 ## Why the split
