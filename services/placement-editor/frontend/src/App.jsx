@@ -3520,10 +3520,15 @@ export function App() {
             width: "100%",
             gap: 12,
             minWidth: 0,
+            // Fill the content cell's height (overrides canvasWrap's center)
+            // so the canvas sizes to the available space instead of a magic
+            // viewport-minus-N px, which under/overshoots and overflows.
+            alignSelf: "stretch",
+            minHeight: 0,
             alignItems: "stretch",
           }}
         >
-          <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <div style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* Canvas-top action bar - close to where the operator works.
               Replaces the section-3-only tool buttons that used to live in
               the global header. UWB + WiFi are the primary actions (current
@@ -3752,10 +3757,11 @@ export function App() {
           preserveAspectRatio="xMidYMid meet"
           width="100%"
           style={{
-            // calc accounts for: header (~52 px) + canvasWrap top/bottom
-            // padding (40 px) + action bar (~52 px). Tighter than 76vh and
-            // leaves zero room for the page to overflow vertically.
-            height: "calc(100vh - 156px)",
+            // Fill the remaining column height below the action bar (the
+            // wrapper is a flex column sized to the content cell), so the
+            // canvas never over/undershoots a magic viewport offset.
+            flex: 1,
+            minHeight: 0,
             background: "#070b18",
             borderRadius: 10,
             border: "1px solid rgba(58,130,255,0.2)",

@@ -14,21 +14,56 @@ import asyncio
 import json
 import logging
 import os
+from pathlib import Path
 
 import httpx
 
+try:
+    import yaml
+except Exception:  # pragma: no cover - yaml is a dependency, guard anyway
+    yaml = None
+
 log = logging.getLogger(__name__)
+
+# Baked declarative source of truth. First existing path wins (image vs repo).
+_CONTRACT_PATHS = (
+    "/app/adapter.contract.yaml",
+    str(Path(__file__).resolve().parents[1] / "adapter.contract.yaml"),
+)
+
+
+def _contract_caps() -> dict:
+    """Capabilities the image declares about itself, from the baked
+    adapter.contract.yaml. Lets the adapter self-advertise without the
+    deployment restating the JSON in an env var."""
+    if yaml is None:
+        return {}
+    for path in _CONTRACT_PATHS:
+        try:
+            data = yaml.safe_load(Path(path).read_text()) or {}
+        except OSError:
+            continue
+        except Exception:
+            return {}
+        caps = data.get("capabilities")
+        return dict(caps) if isinstance(caps, dict) else {}
+    return {}
 
 
 def _caps() -> dict:
-    """Parse advertised capabilities from ADAPTER_CAPABILITIES (JSON). The
-    declarative source of truth is adapter.contract.yaml; compose passes the
-    runtime value and `make positioning-check` validates the two agree. Bad or
-    empty JSON degrades to {} (no capability hints advertised)."""
+    """Advertised capabilities: the baked adapter.contract.yaml is the base
+    (so the image self-declares calibration / discover / etc. with no env
+    plumbing), and ADAPTER_CAPABILITIES (JSON) overrides/extends it for a
+    deployment that tweaks without a rebuild. `make positioning-check`
+    validates the two agree."""
+    caps = _contract_caps()
     try:
-        return json.loads(os.environ.get("ADAPTER_CAPABILITIES") or "{}")
+        override = json.loads(os.environ.get("ADAPTER_CAPABILITIES") or "{}")
     except ValueError:
-        return {}
+        override = {}
+    if isinstance(override, dict):
+        caps.update(override)
+    return caps
 
 
 def _cfg() -> dict:
