@@ -12,6 +12,35 @@ import {
 
 const POLL_MS = 500;
 
+// Build a per-anchor params map from an imported file, for operators who
+// calibrated elsewhere and just want to load the result. Accepts either a
+// wifi-config.json (routers[].{id,tx_power,path_loss_n}) or a {per_anchor:{…}}
+// / flat {id:{tx_power,path_loss_n}} JSON. Throws with a readable reason.
+function toPerAnchor(raw) {
+  if (!raw || typeof raw !== "object") throw new Error("not a JSON object");
+  if (Array.isArray(raw.routers)) {
+    const out = {};
+    for (const r of raw.routers) {
+      if (r?.id != null && r.tx_power != null && r.path_loss_n != null) {
+        out[r.id] = { tx_power: r.tx_power, path_loss_n: r.path_loss_n };
+      }
+    }
+    if (!Object.keys(out).length)
+      throw new Error("no routers with both tx_power and path_loss_n");
+    return out;
+  }
+  const map = raw.per_anchor && typeof raw.per_anchor === "object" ? raw.per_anchor : raw;
+  const out = {};
+  for (const [id, p] of Object.entries(map)) {
+    if (p && typeof p === "object" && p.tx_power != null && p.path_loss_n != null) {
+      out[id] = { tx_power: p.tx_power, path_loss_n: p.path_loss_n };
+    }
+  }
+  if (!Object.keys(out).length)
+    throw new Error("no entries with both tx_power and path_loss_n");
+  return out;
+}
+
 const panel = {
   width: "100%",
   padding: "10px 12px",
@@ -86,6 +115,20 @@ export function CalibrationPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const pollTimerRef = useRef(null);
+  const fileRef = useRef(null);
+
+  const handleImportFile = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file
+    if (!file) return;
+    try {
+      const per_anchor = toPerAnchor(JSON.parse(await file.text()));
+      setDerived(per_anchor); // lands in the review table; operator presses apply
+      setError(null);
+    } catch (err) {
+      setError(`import failed: ${err.message}`);
+    }
+  }, []);
 
   const wifiAnchors = (anchors || []).filter(
     (a) => (a.technology || "wifi") === "wifi"
@@ -261,6 +304,28 @@ export function CalibrationPanel({
         Walk the room. Click on the canvas where you are standing, hold still while
         the device collects 10 scans. Repeat at 8 to 12 points to cover each AP from
         at least 3 distances. Aim for 1 m, 5 m, and 8 m from each AP.
+      </div>
+
+      <div style={sectionTitle}>· import</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          style={btn(false)}
+          title="Already calibrated elsewhere? Load a wifi-config.json (routers[].tx_power/path_loss_n) or a {per_anchor} params file. It lands in the table below; press apply to persist + hot-reload."
+        >
+          ⇪ import calibration
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={handleImportFile}
+          style={{ display: "none" }}
+        />
+      </div>
+      <div style={{ fontSize: 10, color: "#7a8aab", margin: "4px 0 2px" }}>
+        Skip sampling if you already have params: import, review below, apply.
       </div>
 
       {error && (
@@ -440,7 +505,7 @@ export function CalibrationPanel({
                         {params.r2 ?? "-"}
                       </td>
                       <td style={{ padding: "4px 6px", textAlign: "center" }}>
-                        {params.n_points}
+                        {params.n_points ?? "-"}
                       </td>
                     </tr>
                   );
