@@ -423,33 +423,32 @@ export function App() {
   // markers for every cloud-known device so the operator can see where
   // the vendor thinks they sit before pressing import.
   const [vendorSyncPreview, setVendorSyncPreview] = useState([]);
-  // Vendor name discovered from the rest-adapter's loaded schema. Drives
-  // the toolbar label ("↻ sync wittra" instead of a generic "↻ sync
-  // vendor") so the operator sees at a glance which cloud is wired in.
-  // null = endpoint unreachable; "" = no schema loaded yet on the adapter.
-  const [vendorName, setVendorName] = useState(null);
-  // Fetch the vendor name once on first render, then again every time
-  // the operator opens the sync panel (in case the schema was hot-swapped
-  // via PUT /schema). Cheap call, no auth.
+  // Live adapter capabilities from the engine registry (proxied). Drives the
+  // toolbar: CALIBRATE shows only when an adapter advertises `calibration`,
+  // and one SYNC button appears per adapter advertising `discover`. No
+  // hardcoded wifi / wittra. Refetched when the operator changes section/tool.
+  const [adapterCaps, setAdapterCaps] = useState([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const resp = await fetch("/api/vendor/schema");
+        const resp = await fetch("/api/capabilities");
         if (!resp.ok) {
-          if (!cancelled) setVendorName("");
+          if (!cancelled) setAdapterCaps([]);
           return;
         }
         const body = await resp.json();
-        if (!cancelled) setVendorName(body?.vendor || "");
+        if (!cancelled) setAdapterCaps(Array.isArray(body?.adapters) ? body.adapters : []);
       } catch {
-        if (!cancelled) setVendorName(null);
+        if (!cancelled) setAdapterCaps([]);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [tool]);
+  const calibrationCap = adapterCaps.find((a) => a?.capabilities?.calibration);
+  const discoverCaps = adapterCaps.filter((a) => a?.capabilities?.discover);
   const [savedSnapshot, setSavedSnapshot] = useState(emptyLayout);
   // Progressive section: "geo" (drop the building onto the world map) or
   // "plan" (work inside the metric room: walls + anchors). Each step has its
@@ -3659,36 +3658,46 @@ export function App() {
               + Box Room
             </button>
             <span style={{ width: 1, height: 18, background: "rgba(255,255,255,0.08)", margin: "0 4px" }} />
-            <button
-              type="button"
-              onClick={() => setTool(tool === "calibrate" ? "select" : "calibrate")}
-              title="Calibrate WiFi path-loss per AP. Click on the canvas where you are standing; the adapter records 10 raw scans and stores a sample. Repeat at 8 to 12 points covering each AP from at least 3 distances."
-              style={toolBtnStyle({ accent: "#5dffb0", active: tool === "calibrate" })}
-            >
-              ↹ calibrate
-            </button>
-            <button
-              type="button"
-              disabled={vendorName === null}
-              onClick={() => setTool(tool === "vendorsync" ? "select" : "vendorsync")}
-              title={
-                vendorName === null
-                  ? "rest-adapter unreachable. Configure REST_ADAPTER_URL in the placement-editor pod, then refresh."
-                  : vendorName === ""
-                  ? "No vendor schema loaded on the rest-adapter. PUT a schema (or mount one at /app/data/schema.json) to enable sync."
-                  : `Sync ${vendorName} anchors from the cloud. The placement editor calls the rest-adapter's discover endpoint and offers to drop each cloud device at its reported position.`
-              }
-              style={toolBtnStyle({
-                accent: "#c084fc",
-                active: tool === "vendorsync",
-              })}
-            >
-              {vendorName === null
-                ? "↻ no vendor"
-                : vendorName === ""
-                ? "↻ no schema"
-                : `↻ sync ${vendorName}`}
-            </button>
+            {/* Capability-driven: shown only when a live adapter advertises
+                `calibration`. No hardcoded wifi assumption. */}
+            {calibrationCap && (
+              <button
+                type="button"
+                disabled={calibrationCap.state && calibrationCap.state !== "live"}
+                onClick={() => setTool(tool === "calibrate" ? "select" : "calibrate")}
+                title={
+                  calibrationCap.state && calibrationCap.state !== "live"
+                    ? `${calibrationCap.name} adapter is ${calibrationCap.state}; calibration unavailable.`
+                    : "Calibrate WiFi path-loss per AP. Click on the canvas where you are standing; the adapter records 10 raw scans and stores a sample. Repeat at 8 to 12 points covering each AP from at least 3 distances."
+                }
+                style={toolBtnStyle({ accent: "#5dffb0", active: tool === "calibrate" })}
+              >
+                ↹ calibrate
+              </button>
+            )}
+            {/* One SYNC per adapter advertising `discover`, labelled by source.
+                Add a vendor with discover:true and its button appears here,
+                no frontend change. */}
+            {discoverCaps.map((cap) => {
+              const src = cap.capabilities?.source || cap.name;
+              const offline = cap.state && cap.state !== "live";
+              return (
+                <button
+                  key={cap.name}
+                  type="button"
+                  disabled={offline}
+                  onClick={() => setTool(tool === "vendorsync" ? "select" : "vendorsync")}
+                  title={
+                    offline
+                      ? `${src} adapter is ${cap.state}; sync unavailable.`
+                      : `Sync ${src} anchors from the cloud. The placement editor calls the adapter's discover endpoint and offers to drop each cloud device at its reported position.`
+                  }
+                  style={toolBtnStyle({ accent: "#c084fc", active: tool === "vendorsync" })}
+                >
+                  ↻ sync {src}
+                </button>
+              );
+            })}
 
             {/* Floor-plan image background toggle + opacity. Only shown when
                 the active floor plan actually has an image attached - no

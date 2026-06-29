@@ -179,6 +179,22 @@ async def proxy_vendor_schema(request: Request) -> Response:
     return await _proxy(base, "/schema", request, "rest-adapter")
 
 
+# --- Live adapter capabilities ---------------------------------------------
+#
+# The editor toolbar is capability-driven: CALIBRATE shows only when a live
+# adapter advertises `calibration`, and one SYNC button appears per adapter
+# advertising `discover`. The engine's /adapters registry is the authority
+# (each entry carries its self-declared capabilities + live/unreachable/stale
+# state), so the editor proxies it rather than hardcoding wifi / wittra.
+@app.api_route(
+    "/api/capabilities",
+    methods=["GET"],
+)
+async def proxy_capabilities(request: Request) -> Response:
+    base = get_settings().positioning_engine_url
+    return await _proxy(base, "/adapters", request, "positioning-engine")
+
+
 @app.get("/env-config.js", include_in_schema=False)
 async def env_config_js() -> Response:
     """Serve the runtime env-config.js with no-cache so a token rotation

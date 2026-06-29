@@ -12,3 +12,4 @@ capabilities:
   streaming: false      # REST pull (vendor recommends MQTT; out of scope)
   z: true               # UWB reports height
   accuracy_class: sub-metre
+  discover: true         # exposes /discover (vendor device enumeration); editor shows SYNC {source}

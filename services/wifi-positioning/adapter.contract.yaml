@@ -10,3 +10,4 @@ capabilities:
   streaming: false
   z: false              # 2D trilateration, no height estimate
   accuracy_class: metre
+  calibration: true     # exposes the /calibration tool; editor shows CALIBRATE
