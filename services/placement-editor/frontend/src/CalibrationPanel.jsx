@@ -13,22 +13,36 @@ import {
 const POLL_MS = 500;
 
 // Build a per-anchor params map from an imported file, for operators who
-// calibrated elsewhere and just want to load the result. Accepts either a
-// wifi-config.json (routers[].{id,tx_power,path_loss_n}) or a {per_anchor:{…}}
-// / flat {id:{tx_power,path_loss_n}} JSON. Throws with a readable reason.
+// calibrated elsewhere and just want to load the result. Accepts a
+// wifi-config.json / bindings file (routers[] or bindings[] with an anchor
+// `id`, plus top-level tx_power / path_loss_n as a global fallback when an
+// anchor carries none of its own), or a {per_anchor:{…}} / flat
+// {id:{tx_power,path_loss_n}} JSON. Throws with a readable reason.
 function toPerAnchor(raw) {
   if (!raw || typeof raw !== "object") throw new Error("not a JSON object");
-  if (Array.isArray(raw.routers)) {
+  // Global fallback: the wifi-config / bindings shape carries tx_power +
+  // path_loss_n at the top level, with per-AP overrides optional.
+  const gTx = raw.tx_power;
+  const gN = raw.path_loss_n;
+  const arr = Array.isArray(raw.routers)
+    ? raw.routers
+    : Array.isArray(raw.bindings)
+    ? raw.bindings
+    : null;
+  if (arr) {
     const out = {};
-    for (const r of raw.routers) {
-      if (r?.id != null && r.tx_power != null && r.path_loss_n != null) {
-        out[r.id] = { tx_power: r.tx_power, path_loss_n: r.path_loss_n };
-      }
+    for (const r of arr) {
+      if (r?.id == null) continue;
+      const tx = r.tx_power ?? gTx;
+      const n = r.path_loss_n ?? gN;
+      if (tx != null && n != null) out[r.id] = { tx_power: tx, path_loss_n: n };
     }
     if (!Object.keys(out).length)
-      throw new Error("no routers with both tx_power and path_loss_n");
+      throw new Error("no anchors with tx_power + path_loss_n (per-AP or global)");
     return out;
   }
+  // Map shape: each entry must carry its own params (no global fallback here,
+  // so a config file's stray object keys are not mistaken for anchors).
   const map = raw.per_anchor && typeof raw.per_anchor === "object" ? raw.per_anchor : raw;
   const out = {};
   for (const [id, p] of Object.entries(map)) {
@@ -312,7 +326,7 @@ export function CalibrationPanel({
           type="button"
           onClick={() => fileRef.current?.click()}
           style={btn(false)}
-          title="Already calibrated elsewhere? Load a wifi-config.json (routers[].tx_power/path_loss_n) or a {per_anchor} params file. It lands in the table below; press apply to persist + hot-reload."
+          title="Already calibrated elsewhere? Load a wifi-config.json / bindings file (per-AP tx_power/path_loss_n, or the top-level global applied to every anchor) or a {per_anchor} params file. It lands in the table below; press apply to persist + hot-reload."
         >
           ⇪ import calibration
         </button>
@@ -325,7 +339,9 @@ export function CalibrationPanel({
         />
       </div>
       <div style={{ fontSize: 10, color: "#7a8aab", margin: "4px 0 2px" }}>
-        Skip sampling if you already have params: import, review below, apply.
+        Skip sampling if you already have params: import a wifi-config / per-anchor
+        file, review below, apply. A file with only global tx_power / path_loss_n
+        seeds every anchor with those.
       </div>
 
       {error && (
