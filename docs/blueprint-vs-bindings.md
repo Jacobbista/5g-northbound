@@ -40,14 +40,13 @@ edge-deployable (an edge pod fetches the blueprint over the data network, like
 the WiFi scanner already does) and decouples the stack from node-local storage
 and from the editor's uptime.
 
-```
-placement-editor  ──PUT /blueprint──▶  positioning-engine  ◀──GET /blueprint──  wifi-positioning
-   (write-client)                       (AUTHORITY: owns                          (read-client, retries
-                                         persistence, GET/PUT)                     while engine boots)
-                                              ▲
-                                              │ GET /blueprint (proxy)
-                                       camara-gateway  ◀──GET /blueprint──  positioning-demo
-                                                                            (MEC: gateway only)
+```mermaid
+flowchart TD
+    ED["placement-editor<br/>(write-client)"] -->|"PUT /blueprint"| ENG
+    WIFI["wifi-positioning<br/>(read-client, retries while engine boots)"] -->|"GET /blueprint"| ENG
+    ENG["positioning-engine<br/><b>AUTHORITY</b>: owns persistence, GET/PUT"]
+    GW["camara-gateway"] -->|"GET /blueprint (proxy)"| ENG
+    DEMO["positioning-demo<br/>(MEC: gateway only)"] -->|"GET /blueprint"| GW
 ```
 
 | Role          | Service            | How it touches the blueprint                                   |
@@ -177,16 +176,11 @@ Secret. See **Deploying to Kubernetes** below.
 
 ## What the wifi-positioning service does at startup
 
-```
-LAYOUT_PATH set + readable?
-   ├── yes ──▶ load blueprint, extract `rooms[0].anchors`
-   │            where `technology == "wifi"` (id, x, y),
-   │           load bindings file (id → bssids),
-   │           join on id → WifiConfig.routers
-   │
-   └── no  ──▶ legacy mode: bindings file MUST carry positions inline
-                 (`routers: [{id, x, y, bssids}]`). Used by tests and
-                 single-file demos.
+```mermaid
+flowchart TD
+    Q{"LAYOUT_PATH set<br/>+ readable?"}
+    Q -->|yes| Y["load blueprint, extract rooms[0].anchors<br/>where technology == wifi (id, x, y)<br/>load bindings file (id → bssids)<br/>join on id → WifiConfig.routers"]
+    Q -->|no| N["legacy mode: bindings file MUST carry positions inline<br/>(routers: [{id, x, y, bssids}])<br/>used by tests and single-file demos"]
 ```
 
 See [`services/wifi-positioning/app/assemble.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/assemble.py)

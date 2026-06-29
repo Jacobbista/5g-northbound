@@ -8,11 +8,12 @@ the data network, exactly like the WiFi scanner already posts scans.
 
 ## The model
 
-```
-mock-positioning ─┐
-wifi-positioning ─┼─ POST /adapters {name, base_url, kind}  ──▶  positioning-engine
-rest-adapter    ─┘   (at boot, then heartbeat every ~15s)        (registry authority:
-                     DELETE /adapters/{name} on shutdown          persists, evicts, polls)
+```mermaid
+flowchart LR
+    M["mock-positioning"] -->|"POST /adapters {name, base_url, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
+    W["wifi-positioning"] --> E
+    R["rest-adapter"] --> E
+    E["positioning-engine<br/><i>registry authority:<br/>persists · evicts · polls</i>"]
 ```
 
 - **Self-registration**: each adapter POSTs `{name, base_url, kind}` to
