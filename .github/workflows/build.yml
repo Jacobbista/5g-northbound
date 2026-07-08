@@ -12,7 +12,52 @@ env:
   IMAGE_PREFIX: ghcr.io/jacobbista/5g-northbound
 
 jobs:
+  # Decide which images to build. Every service is self-contained (its own
+  # folder), so we build an image only when its path changed since the
+  # previous tag. A tag therefore publishes exactly the images that actually
+  # changed - the registry itself tells you what a release touched, and KELT
+  # re-pins only those. workflow_dispatch (and the first-ever tag) builds all.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      any: ${{ steps.set.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: set
+        shell: bash
+        run: |
+          declare -A MAP=(
+            [camara-gateway]=services/camara-gateway
+            [positioning-engine]=services/positioning-engine
+            [wifi-positioning]=services/wifi-positioning
+            [rest-adapter]=services/rest-adapter
+            [placement-editor]=services/placement-editor
+            [positioning-demo]=services/positioning-demo
+            [mock-positioning]=mocks/mock-positioning
+          )
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE=""                       # manual run -> build everything
+          else
+            BASE="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          fi
+          echo "diff base: ${BASE:-<none, building all>}"
+          include="[]"
+          for img in "${!MAP[@]}"; do
+            path="${MAP[$img]}"
+            if [ -z "$BASE" ] || [ -n "$(git diff --name-only "$BASE".."${GITHUB_REF_NAME}" -- "$path")" ]; then
+              include="$(jq -c --arg i "$img" --arg p "$path" '. += [{"image":$i,"path":$p}]' <<<"$include")"
+            fi
+          done
+          echo "building: $include"
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+          [ "$(jq 'length' <<<"$include")" -gt 0 ] && echo "any=true" >> "$GITHUB_OUTPUT" || echo "any=false" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     name: build (${{ matrix.image }})
     runs-on: ubuntu-latest
     permissions:
@@ -20,21 +65,7 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # Production tier - published images.
-          - { image: camara-gateway,     path: services/camara-gateway }
-          - { image: positioning-engine, path: services/positioning-engine }
-          - { image: wifi-positioning,   path: services/wifi-positioning }
-          - { image: placement-editor,   path: services/placement-editor }
-          - { image: positioning-demo,   path: services/positioning-demo }
-          - { image: rest-adapter,       path: services/rest-adapter }
-          # mock-positioning is published: a synthetic walking adapter is
-          # useful in the testbed for a demo device with no real hardware.
-          # mock-wittra is NOT published: it is a local fake of the Wittra
-          # cloud for `make demo` only (compose builds it from source). In
-          # the testbed you point rest-adapter at the real vendor cloud.
-          - { image: mock-positioning,   path: mocks/mock-positioning }
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -62,6 +93,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+# mock-wittra is NOT published: it is a local fake of the Wittra cloud for
+# `make demo` only. In the testbed you point rest-adapter at the real vendor.
+#
 # Package visibility: GitHub Packages default to private. Set each package to
 # Public once (Repo > Packages > <pkg> > Package settings > Change visibility).
 # GITHUB_TOKEN cannot change visibility, so this is a one-time manual step.
