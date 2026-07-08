@@ -109,6 +109,14 @@ contracts:
 	@python3 deploy/tools/contracts.py lint
 	@python3 deploy/tools/contracts.py sensitivity-manifest
 
+# What is published per image, and which images a release actually changed.
+# `make images` lists the latest ghcr tag per image; to see which images'
+# source changed between two tags (the only ones worth re-pinning), run:
+#   python3 deploy/tools/images.py v0.8.6 v0.8.7
+.PHONY: images
+images:
+	@python3 deploy/tools/images.py
+
 logs:
 	$(COMPOSE) logs -f --tail=100
 

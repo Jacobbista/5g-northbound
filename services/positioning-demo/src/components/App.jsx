@@ -237,7 +237,9 @@ function AdapterHealthBadge({ adapters }) {
   const notLive = adapters.filter((a) => (a.state ? a.state !== "live" : a.in_cooldown));
   const ok = notLive.length === 0;
   return (
-    <span style={{ position: "relative", display: "inline-flex" }}>
+    // zIndex when open lifts the badge's whole subtree above the z40/z50
+    // panels; otherwise the absolutely-positioned dropdown renders behind them.
+    <span style={{ position: "relative", display: "inline-flex", zIndex: open ? 80 : undefined }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

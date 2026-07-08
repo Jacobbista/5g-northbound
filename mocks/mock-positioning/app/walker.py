@@ -21,6 +21,10 @@ _WAYPOINT_TOLERANCE_M = 0.4
 # When a step would cross a wall, back off by this margin so the device
 # never lands flush against the wall (avoids re-collision next step).
 _WALL_MARGIN_M = 0.15
+# Keep the device this far inside the room AABB: waypoints are sampled with
+# it, and the emitted position is clamped to it, so the marker never renders
+# on or past the perimeter wall.
+_ROOM_INSET_M = 0.5
 # Cap dt between polls so a long pause doesn't teleport the device. The
 # adapter typically polls at 1 Hz; if a poll is missed for minutes the
 # device should still only advance a few seconds' worth of distance.
@@ -305,7 +309,7 @@ class WaypointWalker:
     def _new_waypoint(self, rng: random.Random) -> tuple[float, float]:
         # Sample uniformly inside the AABB with a small inset so the device
         # never picks a point right on a wall.
-        inset = 0.5
+        inset = _ROOM_INSET_M
         x = rng.uniform(inset, max(inset, self._cfg.width_m - inset))
         z = rng.uniform(inset, max(inset, self._cfg.depth_m - inset))
         return x, z
@@ -384,8 +388,8 @@ class WaypointWalker:
         target = (st.x + ux * advance, st.z + uz * advance)
         nx, nz = self._blocked_advance((st.x, st.z), target)
         moved = math.hypot(nx - st.x, nz - st.z)
-        st.x = self._clamp(nx, 0.0, self._cfg.width_m)
-        st.z = self._clamp(nz, 0.0, self._cfg.depth_m)
+        st.x = self._clamp(nx, _ROOM_INSET_M, max(_ROOM_INSET_M, self._cfg.width_m - _ROOM_INSET_M))
+        st.z = self._clamp(nz, _ROOM_INSET_M, max(_ROOM_INSET_M, self._cfg.depth_m - _ROOM_INSET_M))
         # A wall blocked the advance (we moved less than 80% of the
         # intended step). Drop the waypoint so a new direction is picked.
         if moved < advance * 0.8:
