@@ -14,6 +14,7 @@ from .config import settings
 from .models import CalibrationSample
 from . import register
 from .routers import calibration as calibration_router
+from .routers import bindings as bindings_router
 from .routers import contract, health, ingest, measurement
 from .wifi import WifiAdapter
 
@@ -74,6 +75,7 @@ async def lifespan(app: FastAPI):
     app.state.config_error = None
     app.state.adapter = None
     app.state.wifi_config = None
+    app.state.bindings_path = bindings_path
 
     # The calibration store depends only on the bindings file (persisted
     # samples), NOT on the blueprint, so wire it unconditionally and FIRST.
@@ -163,3 +165,4 @@ app.include_router(contract.router)
 app.include_router(ingest.router)
 app.include_router(measurement.router)
 app.include_router(calibration_router.router)
+app.include_router(bindings_router.router)

@@ -50,3 +50,35 @@ export const apply = (per_anchor = null) =>
     method: "POST",
     body: JSON.stringify({ per_anchor }),
   });
+
+// Bindings transfer lives one level up from /calibration (it is the whole
+// per-venue config, not just the calibration tool), so it uses an absolute
+// path rather than the /calibration BASE.
+async function jsonFetchAbs(url, options = {}) {
+  const resp = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const text = await resp.text();
+  let parsed = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    // not JSON; surface the raw text in the error
+  }
+  if (!resp.ok) {
+    const detail = parsed?.detail || text || resp.statusText;
+    throw new Error(`HTTP ${resp.status}: ${detail}`);
+  }
+  return parsed;
+}
+
+// Full per-venue bindings (BSSIDs + RF + samples). Export downloads it,
+// import replaces it and hot-reloads the adapter.
+export const getBindings = () => jsonFetchAbs("/api/wifi/bindings");
+
+export const putBindings = (doc) =>
+  jsonFetchAbs("/api/wifi/bindings", {
+    method: "PUT",
+    body: JSON.stringify(doc),
+  });

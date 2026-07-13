@@ -167,3 +167,57 @@ async def test_http_capture_and_state_roundtrip(app_with_adapter):
         state = (await c.get("/calibration/state")).json()
         assert len(state["samples"]) == 1
         assert state["samples"][0]["rssi_by_anchor"][bssid] == pytest.approx(-51)
+
+
+@pytest.mark.asyncio
+async def test_http_bindings_export_import_roundtrip(app_with_adapter, tmp_path):
+    # GET /bindings exports the live file; PUT /bindings replaces it wholesale.
+    from app.calibration import CalibrationStore
+
+    bindings_path = tmp_path / "wifi-config.json"
+    bindings_path.write_text(json.dumps({
+        "tx_power": -42, "path_loss_n": 2.7,
+        "bindings": [{"id": "AP01", "bssids": ["AA:AA:AA:AA:AA:01"], "tx_power": -39.0}],
+        "calibration_samples": [],
+    }))
+    app_with_adapter.state.bindings_path = bindings_path
+    app_with_adapter.state.calibration = CalibrationStore()
+    # No live reload wired: PUT persists + returns reloaded=False (degraded path).
+    app_with_adapter.state.reload_wifi_config = None
+
+    async with AsyncClient(transport=ASGITransport(app=app_with_adapter), base_url="http://test") as c:
+        exported = (await c.get("/bindings")).json()
+        assert exported["bindings"][0]["id"] == "AP01"
+        assert exported["bindings"][0]["bssids"] == ["AA:AA:AA:AA:AA:01"]
+
+        # Import a whole new config: replaces bssids + seeds a sample.
+        new_doc = {
+            "tx_power": -40, "path_loss_n": 3.0,
+            "bindings": [{"id": "AP07", "bssids": ["CC:CC:CC:CC:CC:07"]}],
+            "calibration_samples": [{
+                "id": "s1", "x_m": 1.0, "y_m": 2.0,
+                "rssi_by_anchor": {"CC:CC:CC:CC:CC:07": -50.0}, "n_scans": 5, "ts": 1.0,
+            }],
+        }
+        r = await c.put("/bindings", json=new_doc)
+        assert r.status_code == 200
+        assert r.json()["bindings"] == 1
+        assert r.json()["samples"] == 1
+        assert r.json()["reloaded"] is False
+
+        on_disk = json.loads(bindings_path.read_text())
+        assert [b["id"] for b in on_disk["bindings"]] == ["AP07"]
+        # Store re-hydrated from the imported samples.
+        assert len(app_with_adapter.state.calibration.all_samples()) == 1
+
+        # Legacy routers shape is accepted and its per-AP params kept.
+        r2 = await c.put("/bindings", json={
+            "routers": [{"id": "AP09", "x": 1, "y": 2, "bssids": ["DD"],
+                         "tx_power": -38.0, "path_loss_n": 2.2}],
+        })
+        assert r2.status_code == 200
+        b = json.loads(bindings_path.read_text())["bindings"][0]
+        assert b["id"] == "AP09" and b["bssids"] == ["DD"] and b["tx_power"] == -38.0
+
+        # Garbage body -> 400, not a 500.
+        assert (await c.put("/bindings", content=b"not json")).status_code == 400

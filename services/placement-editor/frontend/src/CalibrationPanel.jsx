@@ -5,55 +5,14 @@ import {
   clearSamples,
   derive as apiDerive,
   deleteSample,
+  getBindings,
   getState,
   pollCapture,
+  putBindings,
   startCapture,
 } from "./api/calibration.js";
 
 const POLL_MS = 500;
-
-// Build a per-anchor params map from an imported file, for operators who
-// calibrated elsewhere and just want to load the result. Accepts a
-// wifi-config.json / bindings file (routers[] or bindings[] with an anchor
-// `id`, plus top-level tx_power / path_loss_n as a global fallback when an
-// anchor carries none of its own), or a {per_anchor:{…}} / flat
-// {id:{tx_power,path_loss_n}} JSON. Throws with a readable reason.
-function toPerAnchor(raw) {
-  if (!raw || typeof raw !== "object") throw new Error("not a JSON object");
-  // Global fallback: the wifi-config / bindings shape carries tx_power +
-  // path_loss_n at the top level, with per-AP overrides optional.
-  const gTx = raw.tx_power;
-  const gN = raw.path_loss_n;
-  const arr = Array.isArray(raw.routers)
-    ? raw.routers
-    : Array.isArray(raw.bindings)
-    ? raw.bindings
-    : null;
-  if (arr) {
-    const out = {};
-    for (const r of arr) {
-      if (r?.id == null) continue;
-      const tx = r.tx_power ?? gTx;
-      const n = r.path_loss_n ?? gN;
-      if (tx != null && n != null) out[r.id] = { tx_power: tx, path_loss_n: n };
-    }
-    if (!Object.keys(out).length)
-      throw new Error("no anchors with tx_power + path_loss_n (per-AP or global)");
-    return out;
-  }
-  // Map shape: each entry must carry its own params (no global fallback here,
-  // so a config file's stray object keys are not mistaken for anchors).
-  const map = raw.per_anchor && typeof raw.per_anchor === "object" ? raw.per_anchor : raw;
-  const out = {};
-  for (const [id, p] of Object.entries(map)) {
-    if (p && typeof p === "object" && p.tx_power != null && p.path_loss_n != null) {
-      out[id] = { tx_power: p.tx_power, path_loss_n: p.path_loss_n };
-    }
-  }
-  if (!Object.keys(out).length)
-    throw new Error("no entries with both tx_power and path_loss_n");
-  return out;
-}
 
 const panel = {
   width: "100%",
@@ -131,18 +90,66 @@ export function CalibrationPanel({
   const pollTimerRef = useRef(null);
   const fileRef = useRef(null);
 
-  const handleImportFile = useCallback(async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-importing the same file
-    if (!file) return;
+  const handleExport = useCallback(async () => {
     try {
-      const per_anchor = toPerAnchor(JSON.parse(await file.text()));
-      setDerived(per_anchor); // lands in the review table; operator presses apply
+      const doc = await getBindings();
+      const blob = new Blob([JSON.stringify(doc, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "wifi-config.json";
+      a.click();
+      URL.revokeObjectURL(url);
       setError(null);
     } catch (err) {
-      setError(`import failed: ${err.message}`);
+      setError(`export failed: ${err.message}`);
     }
   }, []);
+
+  const handleImportBindings = useCallback(
+    async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // allow re-importing the same file
+      if (!file) return;
+      let doc;
+      try {
+        doc = JSON.parse(await file.text());
+      } catch (err) {
+        setError(`import failed: not valid JSON (${err.message})`);
+        return;
+      }
+      const n = Array.isArray(doc?.bindings)
+        ? doc.bindings.length
+        : Array.isArray(doc?.routers)
+        ? doc.routers.length
+        : 0;
+      if (
+        !confirm(
+          `Replace the live wifi bindings with this file (${n} anchors)? This overwrites the current per-venue config (BSSIDs + RF + samples).`
+        )
+      )
+        return;
+      try {
+        setBusy(true);
+        const out = await putBindings(doc);
+        setDerived(null);
+        setError(null);
+        await reloadState();
+        alert(
+          out.reloaded === false
+            ? `Imported ${out.bindings} bindings. wifi-positioning is still loading the blueprint; they apply once it is ready.`
+            : `Imported ${out.bindings} bindings, ${out.samples} samples. Live config reloaded.`
+        );
+      } catch (err) {
+        setError(`import failed: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [reloadState]
+  );
 
   const wifiAnchors = (anchors || []).filter(
     (a) => (a.technology || "wifi") === "wifi"
@@ -325,28 +332,38 @@ export function CalibrationPanel({
         at least 3 distances. Aim for 1 m, 5 m, and 8 m from each AP.
       </div>
 
-      <div style={sectionTitle}>· import</div>
+      <div style={sectionTitle}>· transfer</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={handleExport}
+          disabled={busy}
           style={btn(false)}
-          title="Already calibrated elsewhere? Load a wifi-config.json / bindings file (per-AP tx_power/path_loss_n, or the top-level global applied to every anchor) or a {per_anchor} params file. It lands in the table below; press apply to persist + hot-reload."
+          title="Download the live per-venue bindings (BSSIDs + RF params + samples) as wifi-config.json. Carry it to another cluster and import there."
         >
-          ⇪ import calibration
+          ⇩ export bindings
+        </button>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          style={btn(false)}
+          title="Upload a wifi-config.json / bindings file to REPLACE the live per-venue config (BSSIDs + RF + samples) and hot-reload. Use to seed a fresh cluster from one calibrated on the demo."
+        >
+          ⇪ import bindings
         </button>
         <input
           ref={fileRef}
           type="file"
           accept="application/json,.json"
-          onChange={handleImportFile}
+          onChange={handleImportBindings}
           style={{ display: "none" }}
         />
       </div>
       <div style={{ fontSize: 10, color: "#7a8aab", margin: "4px 0 2px" }}>
-        Skip sampling if you already have params: import a wifi-config / per-anchor
-        file, review below, apply. A file with only global tx_power / path_loss_n
-        seeds every anchor with those.
+        Calibrate on the demo, export, import here: the full config (BSSIDs + RF +
+        samples) travels as one file. Import replaces the live bindings and
+        hot-reloads.
       </div>
 
       {error && (

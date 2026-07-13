@@ -44,6 +44,29 @@ def _normalize_layout(raw: dict) -> dict:
     }
 
 
+def bindings_from_dict(data: dict) -> WifiBindings:
+    """Normalise a raw bindings dict (as read from disk or PUT over HTTP) into
+    a WifiBindings. Legacy `routers: [{id, x, y, bssids}]` is lifted to the
+    `bindings` shape - we drop x/y (positions come from the blueprint) but keep
+    id, bssids, and any per-AP tx_power / path_loss_n so an old config imports
+    without losing its calibration."""
+    if "bindings" not in data and isinstance(data.get("routers"), list):
+        data = {
+            **data,
+            "bindings": [
+                {
+                    "id": r.get("id"),
+                    "bssids": r.get("bssids") or [],
+                    "tx_power": r.get("tx_power"),
+                    "path_loss_n": r.get("path_loss_n"),
+                }
+                for r in data["routers"]
+                if r.get("id")
+            ],
+        }
+    return WifiBindings.model_validate(data)
+
+
 def load_bindings(path: Path) -> WifiBindings:
     """Read the per-venue bindings + tunables file. Legacy wifi-config.json
     layouts (with positions inline) are also accepted: we ignore the x/y
@@ -53,7 +76,7 @@ def load_bindings(path: Path) -> WifiBindings:
     k8s subPath-as-directory footgun where the path is a directory) is treated
     as EMPTY bindings rather than crashing the adapter. wifi then comes up
     ready with the blueprint's anchor positions and no BSSIDs, and picks the
-    bindings up once they are written (calibration import / operator config)."""
+    bindings up once they are written (bindings import / operator config)."""
     try:
         text = path.read_text()
     except OSError as exc:
@@ -70,19 +93,7 @@ def load_bindings(path: Path) -> WifiBindings:
             path, exc,
         )
         return WifiBindings.model_validate({"bindings": []})
-    # Legacy `routers: [{id, x, y, bssids}]` is treated as bindings - we
-    # drop x/y and keep just id + bssids. Operators with old configs
-    # still work; new configs should use the cleaner `bindings` field.
-    if "bindings" not in data and isinstance(data.get("routers"), list):
-        data = {
-            **data,
-            "bindings": [
-                {"id": r.get("id"), "bssids": r.get("bssids") or []}
-                for r in data["routers"]
-                if r.get("id")
-            ],
-        }
-    return WifiBindings.model_validate(data)
+    return bindings_from_dict(data)
 
 
 def assemble_from_blueprint(
@@ -231,26 +242,42 @@ def persist_calibration(
         for s in samples
     ]
 
-    blob = json.dumps(raw, indent=2, ensure_ascii=False)
-    # Best-effort atomic write: tmp file in the same directory, then
-    # rename over the target. When the container user lacks write
-    # permission on the parent directory (common with single-file bind
-    # mounts), fall back to writing the bindings file in place. We lose
-    # crash-safety in that path but keep the calibration data flowing.
+    _atomic_write(bindings_path, json.dumps(raw, indent=2, ensure_ascii=False))
+    log.info(
+        "wifi-positioning: calibration persisted (overrides=%d, samples=%d) -> %s",
+        len(overrides), len(samples), bindings_path,
+    )
+
+
+def write_bindings(bindings_path: Path, bindings: WifiBindings) -> None:
+    """Replace the whole per-venue bindings file with `bindings` (BSSIDs +
+    tunables + calibration samples). This is the write half of the config
+    transfer flow: an operator calibrates on one cluster, exports the file,
+    and imports it here. Replace-semantics, like PUT /blueprint - the uploaded
+    document is authoritative."""
+    doc = bindings.model_dump()
+    _atomic_write(bindings_path, json.dumps(doc, indent=2, ensure_ascii=False))
+    log.info(
+        "wifi-positioning: bindings replaced (bindings=%d, samples=%d) -> %s",
+        len(bindings.bindings), len(bindings.calibration_samples), bindings_path,
+    )
+
+
+def _atomic_write(path: Path, blob: str) -> None:
+    """Best-effort atomic write: tmp file in the same directory, then rename
+    over the target. When the container user lacks write permission on the
+    parent directory (common with single-file bind mounts), fall back to
+    writing in place - we lose crash-safety there but keep the data flowing."""
     try:
-        tmp = bindings_path.with_suffix(bindings_path.suffix + ".tmp")
+        tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(blob)
-        tmp.replace(bindings_path)
+        tmp.replace(path)
     except PermissionError as exc:
         log.warning(
             "wifi-positioning: atomic rename not available (%s); writing in place",
             exc,
         )
-        bindings_path.write_text(blob)
-    log.info(
-        "wifi-positioning: calibration persisted (overrides=%d, samples=%d) -> %s",
-        len(overrides), len(samples), bindings_path,
-    )
+        path.write_text(blob)
 
 
 def load_wifi_config(

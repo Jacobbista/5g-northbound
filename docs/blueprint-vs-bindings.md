@@ -174,6 +174,32 @@ flow. On a single-host docker compose the bind-mount must allow writes;
 on Kubernetes the volume must be a writable PVC, not a ConfigMap or
 Secret. See **Deploying to Kubernetes** below.
 
+### 6. Move calibration between clusters (export / import bindings)
+
+The bindings file (`wifi-config.json`: BSSIDs + tunables + calibration
+samples) is the portable calibration artefact. Calibrate on one cluster
+(e.g. the local demo), carry the file to another (e.g. the testbed):
+
+- `⇩ export bindings` (calibration panel) downloads the live
+  `wifi-config.json` from `wifi-positioning`, full fidelity — BSSIDs, per-AP
+  `tx_power`/`path_loss_n`, and survey samples.
+- `⇪ import bindings` uploads such a file and **replaces** the live bindings
+  wholesale, then hot-reloads. Replace-semantics, like blueprint import and
+  `PUT /schema`: the uploaded document is authoritative. A legacy
+  `routers: [{id, x, y, bssids}]` config is accepted too (positions dropped,
+  bssids + per-AP params kept).
+
+This is how an operator seeds a fresh cluster whose PVC has no BSSIDs yet:
+without them the blueprint's anchors have no radio to match scans against and
+`wifi-positioning` comes up with `0 routers`. Import supplies the id → BSSID
+table and positioning starts.
+
+Under the hood these are `GET`/`PUT /bindings` on `wifi-positioning`, proxied
+by the editor at `/api/wifi/bindings`. BSSIDs ride this **operator plane** only
+(the editor is gated by `placement-admin`); they are never proxied to the demo
+or gateway. Untrusted clients read RF params without BSSIDs via
+`/calibration/params` (engine) and `/anchors/calibration` (gateway).
+
 ## What the wifi-positioning service does at startup
 
 ```mermaid

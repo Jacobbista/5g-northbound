@@ -5,8 +5,10 @@ import pytest
 
 from app.assemble import (
     assemble_from_blueprint,
+    bindings_from_dict,
     load_bindings,
     load_wifi_config,
+    write_bindings,
 )
 
 
@@ -127,6 +129,61 @@ def test_load_bindings_accepts_legacy_routers_shape(tmp_path):
     bindings = load_bindings(bindings_path)
     assert [b.id for b in bindings.bindings] == ["AP01"]
     assert bindings.bindings[0].bssids == ["AA:BB:CC:01:01:01"]
+
+
+def test_bindings_from_dict_keeps_legacy_per_router_params():
+    bindings = bindings_from_dict(
+        {
+            "routers": [
+                {
+                    "id": "AP01",
+                    "x": 1.0,
+                    "y": 1.0,
+                    "bssids": ["AA:BB:CC:01:01:01"],
+                    "tx_power": -39.0,
+                    "path_loss_n": 2.4,
+                }
+            ]
+        }
+    )
+    # x/y dropped (they come from the blueprint), but the per-AP calibration
+    # survives the lift so an old config imports without losing its fit.
+    assert bindings.bindings[0].tx_power == -39.0
+    assert bindings.bindings[0].path_loss_n == 2.4
+
+
+def test_write_bindings_roundtrips_full_fidelity(tmp_path):
+    path = tmp_path / "wifi-config.json"
+    original = bindings_from_dict(
+        {
+            "tx_power": -40,
+            "path_loss_n": 3.0,
+            "bindings": [
+                {
+                    "id": "AP07",
+                    "bssids": ["C8:B5:AD:CA:98:18"],
+                    "tx_power": -39.29,
+                    "path_loss_n": 2.5,
+                }
+            ],
+            "calibration_samples": [
+                {
+                    "id": "s1",
+                    "x_m": 1.0,
+                    "y_m": 2.0,
+                    "rssi_by_anchor": {"C8:B5:AD:CA:98:18": -55.0},
+                    "n_scans": 10,
+                    "ts": 1.0,
+                }
+            ],
+        }
+    )
+    write_bindings(path, original)
+    back = load_bindings(path)
+    assert [b.id for b in back.bindings] == ["AP07"]
+    assert back.bindings[0].bssids == ["C8:B5:AD:CA:98:18"]
+    assert back.bindings[0].tx_power == -39.29
+    assert len(back.calibration_samples) == 1
 
 
 def test_load_wifi_config_blueprint_mode(tmp_path):

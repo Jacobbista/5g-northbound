@@ -139,6 +139,21 @@ async def proxy_calibration(path: str, request: Request) -> Response:
     return await _proxy(base, f"/calibration/{path}", request, "wifi-positioning")
 
 
+# --- WiFi bindings transfer (export / import) ------------------------------
+#
+# GET/PUT the whole per-venue bindings file (BSSIDs + RF + samples) so an
+# operator can calibrate on one cluster, export, and import on another. This
+# is the operator plane (behind placement-admin); BSSIDs never leave here for
+# the demo/gateway. PUT replaces wholesale + hot-reloads wifi-positioning.
+@app.api_route(
+    "/api/wifi/bindings",
+    methods=["GET", "PUT"],
+)
+async def proxy_wifi_bindings(request: Request) -> Response:
+    base = get_settings().wifi_positioning_url
+    return await _proxy(base, "/bindings", request, "wifi-positioning")
+
+
 # --- Vendor discovery proxy -------------------------------------------------
 #
 # Browser hits /api/vendor/discover. Editor backend forwards to the

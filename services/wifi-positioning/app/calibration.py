@@ -169,6 +169,13 @@ class CalibrationStore:
             self._samples = []
         self._notify_changed()
 
+    def replace_samples(self, samples: Optional[list[CalibrationSample]]) -> None:
+        """Swap the in-memory sample set wholesale. Used after a bindings
+        import: the file we just wrote already carries these samples, so we do
+        NOT fire on_samples_changed (that would re-persist redundantly)."""
+        with self._lock:
+            self._samples = list(samples or [])
+
     # ----- derive --------------------------------------------------------------
 
     def derive_params(self, cfg: WifiConfig) -> dict[str, dict]:

@@ -65,6 +65,9 @@ Every adapter pod implements:
 | Method · path                          | Returns         | Notes                                                                  |
 |----------------------------------------|-----------------|------------------------------------------------------------------------|
 | `POST   /ingest/wifi-scan`             | `202 Accepted`  | Edge client pushes a single scan ({bssid, rssi}[]) here                |
+| `GET    /bindings`                     | `WifiBindings`  | **Operator plane**: export the live per-venue bindings (BSSIDs + RF + samples), full fidelity. Reached only through the `placement-admin`-gated editor; never proxied to the demo/gateway |
+| `PUT    /bindings`                     | `{"status":"ok",…}` | **Operator plane**: replace the bindings file wholesale + hot-reload (accepts `bindings[]` or legacy `routers[]`). The config-transfer import. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
+| `POST   /calibration/{...}`            | (various)       | Guided calibration survey (capture / state / derive / apply / params). Proxied by the editor at `/api/wifi/calibration/*`. `/calibration/params` returns per-AP RF **without** BSSIDs |
 
 `mock-positioning` exposes only the contract endpoints, no ingest path (data is synthesised internally).
 
@@ -86,6 +89,9 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 | `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
 | `GET    /api/layout`                   | blueprint JSON                             | Proxies the engine's `GET /blueprint` (the editor is a blueprint client, no local file). `404` when none authored yet |
 | `PUT    /api/layout`                   | `{"status":"ok",…}`                        | Proxies the engine's `PUT /blueprint`. Unknown fields preserved verbatim |
+| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-positioning `GET/PUT /bindings` — the bindings export/import (config transfer). Operator plane; carries BSSIDs |
+| `*      /api/wifi/calibration/*`       | (various)                                  | Proxies wifi-positioning `/calibration/*` (guided survey) |
+| `GET    /api/capabilities`             | `{"adapters":[…]}`                         | Proxies engine `/adapters`; drives the capability-aware toolbar |
 | `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |
 
 ## Conventions across services
