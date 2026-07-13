@@ -106,6 +106,12 @@ const header = {
   borderBottom: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(10,18,40,0.6)",
   backdropFilter: "blur(8px)",
+  // The header is a grid sibling of the 3D scene (and the fixed z40/z50
+  // panels). Without a z-index the later-painted scene covers the lower rows
+  // of the adapter dropdown that hangs below the header. Lift the whole header
+  // stacking context above scene + panels so the dropdown always renders on top.
+  position: "relative",
+  zIndex: 60,
 };
 
 const title = {
