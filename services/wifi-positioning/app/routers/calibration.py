@@ -138,7 +138,11 @@ async def apply(body: ApplyRequest, request: Request) -> dict:
     blueprint (positions) is not touched."""
     store = request.app.state.calibration
     cfg = request.app.state.wifi_config
-    if cfg is None:
+    # Deriving from the stored samples needs the live config; importing
+    # explicit params does not. So let an import persist even while the adapter
+    # is still loading the blueprint - the params land in the bindings and are
+    # picked up on the next successful config load. Only block the derive path.
+    if body.per_anchor is None and cfg is None:
         raise HTTPException(503, "wifi config not loaded yet (blueprint still loading)")
     derived = body.per_anchor or store.derive_params(cfg)
     # Filter: only entries with non-null params are written. Anchors with
@@ -153,17 +157,26 @@ async def apply(body: ApplyRequest, request: Request) -> dict:
             "path_loss_n": params["path_loss_n"],
         }
 
-    persist = request.app.state.persist_calibration
-    persist(overrides, store.all_samples())
+    request.app.state.persist_calibration(overrides, store.all_samples())
 
     # Hot-reload the live wifi config so the next scan uses the new params
-    # without a container restart.
-    reload_cfg = request.app.state.reload_wifi_config
-    new_cfg = reload_cfg()
-    request.app.state.wifi_config = new_cfg
-    request.app.state.adapter.reload(new_cfg)
+    # without a restart - only when the adapter is actually up. If it is still
+    # degraded, the persisted params apply once the blueprint loads.
+    reloaded = False
+    reload_cfg = getattr(request.app.state, "reload_wifi_config", None)
+    adapter = getattr(request.app.state, "adapter", None)
+    if reload_cfg is not None and adapter is not None:
+        new_cfg = reload_cfg()
+        request.app.state.wifi_config = new_cfg
+        adapter.reload(new_cfg)
+        reloaded = True
 
-    return {"status": "ok", "applied": overrides, "samples": len(store.all_samples())}
+    return {
+        "status": "ok",
+        "applied": overrides,
+        "reloaded": reloaded,
+        "samples": len(store.all_samples()),
+    }
 
 
 @router.get("/params")

@@ -265,7 +265,12 @@ export function CalibrationPanel({
       setBusy(true);
       const out = await apiApply(derived);
       setError(null);
-      alert(`Applied to ${Object.keys(out.applied || {}).length} anchors.`);
+      const n = Object.keys(out.applied || {}).length;
+      alert(
+        out.reloaded === false
+          ? `Saved params for ${n} anchors. wifi-positioning is still loading the blueprint; they apply once it is ready.`
+          : `Applied to ${n} anchors.`
+      );
     } catch (e) {
       setError(e.message);
     } finally {

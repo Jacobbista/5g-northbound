@@ -47,8 +47,29 @@ def _normalize_layout(raw: dict) -> dict:
 def load_bindings(path: Path) -> WifiBindings:
     """Read the per-venue bindings + tunables file. Legacy wifi-config.json
     layouts (with positions inline) are also accepted: we ignore the x/y
-    here because positions come from the blueprint."""
-    data = json.loads(path.read_text())
+    here because positions come from the blueprint.
+
+    An absent, unreadable, or invalid bindings file (an unseeded PVC, or the
+    k8s subPath-as-directory footgun where the path is a directory) is treated
+    as EMPTY bindings rather than crashing the adapter. wifi then comes up
+    ready with the blueprint's anchor positions and no BSSIDs, and picks the
+    bindings up once they are written (calibration import / operator config)."""
+    try:
+        text = path.read_text()
+    except OSError as exc:
+        log.warning(
+            "wifi-positioning: bindings not readable at %s (%s); starting with empty bindings",
+            path, exc,
+        )
+        return WifiBindings.model_validate({"bindings": []})
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        log.warning(
+            "wifi-positioning: bindings at %s is not valid JSON (%s); starting with empty bindings",
+            path, exc,
+        )
+        return WifiBindings.model_validate({"bindings": []})
     # Legacy `routers: [{id, x, y, bssids}]` is treated as bindings - we
     # drop x/y and keep just id + bssids. Operators with old configs
     # still work; new configs should use the cleaner `bindings` field.
@@ -171,7 +192,15 @@ def persist_calibration(
     """
     from .models import CalibrationSample
 
-    raw = json.loads(bindings_path.read_text())
+    # Tolerate an absent / unreadable / invalid bindings file (unseeded PVC):
+    # start from an empty doc so an import is a valid recovery path that
+    # CREATES the file rather than failing on read.
+    try:
+        raw = json.loads(bindings_path.read_text())
+        if not isinstance(raw, dict):
+            raw = {}
+    except (OSError, json.JSONDecodeError):
+        raw = {}
     # Update or insert per-binding overrides keyed by id.
     bindings_list = raw.get("bindings")
     if not isinstance(bindings_list, list):
@@ -184,11 +213,16 @@ def persist_calibration(
         ]
         raw["bindings"] = bindings_list
 
-    for entry in bindings_list:
-        anchor_id = entry.get("id")
-        ov = overrides.get(anchor_id)
-        if not ov:
-            continue
+    # Insert entries for imported anchor ids that have no binding yet, so
+    # calibration imported into an empty config persists (BSSIDs stay empty
+    # until the operator supplies them; the RF params are what we're writing).
+    by_id = {e.get("id"): e for e in bindings_list if e.get("id")}
+    for anchor_id, ov in overrides.items():
+        entry = by_id.get(anchor_id)
+        if entry is None:
+            entry = {"id": anchor_id, "bssids": []}
+            bindings_list.append(entry)
+            by_id[anchor_id] = entry
         entry["tx_power"] = ov.get("tx_power")
         entry["path_loss_n"] = ov.get("path_loss_n")
 

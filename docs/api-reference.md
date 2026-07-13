@@ -56,7 +56,8 @@ Every adapter pod implements:
 
 | Method · path                          | Returns            | Notes                                                                            |
 |----------------------------------------|--------------------|----------------------------------------------------------------------------------|
-| `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
+| `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
+| `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
 | `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
 
 `wifi-positioning` also exposes:

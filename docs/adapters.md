@@ -27,6 +27,7 @@ The adapter MUST expose two endpoints:
 ```
 GET  /measurement/{device_id}
 GET  /health
+GET  /ready
 ```
 
 Optionally it MAY expose `POST /ingest/...` (or any other transport) for sources that push data into the adapter; the engine never calls them.
@@ -86,9 +87,11 @@ Treated as a transient adapter failure. The engine logs it and ignores this sour
 
 After three consecutive network errors or `5xx` responses the engine puts the adapter into a short cooldown (2 s, doubling on continued failure up to 60 s) during which `GET /measurement/...` is skipped without a request. A successful response resets the counter. `404` and other non-5xx errors do *not* count toward this threshold. `404` is a normal "no fix" reply, and a misconfigured API key surfacing as `401`/`403` should fail loudly in logs rather than back off. See [`services/positioning-engine/app/adapters/http.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-engine/app/adapters/http.py) for the constants.
 
-### `GET /health`
+### `GET /health` and `GET /ready`
 
-Returns `200 {"status": "ok"}` when the adapter is ready to serve measurements. Used as Kubernetes `readinessProbe` and `livenessProbe`. No authentication.
+No authentication on either. **`/health` is liveness**: `200 {"status": "ok"}` whenever the process is up, independent of business config, so a misconfigured pod stays alive (and keeps answering `/contract`) instead of crash-looping. **`/ready` is readiness**: `200 {"status": "ready"}` once startup config has loaded, else `503 {"status": "not-ready", "error": "<why>"}`.
+
+Point the Kubernetes `livenessProbe` at `/health` and the `readinessProbe` at `/ready`. Probing readiness on `/health` is a trap: a pod that came up but failed to load its config (unseeded volume, unreachable authority) would still report ready and take traffic. The `error` field on `/ready` surfaces exactly why a pod is degraded without needing pod logs.
 
 ## Lifecycle
 
@@ -197,7 +200,7 @@ In-cluster adapters (`wifi-positioning`, `mock-positioning`) do not set these va
 |---|---|
 | **Runtime** | any language or framework; the contract is HTTP+JSON |
 | **Image** | published to a container registry the cluster can pull from (private registries need an `imagePullSecret`) |
-| **Health** | `GET /health` returning `200 {"status": "ok"}` |
+| **Health** | `GET /health` (liveness, always 200) and `GET /ready` (readiness: 200 ready / 503 + `{error}` degraded) |
 | **Port** | conventionally `8080` inside the container; the Service publishes whichever ClusterIP port the engine URL references |
 | **Configuration** | environment variables and/or files mounted from a `ConfigMap` (raw data) plus a `Secret` (credentials) |
 | **State** | per-device in-memory cache is fine; the engine tolerates restarts (a missing measurement is just a 404 for one cycle) |
@@ -253,7 +256,7 @@ Subsequent calls to `GET /measurement/wifi-asset-01` (and the northbound CAMARA 
 ## Minimal Python skeleton
 
 ```python
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from typing import Optional
 
@@ -267,9 +270,18 @@ class Measurement(BaseModel):
 app = FastAPI()
 _cache: dict[str, Measurement] = {}
 
+_ready = True  # flip to False while startup config is still loading
+
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok"}          # liveness: process is up
+
+@app.get("/ready")
+async def ready(response: Response):
+    if not _ready:                    # readiness: config loaded, can serve
+        response.status_code = 503
+        return {"status": "not-ready", "error": "..."}
+    return {"status": "ready"}
 
 @app.get("/measurement/{device_id}", response_model=Measurement)
 async def get_measurement(device_id: str):
