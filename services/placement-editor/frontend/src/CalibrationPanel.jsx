@@ -90,6 +90,21 @@ export function CalibrationPanel({
   const pollTimerRef = useRef(null);
   const fileRef = useRef(null);
 
+  const wifiAnchors = (anchors || []).filter(
+    (a) => (a.technology || "wifi") === "wifi"
+  );
+
+  const reloadState = useCallback(async () => {
+    try {
+      const s = await getState();
+      setSamples(s.samples || []);
+      onSamplesChanged?.(s.samples || []);
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [onSamplesChanged]);
+
   const handleExport = useCallback(async () => {
     try {
       const doc = await getBindings();
@@ -150,21 +165,6 @@ export function CalibrationPanel({
     },
     [reloadState]
   );
-
-  const wifiAnchors = (anchors || []).filter(
-    (a) => (a.technology || "wifi") === "wifi"
-  );
-
-  const reloadState = useCallback(async () => {
-    try {
-      const s = await getState();
-      setSamples(s.samples || []);
-      onSamplesChanged?.(s.samples || []);
-      setError(null);
-    } catch (e) {
-      setError(e.message);
-    }
-  }, [onSamplesChanged]);
 
   useEffect(() => {
     if (!active) return;
