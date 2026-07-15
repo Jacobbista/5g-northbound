@@ -128,18 +128,26 @@ Both are discovery; the difference is that a vendor exports its inventory while
 wifi only reveals what is currently emitting. Neither auto-creates an asset —
 onboarding is always an explicit `PUT /assets`.
 
-### Anchors are not assets
+### Infrastructure is not an asset
 
-A vendor's device list mixes **anchors** (fixed positioning references — the
-infrastructure) with **trackable** devices (the mobile things you onboard).
-Onboarding an anchor as a tracked asset is wrong, so each candidate carries a
-`role` (`anchor` | `trackable`) and its native `device_type`. The management UI
-separates anchors into their own non-onboardable section and prefills the
-wizard's kind from `device_type` for trackables. The classification is
-schema-declared per vendor (`discover.anchor_types`), never guessed — a source
-that doesn't classify leaves `role` off and every candidate stays onboardable.
-wifi/mock only ever report `trackable` (their anchors live in the bindings /
-blueprint, not the device list).
+A vendor's device list mixes **assets** (the mobile things you track — tools,
+pallets, forklifts, workers) with **infrastructure** (fixed sensors — UWB
+anchors, BLE gateways). The paper places infrastructure *outside* the 3GPP
+trust domain: it feeds the fusion engine but is never a tracked asset.
+Onboarding a sensor as an asset is wrong, so each candidate carries:
+
+- **`role`** — `asset` vs `infrastructure`. The management UI separates
+  infrastructure into its own non-onboardable section.
+- **`source_class`** — the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
+  `cellular`/`other`), surfaced as a badge and a hint for the asset's kind.
+
+Classification is **schema-declared per vendor**, never guessed — a source that
+doesn't classify leaves `role`/`source_class` off and every candidate stays
+onboardable. wifi/mock only ever report `role: asset` (their infrastructure
+lives in the bindings / blueprint, not the device list). For a vendor, the
+`rest-adapter`'s `discover.classify` block maps structural predicates on the
+vendor's own record to the two axes — see
+[integrating a vendor REST API](integrating-a-vendor-rest-api.md#classifying-devices-for-asset-onboarding).
 
 ## Tenancy and sensitivity
 

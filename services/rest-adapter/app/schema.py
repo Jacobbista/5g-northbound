@@ -159,9 +159,57 @@ class DiscoverFilter(BaseModel):
     require_path: Optional[str] = None
 
 
+class ClassifyPredicate(BaseModel):
+    """A structural test against one raw vendor device record. Matches when:
+      - `require_path` (if set) resolves to a non-null value, AND
+      - `path` == `equals` (if both set).
+    Real vendor device types are structural (a sub-object present, a flag set),
+    not a clean enum string - Wittra's `deviceType` is an opaque object; an
+    anchor is "has a fixedLocation", a MIOTY node is "has a miotyConfig". So
+    classification is declared as presence / value predicates the schema author
+    writes against the vendor's own fields."""
+
+    model_config = ConfigDict(extra="forbid")
+    require_path: Optional[str] = None
+    path: Optional[str] = None
+    equals: Optional[Any] = None
+
+
+class SourceClassRule(BaseModel):
+    """When `when` matches, the device's `source_class` is `value`. First
+    matching rule wins; `Classify.source_class_default` applies if none do."""
+
+    model_config = ConfigDict(extra="forbid")
+    when: ClassifyPredicate
+    value: str
+
+
+class Classify(BaseModel):
+    """Schema-declared classification for onboarding discovery. Two axes, both
+    from the paper's private-asset model:
+
+      - role: `infrastructure` (fixed sensor: UWB anchor, BLE gateway - outside
+        the 3GPP trust domain, never onboarded as an asset) vs `asset` (the
+        tracked entity). `infrastructure_when` matches infrastructure; anything
+        else is an asset.
+      - source_class: the positioning technology (uwb / ble / wifi / gnss /
+        cellular / other) - the paper's optional `source-class` field. `rules`
+        map structural predicates to a class; `default` applies otherwise.
+
+    Everything is optional: omit `infrastructure_when` and no `role` is emitted
+    (every candidate stays onboardable); omit source_class and none is emitted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    infrastructure_when: Optional[ClassifyPredicate] = None
+    source_class_default: Optional[str] = None
+    source_class_rules: list[SourceClassRule] = Field(default_factory=list)
+
+
 class DiscoverBlock(BaseModel):
     """Optional second endpoint the schema can declare: a list of devices
-    the editor uses to populate / sync UWB (or any vendor-managed) anchors.
+    the editor uses to populate / sync UWB (or any vendor-managed) anchors,
+    and the source onboarding discovery reads (unfiltered) to list candidates.
     Independent from the single-device telemetry endpoint that the engine
     polls; uses the same auth + base URL.
     """
@@ -174,14 +222,12 @@ class DiscoverBlock(BaseModel):
     path_vars: dict[str, EnvRef] = Field(default_factory=dict)
     pagination: Pagination = Field(default_factory=Pagination)
     mapping: DiscoverMapping
+    # The editor's anchor-only include filter. Onboarding discovery reads the
+    # list UNFILTERED (it wants the tags this drops), so `/devices` bypasses it.
     filter: Optional[DiscoverFilter] = None
-    # Native `device_type` values that are fixed anchors (infrastructure), not
-    # trackable assets. Onboarding discovery marks a candidate `role: anchor`
-    # when its device_type is in this list, else `trackable`. Empty (default)
-    # means the vendor did not declare it - candidates carry no `role` and the
-    # consumer treats them all as onboardable. Schema-declared, not hardcoded,
-    # so a different vendor classifies with its own type values.
-    anchor_types: list[str] = Field(default_factory=list)
+    # Role + source_class classification for onboarding. Schema-declared so a
+    # different vendor classifies with its own fields - no adapter code changes.
+    classify: Optional[Classify] = None
 
 
 class Schema(BaseModel):

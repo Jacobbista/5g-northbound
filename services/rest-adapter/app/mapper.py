@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Any, Optional
 
 from .schema import (
+    Classify,
+    ClassifyPredicate,
     ConstSpec,
     DiscoverMapping,
     FieldSpec,
@@ -146,3 +148,45 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
         "device_type": str(device_type_val) if device_type_val is not None else None,
         "fixed": lat is not None and lon is not None,
     }
+
+
+def _predicate_matches(pred: Optional[ClassifyPredicate], entry: Any) -> bool:
+    """A structural predicate against one raw vendor record. An empty predicate
+    (neither `require_path` nor `path`) never matches."""
+    if pred is None:
+        return False
+    matched_any = False
+    if pred.require_path is not None:
+        if get_path(entry, pred.require_path) is None:
+            return False
+        matched_any = True
+    if pred.path is not None:
+        if get_path(entry, pred.path) != pred.equals:
+            return False
+        matched_any = True
+    return matched_any
+
+
+def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
+    """Derive `role` (asset | infrastructure) and `source_class` for one raw
+    device record from the schema's classify rules. Returns only the keys the
+    schema actually declares, so an unclassified source emits neither."""
+    out: dict[str, Any] = {}
+    if classify is None:
+        return out
+    if classify.infrastructure_when is not None:
+        out["role"] = (
+            "infrastructure"
+            if _predicate_matches(classify.infrastructure_when, entry)
+            else "asset"
+        )
+    source_class = None
+    for rule in classify.source_class_rules:
+        if _predicate_matches(rule.when, entry):
+            source_class = rule.value
+            break
+    if source_class is None:
+        source_class = classify.source_class_default
+    if source_class:
+        out["source_class"] = source_class
+    return out

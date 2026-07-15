@@ -12,50 +12,33 @@ async def test_devices_empty_without_schema():
     assert r.json() == {"origin": "inventory", "devices": []}
 
 
-async def test_devices_maps_discover_output(wittra_schema, monkeypatch):
+async def test_devices_unfiltered_passes_role_and_source_class(wittra_schema, monkeypatch):
     app.state.store = State()
     app.state.store.schema = wittra_schema
+    calls = {}
 
-    async def fake_discover(schema):
+    async def fake_discover(schema, *, apply_filter=True):
+        calls["apply_filter"] = apply_filter
+        # discover() has already merged classify (role/source_class) per entry.
         return [
-            {"vendor_device_id": "D001", "label": "Tag 1", "device_type": "tag",
-             "latitude": 59.4, "longitude": 17.9, "height_m": 0},
-            {"vendor_device_id": "D002", "device_type": "beacon",
-             "latitude": None, "longitude": None},
+            {"vendor_device_id": "BEACON1", "label": "b1", "latitude": 59.4,
+             "longitude": 17.9, "role": "infrastructure", "source_class": "uwb"},
+            {"vendor_device_id": "TAG1", "role": "asset", "source_class": "uwb"},
             {"label": "no-id"},  # dropped: no vendor_device_id
         ]
 
     monkeypatch.setattr("app.routers.devices.discover", fake_discover)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.get("/devices")
+    # Onboarding must read the list UNFILTERED (else the editor's anchor filter
+    # would drop the tags).
+    assert calls["apply_filter"] is False
     body = r.json()
     assert body["origin"] == "inventory"
     devs = {d["id"]: d for d in body["devices"]}
-    assert set(devs) == {"D001", "D002"}  # the id-less entry is dropped
-    assert devs["D001"]["label"] == "Tag 1"
-    assert devs["D001"]["position"] == {"latitude": 59.4, "longitude": 17.9}
-    assert "position" not in devs["D002"]  # no coords -> no position
-    # anchor_types classification: beacon (in the example schema's anchor_types)
-    # is an anchor; tag is trackable. device_type surfaces on both.
-    assert devs["D001"]["device_type"] == "tag"
-    assert devs["D001"]["role"] == "trackable"
-    assert devs["D002"]["device_type"] == "beacon"
-    assert devs["D002"]["role"] == "anchor"
-
-
-async def test_devices_no_role_when_schema_declares_no_anchor_types(wittra_schema, monkeypatch):
-    # A schema that never declared anchor_types leaves role off entirely, so a
-    # forward-compatible consumer treats every candidate as onboardable.
-    wittra_schema.discover.anchor_types = []
-    app.state.store = State()
-    app.state.store.schema = wittra_schema
-
-    async def fake_discover(schema):
-        return [{"vendor_device_id": "D001", "device_type": "beacon"}]
-
-    monkeypatch.setattr("app.routers.devices.discover", fake_discover)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
-        r = await c.get("/devices")
-    dev = r.json()["devices"][0]
-    assert dev["device_type"] == "beacon"
-    assert "role" not in dev
+    assert set(devs) == {"BEACON1", "TAG1"}
+    assert devs["BEACON1"]["role"] == "infrastructure"
+    assert devs["BEACON1"]["source_class"] == "uwb"
+    assert devs["BEACON1"]["position"] == {"latitude": 59.4, "longitude": 17.9}
+    assert devs["TAG1"]["role"] == "asset"
+    assert "position" not in devs["TAG1"]  # a tag has no fixedLocation

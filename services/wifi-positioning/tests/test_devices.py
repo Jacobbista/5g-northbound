@@ -17,8 +17,9 @@ def test_observed_devices_newest_first():
     assert [d["id"] for d in out] == ["d2", "d1"]  # newest activity first
     assert out[0]["position"] == {"x": 3.0, "y": 0.0, "z": 4.0}
     assert out[0]["last_seen"] == 200.0
-    # A device seen on the air is always a mobile asset, never an anchor.
-    assert all(d["role"] == "trackable" for d in out)
+    # A device seen on the air is always a tracked asset, never infrastructure.
+    assert all(d["role"] == "asset" for d in out)
+    assert all(d["source_class"] == "wifi" for d in out)
 
 
 @pytest.mark.asyncio

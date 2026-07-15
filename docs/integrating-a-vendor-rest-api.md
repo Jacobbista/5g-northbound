@@ -178,25 +178,39 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 | `path_vars`          | Per-variable `{env: NAME}` resolution, same shape as the top-level.                                                |
 | `pagination.type`    | `"none"` (one GET) or `"page"` (1-indexed page+size query params, walk until accumulated count reaches `total_path`). |
 | `mapping`            | Per-entry field map. `vendor_device_id` is required; `label`, `latitude`, `longitude`, `height_m`, `device_type` are optional.  |
-| `anchor_types`       | Native `device_type` values that are fixed anchors, not trackable assets. Drives the `role` on asset onboarding (below). Optional; empty means "don't classify".  |
+| `filter`             | The editor's anchor-only include rule (`require_path`). Applied to the editor sync only; asset onboarding reads the list **unfiltered**.  |
+| `classify`           | Role + `source_class` classification for asset onboarding (below). Optional; omit to leave candidates unclassified.  |
 
 Vendors with no positions exposed simply omit `latitude`/`longitude`/`height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
 The full HTTP surface is `GET /discover` on the rest-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
 
-### `device_type` + `anchor_types`: anchors vs trackables
+### Classifying devices for asset onboarding
 
-The same list feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` — see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Onboarding must not treat a fixed anchor as a trackable asset, so map the vendor's native type field to `mapping.device_type` and list the anchor type values in `anchor_types`:
+The same list also feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` — see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Two things differ from the editor sync:
+
+1. **Onboarding reads the list unfiltered.** The editor's `filter` keeps only anchors; onboarding wants the *tags* that filter drops, so `/devices` bypasses it.
+2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `source_class` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
+
+Real vendor device records rarely expose a clean "type" enum — the distinction is **structural** (a sub-object present, a flag set). Wittra's `deviceType` is an opaque object; an anchor is "has a `fixedLocation`", a MIOTY node is "has a `miotyConfig`". So classification is a set of **presence / value predicates** the schema author writes against the vendor's own fields:
 
 ```json
 "discover": {
-  "mapping": { "vendor_device_id": { "path": "deviceId" },
-               "device_type": { "path": "deviceType" } },
-  "anchor_types": ["beacon"]
+  "mapping": { "vendor_device_id": { "path": "deviceId" } },
+  "classify": {
+    "infrastructure_when": { "require_path": "fixedLocation.latitude" },
+    "source_class_default": "uwb",
+    "source_class_rules": [
+      { "when": { "require_path": "miotyConfig" }, "value": "other" }
+    ]
+  }
 }
 ```
 
-Each candidate then carries `device_type` (native, surfaced as a badge + kind hint) and a derived `role`: `anchor` when `device_type ∈ anchor_types`, else `trackable`. A vendor with a different structure maps its own field and lists its own anchor values — no adapter code changes. Omit both and candidates carry no `role` (everything stays onboardable).
+- **`infrastructure_when`** — a predicate; when it matches, the candidate is `role: infrastructure`, else `role: asset`. Here: a device with a fixed location is a placed anchor.
+- **`source_class_rules`** — first matching predicate wins its `value`; `source_class_default` applies otherwise. Recommended values: `uwb`, `ble`, `wifi`, `gnss`, `cellular`, `other`.
+
+A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, or add `path`+`equals` for a value test. A vendor with a clean type string instead maps it to `mapping.device_type` and writes value predicates against it — no adapter code changes either way. Omit `classify` entirely and candidates carry no `role`/`source_class` (everything stays onboardable).
 
 ## Local dev: end-to-end with `mock-wittra`
 

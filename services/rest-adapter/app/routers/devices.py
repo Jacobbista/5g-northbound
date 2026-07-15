@@ -25,25 +25,20 @@ async def devices(request: Request) -> dict:
     # aggregator treats it as "this source has no candidates".
     if schema is None or schema.discover is None:
         return {"origin": "inventory", "devices": []}
-    found = await discover(schema)
-    # Anchor classification is schema-declared (not hardcoded): a candidate is
-    # an anchor when its native device_type is listed in the vendor schema's
-    # `anchor_types`. When the schema declares none, role is left off and every
-    # candidate is onboardable - the consumer decides.
-    anchor_types = set(schema.discover.anchor_types or [])
+    # UNFILTERED: onboarding wants the tags the editor's anchor-only filter
+    # drops. role / source_class come from the schema's classify block (already
+    # merged into each entry by discover()).
+    found = await discover(schema, apply_filter=False)
     out = []
     for d in found or []:
         vid = d.get("vendor_device_id")
         if not vid:
             continue
         entry = {"id": vid}
-        if d.get("label"):
-            entry["label"] = d["label"]
-        device_type = d.get("device_type")
-        if device_type:
-            entry["device_type"] = device_type
-            if anchor_types:
-                entry["role"] = "anchor" if device_type in anchor_types else "trackable"
+        for src, dst in (("label", "label"), ("device_type", "device_type"),
+                         ("role", "role"), ("source_class", "source_class")):
+            if d.get(src) is not None:
+                entry[dst] = d[src]
         lat, lon = d.get("latitude"), d.get("longitude")
         if lat is not None and lon is not None:
             entry["position"] = {"latitude": lat, "longitude": lon}

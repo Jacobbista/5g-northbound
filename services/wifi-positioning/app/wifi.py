@@ -225,9 +225,10 @@ class WifiAdapter:
         out = [
             {
                 "id": device_id,
-                # A device seen on the air is a mobile asset being positioned;
-                # wifi anchors (the APs) live in the bindings, never here.
-                "role": "trackable",
+                # A device seen on the air is a tracked asset (paper vocab), not
+                # infrastructure; the wifi anchors (APs) live in the bindings.
+                "role": "asset",
+                "source_class": "wifi",
                 "last_seen": m.timestamp,
                 "position": {"x": m.x, "y": m.y, "z": m.z},
             }

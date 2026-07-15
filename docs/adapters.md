@@ -99,14 +99,21 @@ Enumerate the devices this source knows, so the management layer can onboard the
 
 ```
 GET /devices  ->  { "origin": "inventory" | "observed",
-                    "devices": [ { "id": "…", "role"?: "anchor" | "trackable",
+                    "devices": [ { "id": "…",
+                                   "role"?: "asset" | "infrastructure",
+                                   "source_class"?: "uwb"|"ble"|"wifi"|"gnss"|"cellular"|"other",
                                    "device_type"?: "…", "label"?: "…",
                                    "last_seen"?: <epoch>, "position"?: {…} } ] }
 ```
 
 `origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud — bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested — a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
 
-`role` separates fixed infrastructure from onboardable assets: `anchor` (a positioning reference — never onboarded as a tracked asset) vs `trackable` (a real asset). Leave it off when the source can't classify — the consumer then treats every candidate as onboardable. wifi/mock only ever surface `trackable` (their anchors live elsewhere: wifi APs are in the bindings). A vendor list mixes both, so the classification is **schema-declared, not hardcoded**: the `rest-adapter` reads a native `device_type` (e.g. Wittra `deviceType`) via the schema's `discover.mapping.device_type`, and the schema's `discover.anchor_types` lists which type values are anchors. A different vendor classifies with its own field + values — no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+`role` and `source_class` are the two classification axes from the [private-asset paper](https://github.com/Jacobbista/5g-northbound):
+
+- **`role`** — `asset` (a tracked entity: tool, pallet, forklift, worker) vs `infrastructure` (a fixed sensor: UWB anchor, BLE gateway — outside the 3GPP trust domain, **never onboarded** as an asset). Leave it off when the source can't classify; the consumer then treats every candidate as onboardable.
+- **`source_class`** — the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
+
+wifi/mock only ever surface `role: asset` (their infrastructure lives elsewhere — wifi APs are in the bindings). A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `rest-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields — no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Lifecycle
 

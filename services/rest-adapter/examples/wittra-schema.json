@@ -49,7 +49,7 @@
     }
   },
   "discover": {
-    "_comment": "Returns every device with a native deviceType. anchor_types marks beacons as fixed infrastructure (role: anchor, not onboardable); tags are role: trackable. Each consumer picks: the editor keeps fixed anchors for the blueprint, asset onboarding keeps trackable tags for the registry.",
+    "_comment": "Onboarding reads this list UNFILTERED via /devices. classify splits role structurally: fixedLocation present = infrastructure (a fixed UWB anchor, not onboardable), absent = asset (a mobile tag). source_class defaults to uwb (Wittra is UWB). A deployment with mixed tech adds source_class_rules (e.g. miotyConfig present -> other). The editor's anchor sync still applies the filter; onboarding does not.",
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
     "list_path": "",
     "path_vars": {
@@ -78,13 +78,13 @@
       },
       "height_m": {
         "const": 0
-      },
-      "device_type": {
-        "path": "deviceType"
       }
     },
-    "anchor_types": [
-      "beacon"
-    ]
+    "classify": {
+      "infrastructure_when": {
+        "require_path": "fixedLocation.latitude"
+      },
+      "source_class_default": "uwb"
+    }
   }
 }

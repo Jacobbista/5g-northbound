@@ -52,3 +52,6 @@ docker-compose.override.yml
 **/.idea/
 **/.vscode/
 site/
+
+# Other
+*.pdf

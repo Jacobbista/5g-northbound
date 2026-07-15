@@ -18,7 +18,7 @@ from fastapi import APIRouter, Request
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["devices"])
 
-_COPY_FIELDS = ("label", "last_seen", "position", "device_type", "role")
+_COPY_FIELDS = ("label", "last_seen", "position", "device_type", "role", "source_class")
 
 
 @router.get("/devices")

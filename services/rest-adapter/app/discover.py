@@ -13,8 +13,8 @@ import logging
 from typing import Any, Optional
 
 from .client import fetch_discover_page
-from .mapper import get_path, to_discover_entry
-from .schema import DiscoverFilter, Pagination, Schema
+from .mapper import classify_entry, get_path, to_discover_entry
+from .schema import Classify, DiscoverFilter, Pagination, Schema
 
 log = logging.getLogger(__name__)
 
@@ -46,10 +46,18 @@ def _entry_passes_filter(entry: Any, filt: Optional[DiscoverFilter]) -> bool:
     return True
 
 
-async def discover(schema: Schema) -> Optional[list[dict[str, Any]]]:
+async def discover(
+    schema: Schema, *, apply_filter: bool = True
+) -> Optional[list[dict[str, Any]]]:
     """Walk the vendor's list endpoint, page by page, and return the
     accumulated normalised entries. None on a request failure (so the
     editor can show "vendor unreachable" instead of silently empty).
+
+    `apply_filter=True` (editor sync) keeps only entries passing the schema's
+    include filter (anchors). `apply_filter=False` (asset onboarding via
+    /devices) reads the list UNFILTERED - onboarding wants the tags the anchor
+    filter drops. Either way, when the schema declares a `classify` block, each
+    entry gains a `role` + `source_class` derived from the raw record.
 
     Pagination semantics:
       - "none": one GET, accept whatever array comes back.
@@ -60,18 +68,20 @@ async def discover(schema: Schema) -> Optional[list[dict[str, Any]]]:
         return []
     block = schema.discover
     pagination: Pagination = block.pagination
+    filt = block.filter if apply_filter else None
+    classify = block.classify
 
     if pagination.type == "none":
         body = await fetch_discover_page(schema, page=None)
         if body is None:
             return None
         items = _extract_list(body, block.list_path)
-        filtered = [e for e in items if _entry_passes_filter(e, block.filter)]
+        filtered = [e for e in items if _entry_passes_filter(e, filt)]
         log.info(
             "discover: vendor=%s items_in_response=%d kept_after_filter=%d (list_path=%r)",
             schema.vendor, len(items), len(filtered), block.list_path,
         )
-        out = _normalise(filtered, block.mapping)
+        out = _normalise(filtered, block.mapping, classify)
         log.info(
             "discover: vendor=%s mapped=%d dropped_by_mapping=%d",
             schema.vendor, len(out), len(filtered) - len(out),
@@ -87,7 +97,7 @@ async def discover(schema: Schema) -> Optional[list[dict[str, Any]]]:
         if body is None:
             return None if not out else out
         items = _extract_list(body, block.list_path)
-        filtered = [e for e in items if _entry_passes_filter(e, block.filter)]
+        filtered = [e for e in items if _entry_passes_filter(e, filt)]
         pages_walked += 1
         log.info(
             "discover: vendor=%s page=%d items_in_page=%d kept_after_filter=%d (list_path=%r)",
@@ -95,10 +105,7 @@ async def discover(schema: Schema) -> Optional[list[dict[str, Any]]]:
         )
         if not items:
             break
-        for entry in filtered:
-            mapped = to_discover_entry(block.mapping, entry)
-            if mapped is not None:
-                out.append(mapped)
+        out.extend(_normalise(filtered, block.mapping, classify))
         if declared_total is None:
             t = get_path(body, pagination.total_path)
             if isinstance(t, (int, float)):
@@ -121,12 +128,18 @@ async def discover(schema: Schema) -> Optional[list[dict[str, Any]]]:
     return out
 
 
-def _normalise(items: list, mapping) -> list[dict[str, Any]]:
+def _normalise(
+    items: list, mapping, classify: Optional[Classify] = None
+) -> list[dict[str, Any]]:
     """Bulk-apply the per-entry mapping. Entries that produce None
-    (missing vendor_device_id) are silently dropped."""
+    (missing vendor_device_id) are silently dropped. When a `classify` block is
+    present, merge the derived `role` + `source_class` (evaluated on the raw
+    record, so structural predicates see the vendor's own fields)."""
     out: list[dict[str, Any]] = []
     for entry in items:
         mapped = to_discover_entry(mapping, entry)
         if mapped is not None:
+            if classify is not None:
+                mapped.update(classify_entry(classify, entry))
             out.append(mapped)
     return out
