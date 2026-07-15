@@ -122,6 +122,10 @@ class DiscoverMapping(BaseModel):
     latitude: Optional[FieldSpec] = None
     longitude: Optional[FieldSpec] = None
     height_m: Optional[FieldSpec] = None
+    # Native vendor device type (e.g. Wittra `deviceType` / node-type). Surfaced
+    # as `device_type` on discovery; combined with the block's `anchor_types` it
+    # classifies a candidate as anchor (fixed infra) vs trackable (onboardable).
+    device_type: Optional[FieldSpec] = None
 
 
 class Pagination(BaseModel):
@@ -171,6 +175,13 @@ class DiscoverBlock(BaseModel):
     pagination: Pagination = Field(default_factory=Pagination)
     mapping: DiscoverMapping
     filter: Optional[DiscoverFilter] = None
+    # Native `device_type` values that are fixed anchors (infrastructure), not
+    # trackable assets. Onboarding discovery marks a candidate `role: anchor`
+    # when its device_type is in this list, else `trackable`. Empty (default)
+    # means the vendor did not declare it - candidates carry no `role` and the
+    # consumer treats them all as onboardable. Schema-declared, not hardcoded,
+    # so a different vendor classifies with its own type values.
+    anchor_types: list[str] = Field(default_factory=list)
 
 
 class Schema(BaseModel):

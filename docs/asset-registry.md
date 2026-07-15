@@ -128,6 +128,19 @@ Both are discovery; the difference is that a vendor exports its inventory while
 wifi only reveals what is currently emitting. Neither auto-creates an asset —
 onboarding is always an explicit `PUT /assets`.
 
+### Anchors are not assets
+
+A vendor's device list mixes **anchors** (fixed positioning references — the
+infrastructure) with **trackable** devices (the mobile things you onboard).
+Onboarding an anchor as a tracked asset is wrong, so each candidate carries a
+`role` (`anchor` | `trackable`) and its native `device_type`. The management UI
+separates anchors into their own non-onboardable section and prefills the
+wizard's kind from `device_type` for trackables. The classification is
+schema-declared per vendor (`discover.anchor_types`), never guessed — a source
+that doesn't classify leaves `role` off and every candidate stays onboardable.
+wifi/mock only ever report `trackable` (their anchors live in the bindings /
+blueprint, not the device list).
+
 ## Tenancy and sensitivity
 
 `GET /assets` filters by the token's `org` claim — a consumer only ever sees

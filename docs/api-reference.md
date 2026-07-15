@@ -27,7 +27,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | `GET    /assets`                                       | `{"assets":[…]}`             | **Vendor extension**: the caller's tenant assets (Asset Identity Map), `org`-filtered |
 | `PUT    /assets`                                       | `{"status":"ok",…}`          | **Vendor extension**: replace the asset map (operator; conforms to `schema/asset.schema.json`) |
 | `GET    /assets/{assetId}/details`                     | `{…,"telemetry":…}`          | **Vendor extension**: asset entry + engine telemetry. `telemetry: null` when offline; `404` for a missing or cross-tenant id |
-| `GET    /assets/discoverable`                          | `{"candidates":[…]}`         | **Vendor extension**: devices the live sources report (engine `/devices`) that are **not yet onboarded** as assets, `{id, source, origin, label?, last_seen?}`. `id` becomes the asset's `positioning_id`; `org` is assigned at onboarding. Drives KELT's one-click onboarding |
+| `GET    /assets/discoverable`                          | `{"candidates":[…]}`         | **Vendor extension**: devices the live sources report (engine `/devices`) that are **not yet onboarded** as assets, `{id, source, origin, role?, device_type?, label?, last_seen?}`. `id` becomes the asset's `positioning_id`; `role: anchor` marks fixed infra (not onboardable); `org` is assigned at onboarding. Drives KELT's onboarding wizard |
 | `GET    /capabilities`                                 | `{"adapters","sources","kinds"}` | **Vendor extension**: live adapter capabilities + the tenant's asset sources/kinds |
 | `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-positioning. No BSSIDs. Empty when `WIFI_POSITIONING_URL` unset |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
@@ -61,7 +61,7 @@ Every adapter pod implements:
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
 | `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
 | `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
-| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, label?, last_seen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). Advertised via the `devices` capability; aggregated by the engine |
+| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, device_type?, label?, last_seen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `anchor` (fixed infra, not onboardable) or `trackable`. Advertised via the `devices` capability; aggregated by the engine |
 
 `wifi-positioning` also exposes:
 

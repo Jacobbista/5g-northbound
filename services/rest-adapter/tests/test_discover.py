@@ -17,6 +17,9 @@ def test_to_discover_entry_extracts_known_fields(wittra_schema, wittra_sample_di
     # The schema uses deviceId for both id and label since the real Wittra v4
     # device record has no human-friendly name field.
     assert out["label"] == "D001"
+    # device_type maps from the native deviceType field (drives anchor vs
+    # trackable classification via the block's anchor_types).
+    assert out["device_type"] == "beacon"
     assert out["latitude"] == pytest.approx(45.064547)
     assert out["longitude"] == pytest.approx(7.659272)
     # height_m is a const 0 in the example schema (v4 fixedLocation has level

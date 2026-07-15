@@ -136,11 +136,13 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
     label_val = _resolve_optional(mapping.label, entry)
     lat = _coerce_float(_resolve_optional(mapping.latitude, entry))
     lon = _coerce_float(_resolve_optional(mapping.longitude, entry))
+    device_type_val = _resolve_optional(mapping.device_type, entry)
     return {
         "vendor_device_id": str(raw_id),
         "label": str(label_val) if label_val is not None else None,
         "latitude": lat,
         "longitude": lon,
         "height_m": _coerce_float(_resolve_optional(mapping.height_m, entry)),
+        "device_type": str(device_type_val) if device_type_val is not None else None,
         "fixed": lat is not None and lon is not None,
     }

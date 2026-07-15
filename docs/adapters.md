@@ -99,11 +99,14 @@ Enumerate the devices this source knows, so the management layer can onboard the
 
 ```
 GET /devices  ->  { "origin": "inventory" | "observed",
-                    "devices": [ { "id": "…", "label"?: "…",
+                    "devices": [ { "id": "…", "role"?: "anchor" | "trackable",
+                                   "device_type"?: "…", "label"?: "…",
                                    "last_seen"?: <epoch>, "position"?: {…} } ] }
 ```
 
 `origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud — bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested — a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
+
+`role` separates fixed infrastructure from onboardable assets: `anchor` (a positioning reference — never onboarded as a tracked asset) vs `trackable` (a real asset). Leave it off when the source can't classify — the consumer then treats every candidate as onboardable. wifi/mock only ever surface `trackable` (their anchors live elsewhere: wifi APs are in the bindings). A vendor list mixes both, so the classification is **schema-declared, not hardcoded**: the `rest-adapter` reads a native `device_type` (e.g. Wittra `deviceType`) via the schema's `discover.mapping.device_type`, and the schema's `discover.anchor_types` lists which type values are anchors. A different vendor classifies with its own field + values — no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Lifecycle
 

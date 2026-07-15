@@ -26,6 +26,11 @@ async def devices(request: Request) -> dict:
     if schema is None or schema.discover is None:
         return {"origin": "inventory", "devices": []}
     found = await discover(schema)
+    # Anchor classification is schema-declared (not hardcoded): a candidate is
+    # an anchor when its native device_type is listed in the vendor schema's
+    # `anchor_types`. When the schema declares none, role is left off and every
+    # candidate is onboardable - the consumer decides.
+    anchor_types = set(schema.discover.anchor_types or [])
     out = []
     for d in found or []:
         vid = d.get("vendor_device_id")
@@ -34,6 +39,11 @@ async def devices(request: Request) -> dict:
         entry = {"id": vid}
         if d.get("label"):
             entry["label"] = d["label"]
+        device_type = d.get("device_type")
+        if device_type:
+            entry["device_type"] = device_type
+            if anchor_types:
+                entry["role"] = "anchor" if device_type in anchor_types else "trackable"
         lat, lon = d.get("latitude"), d.get("longitude")
         if lat is not None and lon is not None:
             entry["position"] = {"latitude": lat, "longitude": lon}

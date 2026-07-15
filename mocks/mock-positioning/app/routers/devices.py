@@ -16,4 +16,5 @@ router = APIRouter(tags=["devices"])
 @router.get("/devices")
 async def devices() -> dict:
     ids = sorted({d.strip() for d in settings.device_ids.split(",") if d.strip()})
-    return {"origin": "inventory", "devices": [{"id": d} for d in ids]}
+    # Mock serves simulated mobile assets, never anchors.
+    return {"origin": "inventory", "devices": [{"id": d, "role": "trackable"} for d in ids]}

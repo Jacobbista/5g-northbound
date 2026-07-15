@@ -26,8 +26,10 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
             "devices": [
                 # wittra-tag-01 is already onboarded in the seed map -> excluded
                 {"id": "wittra-tag-01", "source": "wittra", "origin": "inventory"},
-                {"id": "D002", "source": "wittra", "origin": "inventory", "label": "Tag 2"},
-                {"id": "wifi-new", "source": "wifi", "origin": "observed", "last_seen": 12.0},
+                {"id": "D002", "source": "wittra", "origin": "inventory", "label": "Tag 2",
+                 "device_type": "beacon", "role": "anchor"},
+                {"id": "wifi-new", "source": "wifi", "origin": "observed",
+                 "last_seen": 12.0, "role": "trackable"},
             ]
         })
     )
@@ -37,7 +39,11 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
     assert set(cands) == {"D002", "wifi-new"}  # onboarded id subtracted
     assert cands["wifi-new"]["origin"] == "observed"
     assert cands["wifi-new"]["source"] == "wifi"
+    assert cands["wifi-new"]["role"] == "trackable"
     assert cands["D002"]["label"] == "Tag 2"
+    # role + device_type pass through so KELT can separate anchors + prefill kind.
+    assert cands["D002"]["role"] == "anchor"
+    assert cands["D002"]["device_type"] == "beacon"
 
 
 async def test_discoverable_empty_when_engine_absent(client, auth_headers, monkeypatch):

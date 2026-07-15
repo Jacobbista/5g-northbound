@@ -177,11 +177,26 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 | `list_path`          | JSON dotted path to the array inside the response body. Empty (`""`) means the body itself is the array.           |
 | `path_vars`          | Per-variable `{env: NAME}` resolution, same shape as the top-level.                                                |
 | `pagination.type`    | `"none"` (one GET) or `"page"` (1-indexed page+size query params, walk until accumulated count reaches `total_path`). |
-| `mapping`            | Per-entry field map. `vendor_device_id` is required; `label`, `latitude`, `longitude`, `height_m` are optional.    |
+| `mapping`            | Per-entry field map. `vendor_device_id` is required; `label`, `latitude`, `longitude`, `height_m`, `device_type` are optional.  |
+| `anchor_types`       | Native `device_type` values that are fixed anchors, not trackable assets. Drives the `role` on asset onboarding (below). Optional; empty means "don't classify".  |
 
 Vendors with no positions exposed simply omit `latitude`/`longitude`/`height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
 The full HTTP surface is `GET /discover` on the rest-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
+
+### `device_type` + `anchor_types`: anchors vs trackables
+
+The same list feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` — see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Onboarding must not treat a fixed anchor as a trackable asset, so map the vendor's native type field to `mapping.device_type` and list the anchor type values in `anchor_types`:
+
+```json
+"discover": {
+  "mapping": { "vendor_device_id": { "path": "deviceId" },
+               "device_type": { "path": "deviceType" } },
+  "anchor_types": ["beacon"]
+}
+```
+
+Each candidate then carries `device_type` (native, surfaced as a badge + kind hint) and a derived `role`: `anchor` when `device_type ∈ anchor_types`, else `trackable`. A vendor with a different structure maps its own field and lists its own anchor values — no adapter code changes. Omit both and candidates carry no `role` (everything stays onboardable).
 
 ## Local dev: end-to-end with `mock-wittra`
 
