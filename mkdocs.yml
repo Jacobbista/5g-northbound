@@ -57,6 +57,7 @@ nav:
       - Adapters: adapters.md
       - Integrating a vendor REST API: integrating-a-vendor-rest-api.md
       - Adapter registry & routing: adapter-registry.md
+      - Asset registry: asset-registry.md
       - Fusion strategies: fusion-strategies.md
       - Deployment: deployment.md
   - Reference:
