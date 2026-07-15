@@ -23,12 +23,18 @@ theme:
         icon: material/weather-sunny
         name: Switch to dark mode
   features:
-    - navigation.sections
+    # Top horizontal tabs for the top-level sections, with collapsible
+    # sub-sections in the left sidebar - the clear menu the flat
+    # navigation.sections layout was missing.
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.indexes
     - navigation.top
     - navigation.tracking
+    - navigation.footer
     - content.code.copy
     - search.suggest
+    - search.highlight
     - toc.follow
 
 markdown_extensions:

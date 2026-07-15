@@ -21,6 +21,7 @@ model in one page.
 | **Run it on your laptop** | repo `README.md` quick start (`make demo`) → [Architecture](architecture.md) |
 | **Add a positioning source** | [Adapters](adapters.md) → [Vendor REST API](integrating-a-vendor-rest-api.md) → [Adapter registry](adapter-registry.md) |
 | **Build a CAMARA client** | [Data contracts](data-contracts.md) → [API reference](api-reference.md) |
+| **Map real devices (assets)** | [Asset registry](asset-registry.md) → [Data contracts](data-contracts.md) |
 | **Author a venue (rooms, walls, anchors)** | [Blueprint vs bindings](blueprint-vs-bindings.md) → [Georeferencing](georeferencing.md) |
 | **Deploy to Kubernetes** | [Deployment](deployment.md) → [Blueprint vs bindings](blueprint-vs-bindings.md) |
 | **Change how positions fuse** | [Fusion strategies](fusion-strategies.md) |
@@ -47,6 +48,7 @@ Task-focused, follow top to bottom.
 | [Adapters](adapters.md) | The HTTP contract every adapter implements, with a minimal Python skeleton |
 | [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) | Wrap a vendor cloud with the schema-driven `rest-adapter`; the full identity chain |
 | [Adapter registry](adapter-registry.md) | How adapters self-register, heartbeat, and route by `source` |
+| [Asset registry](asset-registry.md) | The Asset Identity Map: asset structure, authoring, seeding, tenancy |
 | [Fusion strategies](fusion-strategies.md) | Fusion algorithms and how to switch between them |
 | [Deployment](deployment.md) | Images, environment variables, ConfigMap and Secret shapes, health probes |
 
