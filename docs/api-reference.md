@@ -27,6 +27,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | `GET    /assets`                                       | `{"assets":[…]}`             | **Vendor extension**: the caller's tenant assets (Asset Identity Map), `org`-filtered |
 | `PUT    /assets`                                       | `{"status":"ok",…}`          | **Vendor extension**: replace the asset map (operator; conforms to `schema/asset.schema.json`) |
 | `GET    /assets/{assetId}/details`                     | `{…,"telemetry":…}`          | **Vendor extension**: asset entry + engine telemetry. `telemetry: null` when offline; `404` for a missing or cross-tenant id |
+| `GET    /assets/discoverable`                          | `{"candidates":[…]}`         | **Vendor extension**: devices the live sources report (engine `/devices`) that are **not yet onboarded** as assets, `{id, source, origin, label?, last_seen?}`. `id` becomes the asset's `positioning_id`; `org` is assigned at onboarding. Drives KELT's one-click onboarding |
 | `GET    /capabilities`                                 | `{"adapters","sources","kinds"}` | **Vendor extension**: live adapter capabilities + the tenant's asset sources/kinds |
 | `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-positioning. No BSSIDs. Empty when `WIFI_POSITIONING_URL` unset |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
@@ -46,6 +47,7 @@ No auth (cluster-internal). Mounts:
 | `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
 | `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
 | `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `base_url`, `kind`, `registered_via`, `last_seen_s_ago`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
+| `GET    /devices`                      | `{"devices":[…]}`  | Aggregates each live adapter's `GET /devices` (those advertising the `devices` capability), tagging each with `source` (adapter name) + `origin`. Best-effort: unreachable sources are skipped. Powers the gateway's `/assets/discoverable` |
 | `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, base_url, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
 | `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
 | `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, altitude_m, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS`. `device_id` is the `positioning_id`; the gateway enriches it to asset shape downstream |
@@ -59,6 +61,7 @@ Every adapter pod implements:
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
 | `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
 | `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
+| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, label?, last_seen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). Advertised via the `devices` capability; aggregated by the engine |
 
 `wifi-positioning` also exposes:
 

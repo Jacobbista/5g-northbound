@@ -98,6 +98,36 @@ On first boot the store is empty. The gateway seeds it **once** from
 again. Mount your `dev/assets.json` shape as the seed for a cold start; after
 that, all changes go through `PUT /assets`.
 
+## Discovering devices to onboard
+
+Typing every asset by hand is mechanical when the source already knows which
+devices exist. Each adapter that advertises the `devices` capability exposes
+`GET /devices`; the engine aggregates them (`GET /devices`), and the gateway
+surfaces the ones **not yet onboarded** at `GET /assets/discoverable`. KELT's
+Assets tab lists those as candidates for one-click onboarding, with `source`
+prefilled.
+
+```mermaid
+flowchart LR
+    W["wifi-positioning<br/>GET /devices (observed)"] --> E["positioning-engine<br/>GET /devices (aggregate + tag source)"]
+    R["rest-adapter<br/>GET /devices (vendor inventory)"] --> E
+    E --> G["camara-gateway<br/>GET /assets/discoverable<br/>(minus already-onboarded)"]
+    G --> K["KELT Assets tab<br/>one-click onboard → PUT /assets"]
+```
+
+The candidate `id` becomes the new asset's `positioning_id`; the operator adds
+`org`, `kind`, and a `label` at onboarding. Two flavours of discovery, from the
+`origin` field:
+
+| `origin`     | Source        | Meaning                                                                 | Onboarding |
+|--------------|---------------|-------------------------------------------------------------------------|------------|
+| `inventory`  | vendor (REST) | a **registry**: the vendor cloud maintains a stable, pre-named list, present whether or not the tag is moving | bulk-safe — the ids are the vendor's own |
+| `observed`   | wifi          | **activity-seen**: an id appears once a scan tagged with it is ingested, and lapses when it stops | claim + label — a human confirms the id is asset X |
+
+Both are discovery; the difference is that a vendor exports its inventory while
+wifi only reveals what is currently emitting. Neither auto-creates an asset —
+onboarding is always an explicit `PUT /assets`.
+
 ## Tenancy and sensitivity
 
 `GET /assets` filters by the token's `org` claim — a consumer only ever sees

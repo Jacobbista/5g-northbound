@@ -215,3 +215,20 @@ class WifiAdapter:
         # Always return the last fix with its real timestamp; the consumer decides
         # staleness from the age, so a transport gap greys out instead of resetting.
         return self._cache.get(device_id)
+
+    def observed_devices(self) -> list[dict]:
+        """Device ids this adapter has produced a fix for, newest activity
+        first. Powers GET /devices for onboarding discovery. This is an
+        `observed` list, not a registry: an id appears once a scan tagged with
+        it is ingested, so the operator claims + names it (unlike a vendor's
+        pre-named inventory). `last_seen` is epoch seconds (as Measurement.timestamp)."""
+        out = [
+            {
+                "id": device_id,
+                "last_seen": m.timestamp,
+                "position": {"x": m.x, "y": m.y, "z": m.z},
+            }
+            for device_id, m in self._cache.items()
+        ]
+        out.sort(key=lambda d: d["last_seen"] or 0, reverse=True)
+        return out

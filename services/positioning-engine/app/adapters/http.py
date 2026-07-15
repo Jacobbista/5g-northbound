@@ -119,5 +119,28 @@ class HttpAdapter(Adapter):
         self._record_success()
         return measurement
 
+    async def get_devices(self) -> Optional[dict]:
+        """Fetch this adapter's discoverable device list (GET /devices).
+
+        Returns the parsed `{origin, devices}` body, or None when the adapter
+        has no such endpoint (404), is in cooldown, or errors. Discovery is a
+        best-effort side channel for onboarding, so it never records a failure
+        against the measurement cooldown - a source that can position but not
+        enumerate should keep positioning."""
+        if self._in_cooldown():
+            return None
+        try:
+            r = await self._client.get(f"{self.base_url}/devices")
+        except httpx.HTTPError as exc:
+            log.warning("adapter %s /devices unreachable: %s", self.base_url, exc)
+            return None
+        if r.status_code != 200:
+            return None
+        try:
+            body = r.json()
+        except ValueError:
+            return None
+        return body if isinstance(body, dict) else None
+
     async def aclose(self):
         await self._client.aclose()

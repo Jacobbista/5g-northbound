@@ -13,3 +13,4 @@ capabilities:
   z: true               # UWB reports height
   accuracy_class: sub-metre
   discover: true         # exposes /discover (vendor device enumeration); editor shows SYNC {source}
+  devices: true          # exposes /devices (vendor inventory for onboarding, standard shape)

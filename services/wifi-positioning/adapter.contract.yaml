@@ -11,3 +11,4 @@ capabilities:
   z: false              # 2D trilateration, no height estimate
   accuracy_class: metre
   calibration: true     # exposes the /calibration tool; editor shows CALIBRATE
+  devices: true         # exposes /devices (observed device enumeration for onboarding)

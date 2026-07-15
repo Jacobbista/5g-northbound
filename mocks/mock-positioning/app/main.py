@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from . import register
 from .config import settings
-from .routers import health, measurement
+from .routers import devices, health, measurement
 from .walker import build_walker
 
 logging.basicConfig(level=logging.INFO)
@@ -30,3 +30,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Mock Positioning", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(measurement.router)
+app.include_router(devices.router)

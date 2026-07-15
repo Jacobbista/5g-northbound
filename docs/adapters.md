@@ -30,7 +30,7 @@ GET  /health
 GET  /ready
 ```
 
-Optionally it MAY expose `POST /ingest/...` (or any other transport) for sources that push data into the adapter; the engine never calls them.
+Optionally it MAY expose `POST /ingest/...` (or any other transport) for sources that push data into the adapter; the engine never calls them. It MAY also expose `GET /devices` (below) to feed asset onboarding.
 
 ### `GET /measurement/{device_id}`
 
@@ -92,6 +92,18 @@ After three consecutive network errors or `5xx` responses the engine puts the ad
 No authentication on either. **`/health` is liveness**: `200 {"status": "ok"}` whenever the process is up, independent of business config, so a misconfigured pod stays alive (and keeps answering `/contract`) instead of crash-looping. **`/ready` is readiness**: `200 {"status": "ready"}` once startup config has loaded, else `503 {"status": "not-ready", "error": "<why>"}`.
 
 Point the Kubernetes `livenessProbe` at `/health` and the `readinessProbe` at `/ready`. Probing readiness on `/health` is a trap: a pod that came up but failed to load its config (unseeded volume, unreachable authority) would still report ready and take traffic. The `error` field on `/ready` surfaces exactly why a pod is degraded without needing pod logs.
+
+### `GET /devices` (optional)
+
+Enumerate the devices this source knows, so the management layer can onboard them from a list instead of hand entry. Adapters that implement it advertise the `devices` capability; the engine aggregates them at `GET /devices` and the gateway serves the un-onboarded ones at `GET /assets/discoverable`. See [asset registry](asset-registry.md#discovering-devices-to-onboard).
+
+```
+GET /devices  ->  { "origin": "inventory" | "observed",
+                    "devices": [ { "id": "…", "label"?: "…",
+                                   "last_seen"?: <epoch>, "position"?: {…} } ] }
+```
+
+`origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud — bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested — a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
 
 ## Lifecycle
 

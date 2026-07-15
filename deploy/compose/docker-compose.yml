@@ -62,7 +62,7 @@ services:
       ADAPTER_BASE_URL: "http://wifi-positioning:8080"
       # Advertised capabilities (mirrors adapter.contract.yaml; validated by
       # `make positioning-check`). Drives the gateway's GET /capabilities.
-      ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"local","streaming":false,"z":false,"accuracy_class":"metre","calibration":true}'
+      ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"local","streaming":false,"z":false,"accuracy_class":"metre","calibration":true,"devices":true}'
       # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
       # trilateration diagnostics in this container's logs. Useful for
       # tuning tx_power / path_loss_n against a real venue.
@@ -129,7 +129,7 @@ services:
       ADAPTER_NAME: "wittra"
       ADAPTER_KIND: "vendor"
       ADAPTER_BASE_URL: "http://rest-adapter:8080"
-      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true}'
+      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true}'
     depends_on:
       mock-wittra:
         condition: service_healthy
@@ -172,7 +172,7 @@ services:
       # The walker can synthesise a position for any id; scope it so it 404s for
       # devices it does not own, keeping engine fan-out (no DEVICE_MAP) clean.
       DEVICE_IDS: "mock-demo-01"
-      ADAPTER_CAPABILITIES: '{"source":"mock","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse"}'
+      ADAPTER_CAPABILITIES: '{"source":"mock","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse","devices":true}'
     depends_on:
       positioning-engine:
         condition: service_healthy

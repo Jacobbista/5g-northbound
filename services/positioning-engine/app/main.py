@@ -10,7 +10,7 @@ from .fusion.registry import get_strategy
 from .registry import SEED, AdapterRegistry, _safe_aclose
 from .routers import adapters as adapters_router
 from .routers import blueprint as blueprint_router
-from .routers import contract, health, position, websocket
+from .routers import contract, devices, health, position, websocket
 from .services.position_service import PositionService
 
 logging.basicConfig(level=logging.INFO)
@@ -107,3 +107,4 @@ app.include_router(blueprint_router.router)
 app.include_router(position.router)
 app.include_router(websocket.router)
 app.include_router(adapters_router.router)
+app.include_router(devices.router)

@@ -217,6 +217,22 @@ async def get_adapter_status() -> list[dict] | None:
         return None
 
 
+async def get_engine_devices() -> list[dict] | None:
+    """Vendor extension: proxy the engine's GET /devices aggregate (discoverable
+    devices across live sources) for the onboarding flow. Returns the list, or
+    None when the engine is not configured / unreachable (caller degrades to an
+    empty candidate set rather than erroring)."""
+    url = get_settings().positioning_engine_url
+    if not url:
+        return None
+    try:
+        d = await _engine_get("/devices", timeout=_ADAPTERS_REQUEST_TIMEOUT_S)
+        return d.get("devices", [])
+    except Exception as exc:
+        log.warning("engine /devices unreachable (%s)", exc)
+        return None
+
+
 async def get_blueprint() -> dict | None:
     """Vendor extension: proxy the engine's GET /blueprint so the demo (which
     talks only to the gateway, per the MEC constraint in CLAUDE.md) can read

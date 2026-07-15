@@ -15,7 +15,7 @@ from .models import CalibrationSample
 from . import register
 from .routers import calibration as calibration_router
 from .routers import bindings as bindings_router
-from .routers import contract, health, ingest, measurement
+from .routers import contract, devices, health, ingest, measurement
 from .wifi import WifiAdapter
 
 logging.basicConfig(level=logging.INFO)
@@ -164,5 +164,6 @@ app.include_router(health.router)
 app.include_router(contract.router)
 app.include_router(ingest.router)
 app.include_router(measurement.router)
+app.include_router(devices.router)
 app.include_router(calibration_router.router)
 app.include_router(bindings_router.router)

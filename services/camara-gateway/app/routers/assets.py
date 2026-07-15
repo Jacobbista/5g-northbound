@@ -19,10 +19,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..assets import AssetMap, asset_by_id, load_asset_map, save_asset_map
+from ..assets import AssetMap, asset_by_id, list_assets, load_asset_map, save_asset_map
 from ..auth import consumer_org, require_location_role
 from ..errors import CamaraError
-from ..position import authorize_asset, get_position_details
+from ..position import authorize_asset, get_engine_devices, get_position_details
 
 router = APIRouter(prefix="/assets", tags=["Asset Identity Map"])
 
@@ -43,6 +43,49 @@ async def put_assets(
 ) -> AssetMap:
     save_asset_map(body)
     return body
+
+
+class DiscoverableDevice(BaseModel):
+    # `id` is the source's device id; it becomes the asset's positioning_id on
+    # onboarding. `origin` = inventory (vendor, bulk-safe) | observed (wifi,
+    # claim + label). No `org` yet - the operator assigns a tenant at onboard.
+    id: str
+    source: str
+    origin: Optional[str] = None
+    label: Optional[str] = None
+    last_seen: Optional[float] = None
+
+
+class DiscoverableResponse(BaseModel):
+    candidates: list[DiscoverableDevice]
+
+
+@router.get("/discoverable", response_model=DiscoverableResponse)
+async def discoverable(_claims: dict = Depends(require_location_role)) -> DiscoverableResponse:
+    """Vendor extension: devices the live sources report that are NOT yet
+    onboarded as assets. KELT's Assets tab offers these for one-click
+    onboarding with `source` prefilled, so the operator picks from discovery
+    instead of hand-typing every asset. Already-mapped positioning_ids are
+    subtracted. Candidates are unclaimed (no org) until onboarded."""
+    devices = await get_engine_devices() or []
+    mapped = {a.positioning_id for a in list_assets()}
+    seen: set[str] = set()
+    candidates: list[DiscoverableDevice] = []
+    for d in devices:
+        device_id = d.get("id")
+        if not device_id or device_id in mapped or device_id in seen:
+            continue
+        seen.add(device_id)
+        candidates.append(
+            DiscoverableDevice(
+                id=device_id,
+                source=d.get("source", ""),
+                origin=d.get("origin"),
+                label=d.get("label"),
+                last_seen=d.get("last_seen"),
+            )
+        )
+    return DiscoverableResponse(candidates=candidates)
 
 
 class AssetTelemetry(BaseModel):

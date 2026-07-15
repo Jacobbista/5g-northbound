@@ -167,6 +167,17 @@ class AdapterRegistry:
             return "unreachable"
         return "live"
 
+    def device_adapters(self) -> list[tuple[str, HttpAdapter]]:
+        """Live adapters that advertise the `devices` capability - the sources
+        the engine polls for onboarding discovery. Unreachable/stale entries are
+        skipped so a dead source does not stall the aggregate."""
+        now = self._clock()
+        return [
+            (e.name, e.adapter)
+            for e in self._entries.values()
+            if e.capabilities.get("devices") and self._state(e, now) == "live"
+        ]
+
     def status_list(self) -> list[dict]:
         now = self._clock()
         out = []

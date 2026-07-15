@@ -9,6 +9,7 @@ capabilities:
   source: mock          # modality tag surfaced on fixes
   kinds: [forklift, asset]   # asset kinds this adapter can locate
   frame: local          # Measurement frame it emits (floor-plan-local, north-up)
+  devices: true         # exposes /devices (configured device inventory for onboarding)
   streaming: false      # pull-only (no push channel)
   z: true               # provides a vertical (height) component
   accuracy_class: coarse  # coarse | metre | sub-metre
