@@ -174,7 +174,14 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if classify is None:
         return out
-    if classify.infrastructure_when is not None:
+    # asset_when wins if declared: match -> asset, else infrastructure (unknown
+    # defaults to infra, not auto-onboarded). infrastructure_when is the inverse
+    # convention: match -> infrastructure, else asset.
+    if classify.asset_when is not None:
+        out["role"] = (
+            "asset" if _predicate_matches(classify.asset_when, entry) else "infrastructure"
+        )
+    elif classify.infrastructure_when is not None:
         out["role"] = (
             "infrastructure"
             if _predicate_matches(classify.infrastructure_when, entry)

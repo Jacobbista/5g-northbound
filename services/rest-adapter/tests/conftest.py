@@ -46,30 +46,41 @@ def wittra_sample_payload() -> list:
 
 @pytest.fixture
 def wittra_sample_discover_page() -> list:
-    """Trimmed Wittra v4 device-list response. Real v4 returns the array
-    directly with no envelope, so the example schema uses
-    `list_path: ""` and `pagination.type: "none"`."""
+    """Trimmed Wittra v4 device-list response, mirroring the real shape: the
+    array comes back directly with no envelope (the example schema uses
+    `list_path: ""`, `pagination.type: "none"`), each record carries a clean
+    `deviceType` string + a human `name`, and only anchors have `fixedLocation`.
+    Three device classes so classification is exercised: a fixed beacon
+    (infrastructure), a meshrouter with no fixedLocation (still infrastructure),
+    and a mobile tag (the only onboardable asset)."""
     return [
         {
             "deviceId": "D001",
             "deviceType": "beacon",
+            "name": "Position Beacon 01",
             "isPositioningActive": True,
             "fixedLocation": {
                 "latitude": 45.064547,
                 "longitude": 7.659272,
+                "height": 2.0,
                 "level": 0,
             },
             "lastSeen": None,
         },
         {
-            "deviceId": "D002",
-            "deviceType": "beacon",
+            "deviceId": "MR1",
+            "deviceType": "meshrouter",
+            "name": "Mesh Router 01",
             "isPositioningActive": True,
-            "fixedLocation": {
-                "latitude": 45.064600,
-                "longitude": 7.659300,
-                "level": 0,
-            },
+            "fixedLocation": None,
+            "lastSeen": None,
+        },
+        {
+            "deviceId": "TAG1",
+            "deviceType": "tag",
+            "name": "Asset Tag 01",
+            "isPositioningActive": True,
+            "fixedLocation": None,
             "lastSeen": None,
         },
     ]

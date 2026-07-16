@@ -171,10 +171,12 @@ async def list_devices(
         out.append({
             "deviceId": device_id,
             "deviceType": "beacon",
+            "name": f"{meta['label']} (Position Beacon)",
             "isPositioningActive": True,
             "fixedLocation": {
                 "latitude": lat,
                 "longitude": lon,
+                "height": meta["height_m"],
                 "level": 0,
             },
             "color": "#ff9800",
@@ -182,12 +184,26 @@ async def list_devices(
             "lastSeen": None,
             "group": None,
         })
-    # One mobile tag (no fixedLocation) so discover surfaces a fixed=false entry
-    # alongside the fixed beacons: the editor keeps anchors, asset onboarding
-    # keeps tags.
+    # A meshrouter: fixed UWB relay infrastructure that carries NO fixedLocation,
+    # so classification must key off deviceType (not "has a position") to label
+    # it infrastructure rather than an onboardable asset.
+    out.append({
+        "deviceId": "D00124B00249MR01",
+        "deviceType": "meshrouter",
+        "name": "Mesh Router 01",
+        "isPositioningActive": True,
+        "fixedLocation": None,
+        "color": "#ff9800",
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "lastSeen": None,
+        "group": None,
+    })
+    # One mobile tag (no fixedLocation) - the only onboardable asset. The editor
+    # keeps anchors (fixedLocation), asset onboarding keeps tags.
     out.append({
         "deviceId": "D00124B00249TAG01",
         "deviceType": "tag",
+        "name": "Asset Tag 01",
         "isPositioningActive": True,
         "fixedLocation": None,
         "color": "#5dffb0",

@@ -46,84 +46,91 @@ def _entry_passes_filter(entry: Any, filt: Optional[DiscoverFilter]) -> bool:
     return True
 
 
-async def discover(
-    schema: Schema, *, apply_filter: bool = True
-) -> Optional[list[dict[str, Any]]]:
-    """Walk the vendor's list endpoint, page by page, and return the
-    accumulated normalised entries. None on a request failure (so the
-    editor can show "vendor unreachable" instead of silently empty).
-
-    `apply_filter=True` (editor sync) keeps only entries passing the schema's
-    include filter (anchors). `apply_filter=False` (asset onboarding via
-    /devices) reads the list UNFILTERED - onboarding wants the tags the anchor
-    filter drops. Either way, when the schema declares a `classify` block, each
-    entry gains a `role` + `source_class` derived from the raw record.
+async def _walk_pages(schema: Schema) -> Optional[list[Any]]:
+    """Walk the vendor's list endpoint and return the accumulated RAW records
+    (one dict per device, exactly as the vendor sent them). None on a request
+    failure. This is the single fetch+pagination walker; both the normalised
+    `discover()` and the raw builder feed served by the router sit on top of it.
 
     Pagination semantics:
       - "none": one GET, accept whatever array comes back.
       - "page": 1-indexed pages, stop when the running total reaches the
         vendor's reported total or when a page returns an empty array.
     """
-    if schema.discover is None:
-        return []
     block = schema.discover
     pagination: Pagination = block.pagination
-    filt = block.filter if apply_filter else None
-    classify = block.classify
 
     if pagination.type == "none":
         body = await fetch_discover_page(schema, page=None)
         if body is None:
             return None
         items = _extract_list(body, block.list_path)
-        filtered = [e for e in items if _entry_passes_filter(e, filt)]
         log.info(
-            "discover: vendor=%s items_in_response=%d kept_after_filter=%d (list_path=%r)",
-            schema.vendor, len(items), len(filtered), block.list_path,
+            "discover: vendor=%s items_in_response=%d (list_path=%r)",
+            schema.vendor, len(items), block.list_path,
         )
-        out = _normalise(filtered, block.mapping, classify)
-        log.info(
-            "discover: vendor=%s mapped=%d dropped_by_mapping=%d",
-            schema.vendor, len(out), len(filtered) - len(out),
-        )
-        return out
+        return items
 
-    # Page-based pagination.
-    out: list[dict[str, Any]] = []
+    raw: list[Any] = []
     declared_total: Optional[int] = None
-    pages_walked = 0
     for page in range(1, _MAX_PAGES + 1):
         body = await fetch_discover_page(schema, page=page)
         if body is None:
-            return None if not out else out
+            return None if not raw else raw
         items = _extract_list(body, block.list_path)
-        filtered = [e for e in items if _entry_passes_filter(e, filt)]
-        pages_walked += 1
         log.info(
-            "discover: vendor=%s page=%d items_in_page=%d kept_after_filter=%d (list_path=%r)",
-            schema.vendor, page, len(items), len(filtered), block.list_path,
+            "discover: vendor=%s page=%d items_in_page=%d (list_path=%r)",
+            schema.vendor, page, len(items), block.list_path,
         )
         if not items:
             break
-        out.extend(_normalise(filtered, block.mapping, classify))
+        raw.extend(items)
         if declared_total is None:
             t = get_path(body, pagination.total_path)
             if isinstance(t, (int, float)):
                 declared_total = int(t)
-                log.info(
-                    "discover: vendor=%s declared_total=%d",
-                    schema.vendor, declared_total,
-                )
-        if declared_total is not None and len(out) >= declared_total:
+                log.info("discover: vendor=%s declared_total=%d", schema.vendor, declared_total)
+        if declared_total is not None and len(raw) >= declared_total:
             break
     else:
-        log.warning(
-            "vendor %s discover hit page cap %d; truncating",
-            schema.vendor, _MAX_PAGES,
-        )
+        log.warning("vendor %s discover hit page cap %d; truncating", schema.vendor, _MAX_PAGES)
+    return raw
+
+
+async def discover_raw(schema: Schema) -> Optional[list[Any]]:
+    """The vendor's device list as RAW records - no mapping, no filter, no
+    classify. Feeds the guided schema builder: the operator sees the vendor's
+    actual field names to choose paths against. None on request failure."""
+    if schema.discover is None:
+        return []
+    return await _walk_pages(schema)
+
+
+async def discover(
+    schema: Schema, *, apply_filter: bool = True
+) -> Optional[list[dict[str, Any]]]:
+    """Walk the vendor's list endpoint and return the accumulated NORMALISED
+    entries. None on a request failure (so the editor can show "vendor
+    unreachable" instead of silently empty).
+
+    `apply_filter=True` (editor sync) keeps only entries passing the schema's
+    include filter (anchors). `apply_filter=False` (asset onboarding via
+    /devices) reads the list UNFILTERED - onboarding wants the tags the anchor
+    filter drops. Either way, when the schema declares a `classify` block, each
+    entry gains a `role` + `source_class` derived from the raw record.
+    """
+    if schema.discover is None:
+        return []
+    block = schema.discover
+    raw = await _walk_pages(schema)
+    if raw is None:
+        return None
+    filt = block.filter if apply_filter else None
+    filtered = [e for e in raw if _entry_passes_filter(e, filt)]
+    out = _normalise(filtered, block.mapping, block.classify)
     log.info(
-        "discover: vendor=%s done, pages=%d mapped=%d",
-        schema.vendor, pages_walked, len(out),
+        "discover: vendor=%s raw=%d kept_after_filter=%d mapped=%d",
+        schema.vendor, len(raw), len(filtered), len(out),
     )
     return out
 

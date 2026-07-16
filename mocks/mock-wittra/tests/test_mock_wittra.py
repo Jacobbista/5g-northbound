@@ -67,14 +67,22 @@ async def test_list_devices_returns_raw_array(client):
     r = await client.get(_LIST, headers={"Authorization": _basic("demo-org", "demo-key")})
     assert r.status_code == 200
     body = r.json()
-    # Wittra v4 returns the device array directly, no envelope: two fixed
-    # beacons (fixedLocation set) + one mobile tag (fixedLocation None), so a
-    # discover consumer can tell anchors from tags.
+    # Wittra v4 returns the device array directly, no envelope: two fixed beacons
+    # (fixedLocation set), a meshrouter (infra, no fixedLocation) and a mobile tag
+    # (no fixedLocation). Classification keys off deviceType, so the meshrouter is
+    # infrastructure despite lacking a position, and only the tag is onboardable.
     assert isinstance(body, list)
-    assert len(body) == 3
+    assert len(body) == 4
     by_id = {d["deviceId"]: d for d in body}
-    assert set(by_id) == {"wittra-tag-01", "wittra-tag-02", "D00124B00249TAG01"}
+    assert set(by_id) == {
+        "wittra-tag-01",
+        "wittra-tag-02",
+        "D00124B00249MR01",
+        "D00124B00249TAG01",
+    }
     assert by_id["wittra-tag-01"]["fixedLocation"]["latitude"] is not None
+    assert by_id["D00124B00249MR01"]["deviceType"] == "meshrouter"
+    assert by_id["D00124B00249MR01"]["fixedLocation"] is None
     assert by_id["D00124B00249TAG01"]["fixedLocation"] is None
 
 

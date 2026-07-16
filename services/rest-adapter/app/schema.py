@@ -122,9 +122,9 @@ class DiscoverMapping(BaseModel):
     latitude: Optional[FieldSpec] = None
     longitude: Optional[FieldSpec] = None
     height_m: Optional[FieldSpec] = None
-    # Native vendor device type (e.g. Wittra `deviceType` / node-type). Surfaced
-    # as `device_type` on discovery; combined with the block's `anchor_types` it
-    # classifies a candidate as anchor (fixed infra) vs trackable (onboardable).
+    # Native vendor device type (e.g. Wittra `deviceType`: "beacon" / "tag" /
+    # "meshrouter" / "gateway"). Surfaced as `device_type` on discovery and used
+    # by the `classify` block's predicates to derive role + source_class.
     device_type: Optional[FieldSpec] = None
 
 
@@ -163,11 +163,12 @@ class ClassifyPredicate(BaseModel):
     """A structural test against one raw vendor device record. Matches when:
       - `require_path` (if set) resolves to a non-null value, AND
       - `path` == `equals` (if both set).
-    Real vendor device types are structural (a sub-object present, a flag set),
-    not a clean enum string - Wittra's `deviceType` is an opaque object; an
-    anchor is "has a fixedLocation", a MIOTY node is "has a miotyConfig". So
-    classification is declared as presence / value predicates the schema author
-    writes against the vendor's own fields."""
+    Vendors differ: some expose a clean type string (Wittra's `deviceType` is
+    "beacon" / "tag" / "meshrouter" / "gateway" - match with `path` + `equals`);
+    others only encode it structurally, as a sub-object's presence (a MIOTY node
+    has a `miotyConfig`, a border router has a `borderrouter` - match with
+    `require_path`). Both forms are the schema author's, written against the
+    vendor's own fields; the adapter code stays vendor-agnostic."""
 
     model_config = ConfigDict(extra="forbid")
     require_path: Optional[str] = None
@@ -188,19 +189,30 @@ class Classify(BaseModel):
     """Schema-declared classification for onboarding discovery. Two axes, both
     from the paper's private-asset model:
 
-      - role: `infrastructure` (fixed sensor: UWB anchor, BLE gateway - outside
-        the 3GPP trust domain, never onboarded as an asset) vs `asset` (the
-        tracked entity). `infrastructure_when` matches infrastructure; anything
-        else is an asset.
+      - role: `infrastructure` (fixed sensor: UWB anchor, mesh router, gateway -
+        outside the 3GPP trust domain, never onboarded as an asset) vs `asset`
+        (the tracked entity). Declare exactly ONE of two predicates, which sets
+        the default for an unmatched device:
+          * `asset_when`          - match -> asset, else infrastructure.
+            Positively names the asset; an UNKNOWN device defaults to
+            infrastructure (conservative: not auto-onboarded). Preferred when
+            the vendor's device list is mostly fixed gear and only a small,
+            named type is trackable (Wittra: `deviceType == tag`).
+          * `infrastructure_when` - match -> infrastructure, else asset.
+            An unknown device defaults to asset (onboardable). Use when the
+            trackable set is open-ended and infra is the small, named set.
       - source_class: the positioning technology (uwb / ble / wifi / gnss /
-        cellular / other) - the paper's optional `source-class` field. `rules`
-        map structural predicates to a class; `default` applies otherwise.
+        cellular / mioty / other) - the paper's optional `source-class` field.
+        `rules` map structural predicates to a class; `default` applies
+        otherwise.
 
-    Everything is optional: omit `infrastructure_when` and no `role` is emitted
-    (every candidate stays onboardable); omit source_class and none is emitted.
+    Everything is optional: declare neither role predicate and no `role` is
+    emitted (every candidate stays onboardable); omit source_class and none is
+    emitted. If both role predicates are set, `asset_when` wins.
     """
 
     model_config = ConfigDict(extra="forbid")
+    asset_when: Optional[ClassifyPredicate] = None
     infrastructure_when: Optional[ClassifyPredicate] = None
     source_class_default: Optional[str] = None
     source_class_rules: list[SourceClassRule] = Field(default_factory=list)
