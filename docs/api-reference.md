@@ -78,8 +78,9 @@ Every adapter pod implements:
 
 | Method · path                          | Returns                          | Notes                                                                  |
 |----------------------------------------|----------------------------------|------------------------------------------------------------------------|
+| `GET    /discover`                     | `{"vendor","devices":[…]}`       | Normalised vendor device list (mapping + classify applied). `?raw=1` → `{"vendor","raw":[…]}` instead: the vendor records **verbatim**, for the guided schema builder (operator points paths at real field names). ⚠️ raw is the full vendor payload — may carry secrets; keep behind operator auth, never log |
 | `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
-| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | Replace the schema (applied live + cache cleared) and persist it. `persisted:false` + a `warning` when the schema volume is read-only (ConfigMap/subPath) — the schema is live but lost on restart; needs a writable volume to persist. See [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) |
+| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | **Dev / preview hot-patch only** — applies live + clears cache. Production schema changes go through the ConfigMap + `rollout restart` ([`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). On a read-only ConfigMap/subPath mount returns `persisted:false` + a `warning` and the ConfigMap re-wins on restart |
 
 `mock-wittra` is the demo-only fake Wittra cloud, not an adapter; it implements one path: `GET /v1/organizations/{org}/projects/{prj}/devices/{device_id}` returning Wittra-shaped JSON behind HTTP Basic auth.
 

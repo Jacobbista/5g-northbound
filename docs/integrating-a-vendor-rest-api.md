@@ -63,7 +63,7 @@ The two contracts an operator must get right (see step 5):
      --from-literal=org-id=<...> --from-literal=api-key=<...> --from-literal=project-id=<...>
    ```
 
-2. **Deploy the adapter.** One `Deployment` per vendor, image `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`, with the persistent schema PVC at `/app/data/` and the Secret keys mapped to env:
+2. **Deploy the adapter.** One `Deployment` per vendor, image `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`, with the schema ConfigMap mounted at `SCHEMA_FILE` (read-only; step 4) and the Secret keys mapped to env:
 
    ```yaml
    env:
@@ -77,19 +77,31 @@ The two contracts an operator must get right (see step 5):
        valueFrom: { secretKeyRef: { name: wittra-credentials, key: api-key } }
    ```
 
-3. **Load the schema.** PUT the schema to the adapter (from the dashboard's adapter view, or a `curl` in dev). Set `ADAPTER_NAME=wittra` on the adapter — it is the routing key (see step 4):
+3. **Build the schema from live data, don't hand-write it blind.** There is no cross-vendor standard — every cloud has its own field names — so the schema is authored per deployment by the operator, guided by the vendor's actual response. Point a bare adapter (auth + `path` + `discover.path` set, mapping/classify still empty) at the vendor and read the raw records:
 
    ```bash
-   curl -X PUT http://rest-adapter-wittra:8080/schema \
-     -H "Content-Type: application/json" \
-     -d @wittra-schema.json
+   curl 'http://rest-adapter-wittra:8080/discover?raw=1' | jq '.raw[0]'
+   # -> { "deviceId": "...", "deviceType": "beacon", "fixedLocation": {...}, "name": "...", ... }
    ```
 
-   The response carries `persisted`: `true` when written to disk. **Mount `SCHEMA_FILE` on a writable volume (PVC), not a ConfigMap or `subPath`** — those are read-only, so the rename-over fails (`EBUSY`) and the pod cannot persist. On a read-only mount PUT still applies the schema **live** (hot-reload) but returns `persisted:false` + a `warning`, and the change is lost on restart. To edit a ConfigMap-mounted schema durably, change the ConfigMap and `kubectl rollout restart`; to keep runtime PUT durable, use a PVC. Same read-only-mount footgun as the wifi bindings and the asset map — all three want a writable volume, see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes).
+   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/examples/wittra-schema.json) is a worked **reference** for this — not a config to ship as-is.
 
-4. **Routing is capability-driven — no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
+4. **Persist the schema as a ConfigMap + rollout — this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
 
-5. **Register the asset.** PUT an entry into the gateway's Asset Identity Map (`GET/PUT /assets`; fixture `dev/assets.json`). The fields that matter:
+   ```bash
+   kubectl create configmap rest-adapter-wittra-schema \
+     --from-file=schema.json=wittra-schema.json --dry-run=client -o yaml \
+     | kubectl apply -f -
+   kubectl rollout restart deploy/rest-adapter-wittra   # picks up the new schema
+   ```
+
+   Set `ADAPTER_NAME=wittra` on the adapter — the routing key (see step 5).
+
+   `PUT /schema` exists for **dev / preview only** — a hot-patch to try a schema against a running pod without a rollout. On a ConfigMap (read-only) mount it applies live but returns `persisted:false` + a `warning`, and the **ConfigMap re-wins on the next restart**. Do not use it as the production write path; land the real change in the ConfigMap. (The read-only-mount footgun is shared with the wifi bindings and the asset map — see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes). The editor's Export/Import of a whole schema/bindings set is a **testbed-to-testbed** transfer, not part of normal operation.)
+
+5. **Routing is capability-driven — no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
+
+6. **Register the asset.** PUT an entry into the gateway's Asset Identity Map (`GET/PUT /assets`; fixture `dev/assets.json`). The fields that matter:
 
    - `asset_id` — the business identifier the consumer queries (`device.assetId`). **Not** a phone number.
    - `positioning_id` — **must equal the vendor-native device id**: it is substituted verbatim into the vendor telemetry path (`?deviceId={device_id}`), so it is the key the vendor cloud knows. (The editor's vendor-sync reads `discover.vendor_device_id` separately — same value, different code path.)
@@ -192,25 +204,33 @@ The same list also feeds **asset onboarding** through `GET /devices` (aggregated
 1. **Onboarding reads the list unfiltered.** The editor's `filter` keeps only anchors; onboarding wants the *tags* that filter drops, so `/devices` bypasses it.
 2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `source_class` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
 
-Real vendor device records rarely expose a clean "type" enum — the distinction is **structural** (a sub-object present, a flag set). Wittra's `deviceType` is an opaque object; an anchor is "has a `fixedLocation`", a MIOTY node is "has a `miotyConfig`". So classification is a set of **presence / value predicates** the schema author writes against the vendor's own fields:
+Classification is a set of **predicates** the schema author writes against the vendor's own fields. Vendors differ in how they expose type: some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` — match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` — match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic. The real Wittra example:
 
 ```json
 "discover": {
-  "mapping": { "vendor_device_id": { "path": "deviceId" } },
+  "mapping": {
+    "vendor_device_id": { "path": "deviceId" },
+    "label":            { "path": "name", "default": null },
+    "device_type":      { "path": "deviceType" }
+  },
   "classify": {
-    "infrastructure_when": { "require_path": "fixedLocation.latitude" },
+    "asset_when": { "path": "deviceType", "equals": "tag" },
     "source_class_default": "uwb",
     "source_class_rules": [
-      { "when": { "require_path": "miotyConfig" }, "value": "other" }
+      { "when": { "require_path": "miotyConfig" }, "value": "mioty" }
     ]
   }
 }
 ```
 
-- **`infrastructure_when`** — a predicate; when it matches, the candidate is `role: infrastructure`, else `role: asset`. Here: a device with a fixed location is a placed anchor.
-- **`source_class_rules`** — first matching predicate wins its `value`; `source_class_default` applies otherwise. Recommended values: `uwb`, `ble`, `wifi`, `gnss`, `cellular`, `other`.
+**Role — declare exactly one of two predicates; the choice sets the default for an *unknown* device:**
 
-A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, or add `path`+`equals` for a value test. A vendor with a clean type string instead maps it to `mapping.device_type` and writes value predicates against it — no adapter code changes either way. Omit `classify` entirely and candidates carry no `role`/`source_class` (everything stays onboardable).
+- **`asset_when`** — match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable — the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them — key off `deviceType`, not location).
+- **`infrastructure_when`** — match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
+
+**`source_class`** — first matching `source_class_rules` predicate wins its `value`; `source_class_default` applies otherwise. Recommended values: `uwb`, `ble`, `wifi`, `gnss`, `cellular`, `mioty`, `other`. A single-radio fleet (Wittra is all UWB) just sets the default; the `miotyConfig` rule above future-proofs a mixed deployment without forcing a per-device type today.
+
+A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `source_class` (everything stays onboardable).
 
 ## Local dev: end-to-end with `mock-wittra`
 

@@ -170,13 +170,13 @@ Synthetic random-walk adapter. No external configuration file; bounds and motion
 
 ### rest-adapter
 
-Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor; the schema is loaded at runtime through `PUT /schema` (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)).
+Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor. In production the schema is durable cluster config: a **ConfigMap mounted at `SCHEMA_FILE`, changed + `kubectl rollout restart`** (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). `PUT /schema` is a dev / preview hot-patch only — on a ConfigMap mount it applies live but does not persist, and the ConfigMap re-wins on restart.
 
 | Variable        | Default                       | Notes |
 |-----------------|-------------------------------|-------|
-| `SCHEMA_FILE`   | `/app/data/schema.json`       | Persistent path for the loaded schema. Mount a PVC here; the testbed dashboard writes through `PUT /schema` |
+| `SCHEMA_FILE`   | `/app/data/schema.json`       | Path the schema is read from. Production: mount a ConfigMap here (read-only) and roll out to change it. Compose bind-mounts the example for the demo |
 
-Vendor-specific env vars (base URL override, credentials, path-template parameters) are referenced *by name* from inside the schema, so the adapter pod needs `WITTRA_API_KEY`, `WITTRA_ORG_ID`, etc. (or your vendor's equivalents) mounted from a Kubernetes `Secret`. The schema itself contains no credentials and is safe to keep in plain text / a `ConfigMap`.
+Vendor-specific env vars (base URL override, credentials, path-template parameters) are referenced *by name* from inside the schema, so the adapter pod needs `WITTRA_API_KEY`, `WITTRA_ORG_ID`, etc. (or your vendor's equivalents) mounted from a Kubernetes `Secret`. The schema itself contains no credentials and is safe to keep in a `ConfigMap`.
 
 ### mock-wittra
 
