@@ -4,6 +4,7 @@ import { CalibrationPanel } from "./CalibrationPanel.jsx";
 import { FloorPlanImageInput, GeorefMap, localToGps } from "./GeorefMap.jsx";
 import { PlanCanvas } from "./PlanCanvas.jsx";
 import { VendorSyncPanel } from "./VendorSyncPanel.jsx";
+import { ToastHost } from "./ToastHost.jsx";
 import {
   bboxOfPolygon,
   centroidOfPolygon,
@@ -4959,6 +4960,7 @@ export function App() {
         </div>
         )}
       </div>
+      <ToastHost />
     </div>
   );
 }

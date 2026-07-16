@@ -17,6 +17,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { fetchBuildingCandidates } from "./osmBuildings.js";
+import { toast } from "./toast.js";
 
 const { BaseLayer, Overlay } = LayersControl;
 
@@ -865,7 +866,7 @@ export function FloorPlanImageInput({ value, onChange, onOpacityDragStart, onOpa
   const onFile = (file) => {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert("Image too large (>2 MB). Resize before uploading.");
+      toast("Image too large (>2 MB). Resize before uploading.", "error");
       return;
     }
     const reader = new FileReader();

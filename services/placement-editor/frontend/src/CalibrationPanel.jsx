@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "./toast.js";
 import {
   apply as apiApply,
   cancelCapture,
@@ -152,10 +153,11 @@ export function CalibrationPanel({
         setDerived(null);
         setError(null);
         await reloadState();
-        alert(
+        toast(
           out.reloaded === false
             ? `Imported ${out.bindings} bindings. wifi-positioning is still loading the blueprint; they apply once it is ready.`
-            : `Imported ${out.bindings} bindings, ${out.samples} samples. Live config reloaded.`
+            : `Imported ${out.bindings} bindings, ${out.samples} samples. Live config reloaded.`,
+          out.reloaded === false ? "warn" : "info"
         );
       } catch (err) {
         setError(`import failed: ${err.message}`);
@@ -273,10 +275,11 @@ export function CalibrationPanel({
       const out = await apiApply(derived);
       setError(null);
       const n = Object.keys(out.applied || {}).length;
-      alert(
+      toast(
         out.reloaded === false
           ? `Saved params for ${n} anchors. wifi-positioning is still loading the blueprint; they apply once it is ready.`
-          : `Applied to ${n} anchors.`
+          : `Applied to ${n} anchors.`,
+        out.reloaded === false ? "warn" : "info"
       );
     } catch (e) {
       setError(e.message);
