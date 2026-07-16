@@ -85,7 +85,7 @@ The two contracts an operator must get right (see step 5):
      -d @wittra-schema.json
    ```
 
-   The pod persists the schema to the PVC, so subsequent restarts boot configured.
+   The response carries `persisted`: `true` when written to disk. **Mount `SCHEMA_FILE` on a writable volume (PVC), not a ConfigMap or `subPath`** — those are read-only, so the rename-over fails (`EBUSY`) and the pod cannot persist. On a read-only mount PUT still applies the schema **live** (hot-reload) but returns `persisted:false` + a `warning`, and the change is lost on restart. To edit a ConfigMap-mounted schema durably, change the ConfigMap and `kubectl rollout restart`; to keep runtime PUT durable, use a PVC. Same read-only-mount footgun as the wifi bindings and the asset map — all three want a writable volume, see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes).
 
 4. **Routing is capability-driven — no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
 

@@ -23,10 +23,38 @@ def test_load_schema_invalid_shape_returns_none(tmp_path):
 
 def test_save_and_load_roundtrip(tmp_path, wittra_schema):
     path = tmp_path / "schema.json"
-    save_schema(str(path), wittra_schema)
+    assert save_schema(str(path), wittra_schema) is True
     loaded = load_schema(str(path))
     assert loaded is not None
     assert loaded.vendor == "wittra"
+
+
+def test_save_schema_falls_back_to_in_place_when_rename_fails(tmp_path, wittra_schema, monkeypatch):
+    # A bind-mounted single file cannot be replaced via rename (EBUSY); the
+    # in-place write must still land the schema.
+    path = tmp_path / "schema.json"
+    path.write_text("{}")
+
+    def boom(src, dst):
+        raise OSError(16, "Device or resource busy")
+
+    monkeypatch.setattr("app.store.os.replace", boom)
+    assert save_schema(str(path), wittra_schema) is True
+    assert load_schema(str(path)).vendor == "wittra"
+
+
+def test_save_schema_returns_false_on_read_only_mount(tmp_path, wittra_schema, monkeypatch):
+    # ConfigMap / subPath: rename AND in-place write both fail (read-only) ->
+    # save_schema returns False rather than raising, so PUT can report it.
+    path = tmp_path / "schema.json"
+
+    def boom(*a, **k):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr("app.store.os.replace", boom)
+    monkeypatch.setattr("app.store.tempfile.mkstemp", boom)
+    monkeypatch.setattr("app.store.Path.write_text", lambda self, data: (_ for _ in ()).throw(OSError(30, "ro")))
+    assert save_schema(str(path), wittra_schema) is False
 
 
 def test_cache_returns_none_when_empty():

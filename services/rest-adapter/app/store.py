@@ -2,7 +2,10 @@
 
 Schema persistence follows the placement-editor pattern: the schema is loaded
 at startup from a mounted file path; operators replace it at runtime via
-PUT /schema, which atomically rewrites the file. No restart required.
+PUT /schema, which applies it live and best-effort persists it (atomic rename,
+falling back to in-place write). A read-only mount - a ConfigMap / subPath -
+takes the schema live but cannot persist it; the PUT reports persisted:false
+rather than failing. Persistence wants a writable volume (PVC).
 
 The cache holds the latest vendor response per device for `cache_ttl_s`. The
 engine polls at ~1Hz; vendors can be slower or rate-limited, so caching keeps
@@ -40,25 +43,46 @@ def load_schema(path: str) -> Optional[Schema]:
         return None
 
 
-def save_schema(path: str, schema: Schema) -> None:
-    """Atomically write schema to disk.
+def save_schema(path: str, schema: Schema) -> bool:
+    """Persist the schema to disk. Returns True when it landed, False when the
+    target volume cannot be written.
 
-    The two-phase write avoids leaving a half-written file if the pod is
-    killed mid-save. fsync of the directory is omitted intentionally: the
-    operator's PUT call can always be retried.
+    Three tiers, degrading gracefully:
+      1. atomic: tmp file in the same dir + rename over the target (crash-safe).
+      2. in-place write: when the target is a bind-mounted single file, the
+         rename fails with EBUSY (you cannot rename over a mount) - fall back to
+         truncating it in place. Loses crash-safety, keeps the data flowing.
+      3. give up: a ConfigMap / subPath mount is READ-ONLY, so even the in-place
+         write fails (EROFS/EBUSY). Return False so the caller can report that
+         the schema is live but not persisted, instead of a 500. Edit the
+         ConfigMap + restart, or mount the schema on a writable volume.
     """
     p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    data = schema.model_dump(mode="json")
-    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".schema.", suffix=".tmp")
+    blob = json.dumps(schema.model_dump(mode="json"), indent=2)
     try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp, p)
-    except Exception:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+        p.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".schema.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(blob)
+            os.replace(tmp, p)
+            return True
+        except OSError:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+    except OSError as exc:
+        log.warning("schema atomic write failed (%s); trying in-place", exc)
+    try:
+        p.write_text(blob)
+        return True
+    except OSError as exc:
+        log.warning(
+            "schema NOT persisted (%s): the schema volume is read-only "
+            "(ConfigMap/subPath?). Applied live; edit the source + restart to persist.",
+            exc,
+        )
+        return False
 
 
 @dataclass

@@ -45,10 +45,32 @@ async def test_put_schema_validates_and_persists(
     r = await client.put("/schema", json=wittra_schema_dict)
     assert r.status_code == 200
     assert r.json()["vendor"] == "wittra"
+    assert r.json()["persisted"] is True
 
     health = await client.get("/health")
     assert health.json()["schema_loaded"] is True
     assert health.json()["vendor"] == "wittra"
+
+
+@pytest.mark.asyncio
+async def test_put_schema_applies_live_even_when_readonly_mount(
+    client, wittra_schema_dict, monkeypatch, tmp_path
+):
+    # ConfigMap/subPath: persistence fails, but the PUT must still apply the
+    # schema live (200, persisted:false, warning) instead of 500ing.
+    monkeypatch.setattr(
+        "app.routers.schema.get_settings",
+        lambda: type("S", (), {"schema_file": str(tmp_path / "schema.json")})(),
+    )
+    monkeypatch.setattr("app.routers.schema.save_schema", lambda path, schema: False)
+    r = await client.put("/schema", json=wittra_schema_dict)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["persisted"] is False
+    assert "warning" in body
+    # Applied live regardless of persistence.
+    health = await client.get("/health")
+    assert health.json()["schema_loaded"] is True
 
 
 @pytest.mark.asyncio

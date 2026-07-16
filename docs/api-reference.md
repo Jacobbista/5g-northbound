@@ -79,7 +79,7 @@ Every adapter pod implements:
 | Method · path                          | Returns                          | Notes                                                                  |
 |----------------------------------------|----------------------------------|------------------------------------------------------------------------|
 | `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
-| `PUT    /schema`                       | `{"status":"ok","vendor":"…"}`   | Replace + persist the schema, clear the cache. See [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) |
+| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | Replace the schema (applied live + cache cleared) and persist it. `persisted:false` + a `warning` when the schema volume is read-only (ConfigMap/subPath) — the schema is live but lost on restart; needs a writable volume to persist. See [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md) |
 
 `mock-wittra` is the demo-only fake Wittra cloud, not an adapter; it implements one path: `GET /v1/organizations/{org}/projects/{prj}/devices/{device_id}` returning Wittra-shaped JSON behind HTTP Basic auth.
 
