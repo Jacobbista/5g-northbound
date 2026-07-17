@@ -24,24 +24,37 @@ def test_to_discover_entry_extracts_known_fields(wittra_schema, wittra_sample_di
     assert out["height_m"] == pytest.approx(2.0)
 
 
-def test_classify_entry_splits_role_and_source_class(wittra_schema):
+def test_classify_entry_role_from_devicetype(wittra_schema):
     from app.mapper import classify_entry
 
     cl = wittra_schema.discover.classify
-    # deviceType == tag is the only onboardable asset.
-    tag = classify_entry(cl, {"deviceId": "TAG1", "deviceType": "tag"})
-    assert tag == {"role": "asset", "source_class": "uwb"}
-    # beacon / meshrouter / gateway are fixed infrastructure.
+    # role is derived only from the vendor's own deviceType. The example asserts
+    # NO source_class: /devices does not expose positioning tech per unit, so the
+    # adapter invents none - the operator adds rules when they have a real signal.
+    assert classify_entry(cl, {"deviceType": "tag"}) == {"role": "asset"}
     for infra_type in ("beacon", "meshrouter", "gateway"):
-        got = classify_entry(cl, {"deviceType": infra_type})
-        assert got == {"role": "infrastructure", "source_class": "uwb"}
-    # An UNKNOWN deviceType defaults to infrastructure (asset_when semantics:
-    # not auto-onboarded), NOT asset.
-    unknown = classify_entry(cl, {"deviceType": "some-future-node"})
-    assert unknown["role"] == "infrastructure"
-    # A mioty node (structural: has miotyConfig) overrides source_class.
-    mioty = classify_entry(cl, {"deviceType": "tag", "miotyConfig": {"eui": "x"}})
-    assert mioty == {"role": "asset", "source_class": "mioty"}
+        assert classify_entry(cl, {"deviceType": infra_type}) == {"role": "infrastructure"}
+    # An UNKNOWN deviceType defaults to infrastructure (asset_when: not
+    # auto-onboarded), never asset.
+    assert classify_entry(cl, {"deviceType": "some-future-node"}) == {"role": "infrastructure"}
+
+
+def test_classify_entry_source_class_rules_grammar():
+    # source_class is operator-authored: the adapter APPLIES rules but asserts
+    # nothing on its own. Grammar exercised on a hand-built classify (not the
+    # example), so the contract stays covered without the Wittra example
+    # claiming a per-unit radio it cannot know.
+    from app.mapper import classify_entry
+    from app.schema import Classify, ClassifyPredicate, SourceClassRule
+
+    cl = Classify(
+        source_class_rules=[
+            SourceClassRule(when=ClassifyPredicate(require_path="miotyConfig"), value="mioty"),
+        ],
+    )
+    assert classify_entry(cl, {"miotyConfig": {"eui": "x"}}) == {"source_class": "mioty"}
+    # No rule matches and no default -> no source_class emitted at all.
+    assert classify_entry(cl, {"deviceType": "beacon"}) == {}
 
 
 async def test_discover_unfiltered_keeps_tags(wittra_schema, monkeypatch):

@@ -204,7 +204,7 @@ The same list also feeds **asset onboarding** through `GET /devices` (aggregated
 1. **Onboarding reads the list unfiltered.** The editor's `filter` keeps only anchors; onboarding wants the *tags* that filter drops, so `/devices` bypasses it.
 2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `source_class` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
 
-Classification is a set of **predicates** the schema author writes against the vendor's own fields. Vendors differ in how they expose type: some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` — match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` — match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic. The real Wittra example:
+Classification is a set of **predicates** the schema author writes against the vendor's own fields. The rule is honesty: **classify only what the vendor record actually states, never a guess.** Vendors differ in how they expose type — some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` — match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` — match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic and asserts nothing on its own — it applies the operator's schema. The Wittra example classifies role only:
 
 ```json
 "discover": {
@@ -214,11 +214,7 @@ Classification is a set of **predicates** the schema author writes against the v
     "device_type":      { "path": "deviceType" }
   },
   "classify": {
-    "asset_when": { "path": "deviceType", "equals": "tag" },
-    "source_class_default": "uwb",
-    "source_class_rules": [
-      { "when": { "require_path": "miotyConfig" }, "value": "mioty" }
-    ]
+    "asset_when": { "path": "deviceType", "equals": "tag" }
   }
 }
 ```
@@ -228,7 +224,7 @@ Classification is a set of **predicates** the schema author writes against the v
 - **`asset_when`** — match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable — the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them — key off `deviceType`, not location).
 - **`infrastructure_when`** — match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
 
-**`source_class`** — first matching `source_class_rules` predicate wins its `value`; `source_class_default` applies otherwise. Recommended values: `uwb`, `ble`, `wifi`, `gnss`, `cellular`, `mioty`, `other`. A single-radio fleet (Wittra is all UWB) just sets the default; the `miotyConfig` rule above future-proofs a mixed deployment without forcing a per-device type today.
+**`source_class`** (the positioning technology) — first matching `source_class_rules` predicate wins its `value`, `source_class_default` applies otherwise; recommended values `uwb` / `ble` / `wifi` / `gnss` / `cellular` / `mioty` / `other`. It is **optional and operator-authored — only add it when the vendor record carries a real per-unit signal.** The Wittra example deliberately omits it: `GET /devices` exposes `deviceType` (the role) but not the radio, and a UWB `beacon` and a non-UWB one are byte-identical there — Wittra's UWB module lives in `Config.tof` on a separate endpoint (`GET /devices/configs`). Asserting `source_class` from the device list alone would be a guess, so the schema leaves it out; a deployment that needs per-unit precision maps the field that genuinely encodes it (a structural rule like `{ "when": { "require_path": "miotyConfig" }, "value": "mioty" }`, or the `Config.tof` join) rather than a blanket default.
 
 A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `source_class` (everything stays onboardable).
 

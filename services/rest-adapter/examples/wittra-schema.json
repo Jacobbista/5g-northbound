@@ -49,7 +49,7 @@
     }
   },
   "discover": {
-    "_comment": "Onboarding reads this list UNFILTERED via /devices. Wittra's deviceType is a clean string (beacon/tag/meshrouter/gateway), so classify keys off it: only deviceType==tag is a trackable asset; beacon/meshrouter/gateway are fixed infrastructure. asset_when means an UNKNOWN future deviceType defaults to infrastructure (not auto-onboarded) rather than asset. source_class defaults to uwb (this fleet is all UWB); the miotyConfig rule tags a mioty node if one is ever added. The editor's anchor sync still applies the filter (fixedLocation present = anchor); onboarding does not.",
+    "_comment": "Onboarding reads this list UNFILTERED via /devices. classify derives ONLY what the vendor record honestly states: role from deviceType (tag = trackable asset; beacon/meshrouter/gateway = infrastructure), asset_when so an UNKNOWN type defaults to infrastructure (not auto-onboarded). No source_class here: the /devices endpoint does not expose positioning technology per unit (deviceType is the role, not the radio; Wittra's UWB module lives in Config.tof on a separate endpoint), so asserting a source_class from this list would be a guess. The operator adds source_class in the schema builder when they have a real signal - see docs/integrating-a-vendor-rest-api.md. The editor's anchor sync still applies the filter (fixedLocation present = anchor); onboarding does not.",
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
     "list_path": "",
     "path_vars": {
@@ -89,16 +89,7 @@
       "asset_when": {
         "path": "deviceType",
         "equals": "tag"
-      },
-      "source_class_default": "uwb",
-      "source_class_rules": [
-        {
-          "when": {
-            "require_path": "miotyConfig"
-          },
-          "value": "mioty"
-        }
-      ]
+      }
     }
   }
 }
