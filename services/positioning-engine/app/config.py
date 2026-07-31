@@ -47,7 +47,15 @@ class Settings(BaseSettings):
     # in steady state - the editor PUTs the blueprint over HTTP.
     blueprint_seed_path: str = ""
     websocket_interval_ms: int = 500
+    # Cold-start seed for the broadcast set, used ONLY when no adapter
+    # advertises the `devices` capability. In steady state the broadcast learns
+    # its ids + per-id source from the adapters themselves (capability-driven,
+    # see services/discovery.py), so this stays at its default.
     device_ids: str = "uwb-tag-001"
+    # How often the broadcast re-discovers its targets from adapter /devices.
+    # Decoupled from websocket_interval_ms so discovery polling does not run at
+    # the (sub-second) broadcast rate.
+    device_discovery_interval_s: float = 5.0
 
     # Comma-separated named adapter base URLs. Two equivalent forms:
     #   ADAPTER_URLS="wifi=http://wifi-positioning:8080,uwb=http://wittra-uwb:8080"

@@ -1,10 +1,13 @@
 import asyncio
 import json
 import logging
+import time
+from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..config import settings
+from ..services.discovery import resolve_broadcast_targets
 from ..services.geo import local_to_gps
 from ..services.position_service import ts_to_iso
 
@@ -40,22 +43,39 @@ async def ws_positions(websocket: WebSocket):
 
 async def broadcast_loop(app):
     interval = settings.websocket_interval_ms / 1000.0
-    device_ids = [d.strip() for d in settings.device_ids.split(",") if d.strip()]
+    discovery_interval = settings.device_discovery_interval_s
+    # Static seed: used only when no adapter advertises the `devices`
+    # capability, so a minimal engine still broadcasts (source unset -> the
+    # legacy fan-out-and-fuse path).
+    seed_ids = [d.strip() for d in settings.device_ids.split(",") if d.strip()]
+
+    # positioning_id -> source (None means fan out). Learned from adapter
+    # capability and refreshed on its own cadence, not every broadcast tick -
+    # /devices polling must not run at the broadcast rate.
+    targets: dict[str, Optional[str]] = {}
+    last_discovery = -discovery_interval  # force discovery on the first tick
 
     while True:
         await asyncio.sleep(interval)
         if not manager.connections:
             continue
 
+        now = time.monotonic()
+        if now - last_discovery >= discovery_interval:
+            discovered = await resolve_broadcast_targets(app.state.registry)
+            targets = discovered or {sid: None for sid in seed_ids}
+            last_discovery = now
+
         svc = app.state.position_service
         origin = app.state.floor_plan.gps_origin
+        ids = list(targets)
         results = await asyncio.gather(
-            *[svc.get_position(did) for did in device_ids],
+            *[svc.get_position(did, targets[did]) for did in ids],
             return_exceptions=True,
         )
 
         payload_items = []
-        for did, res in zip(device_ids, results):
+        for did, res in zip(ids, results):
             if isinstance(res, Exception) or res is None:
                 continue
             lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.z, origin)

@@ -260,7 +260,9 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 
 The path id is the asset's `positioning_id` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude_m` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
 
-**Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the asset's `source`, so steady-state routing is single-adapter; fan-out is the no-source fallback (e.g. the broadcast stream). See [adapter-registry.md](adapter-registry.md).
+**Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the asset's `source`, so steady-state routing is single-adapter; fan-out is the no-source fallback. See [adapter-registry.md](adapter-registry.md).
+
+The **broadcast** is also single-adapter, not fan-out: it does not read a static id list or the asset map but learns its target ids from adapters advertising the `devices` capability, and routes each id to the adapter that reported it (the reporter *is* the source). This keeps the engine asset-agnostic. When two adapters report the same id (a misconfiguration - steady state is one source per id), precedence is deterministic: higher `origin` rank (`observed` > `inventory`), then adapter name alphabetically. `DEVICE_IDS` is only a cold-start seed used when no adapter advertises `devices`.
 
 Status codes the engine returns:
 
