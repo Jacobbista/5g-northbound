@@ -49,6 +49,13 @@ function frameFromLayout(layout) {
 }
 
 const TECH_LABEL = { wifi: "WiFi", wittra: "UWB", fiveg: "5G", gnss: "GNSS" };
+// Human-readable names for the engine fusion strategies (see
+// docs/fusion-strategies.md). Falls back to the raw id for anything unmapped.
+const STRATEGY_LABEL = {
+  weighted_avg: "Weighted average",
+  nearest: "Nearest anchor",
+  kalman: "Kalman",
+};
 const TECH_COLOR = { wifi: "#ffb347", wittra: "#5dffb0", fiveg: "#c084fc", gnss: "#fbbf24" };
 const TECH_VIS_KEY = "5g-positioning-demo.visible-techs.v1";
 
@@ -172,7 +179,11 @@ const statusPill = (state) => {
     live: { bg: "rgba(93,255,176,0.12)", fg: "#5dffb0", border: "#5dffb0" },
     stale: { bg: "rgba(255,179,71,0.12)", fg: "#ffb347", border: "#ffb347" },
     imprecise: { bg: "rgba(122,138,171,0.14)", fg: "#9aa9c4", border: "#9aa9c4" },
-    offline: { bg: "rgba(122,138,171,0.12)", fg: "#7a8aab", border: "#7a8aab" },
+    // No fix arriving for a device the user IS tracking (source silent / stream
+    // down). Distinct from `hidden`, which is a deliberate deselect.
+    offline: { bg: "rgba(255,107,120,0.10)", fg: "#c98a92", border: "#c98a92" },
+    // The user unchecked the device: not shown in the scene, not a data problem.
+    hidden: { bg: "transparent", fg: "#5a6987", border: "rgba(122,138,171,0.35)" },
     err: { bg: "rgba(255,107,120,0.12)", fg: "#ff6b78", border: "#ff6b78" },
   };
   const c = colors[state] || colors.offline;
@@ -311,8 +322,9 @@ const coordBtn = (active) => ({
   cursor: "pointer",
 });
 
-function deviceState({ position, connected }) {
-  if (!position?.lastLocationTime) return connected ? "offline" : "offline";
+function deviceState({ position }) {
+  // Called only for a SELECTED device; deselected rows show "hidden" upstream.
+  if (!position?.lastLocationTime) return "offline";
   const ageMs = Date.now() - new Date(position.lastLocationTime).getTime();
   if (ageMs > STALE_MS) return "stale";
   const radius = position?.area?.radius;
@@ -470,7 +482,16 @@ function DeviceItem({ device, state, position, selected, coordMode, onToggle, fr
           {device.assetId} · {device.kind} · {device.source}
         </span>
         {selected && coordStr && (
-          <span style={{ fontSize: 10, color: "#7a8aab", fontFamily: "ui-monospace, monospace" }}>
+          <span
+            style={{
+              fontSize: 10,
+              color: "#7a8aab",
+              fontFamily: "ui-monospace, monospace",
+              // Never let an out-of-frame fix (very large x/z) push the row wider
+              // than the sidebar; wrap instead of overflowing horizontally.
+              overflowWrap: "anywhere",
+            }}
+          >
             {coordStr}
             {" ±"}
             {position.area.radius?.toFixed(1)}m
@@ -560,6 +581,18 @@ export function App() {
     return out;
   }, [devices, byDeviceId]);
 
+  // The engine's active fusion strategy, surfaced from the live feed itself
+  // (every fix carries it as a private-profile vendor extension). Read from the
+  // stream the demo already consumes via the gateway - never a direct engine
+  // call (this is a MEC app: gateway only). All fixes share the primary, so any
+  // one is representative.
+  const activeStrategy = useMemo(() => {
+    for (const it of Object.values(byDeviceId)) {
+      if (it?.strategy) return it.strategy;
+    }
+    return null;
+  }, [byDeviceId]);
+
   // Keep the panel content mounted through the close transition so the rail
   // can slide/fade out instead of vanishing. Cleared after the animation.
   const [renderedSelection, setRenderedSelection] = useState(null);
@@ -609,9 +642,34 @@ export function App() {
       }}
     >
       <header style={header}>
-        <div style={dot("#3a82ff", true)} />
+        <div
+          style={dot(connected ? "#5dffb0" : "#7a8aab", connected)}
+          title={connected ? "Live position feed connected" : "Position feed disconnected — reconnecting"}
+        />
         <h2 style={title}>5G Positioning</h2>
-        <span style={subtitle}>· CAMARA · live</span>
+        <span style={subtitle}>· CAMARA · {connected ? "live" : "offline"}</span>
+        {activeStrategy && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 10,
+              color: "#9ec3ff",
+              fontFamily: "ui-monospace, monospace",
+              padding: "2px 8px",
+              borderRadius: 6,
+              border: "1px solid rgba(58,130,255,0.3)",
+              background: "rgba(58,130,255,0.08)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+            title={`Engine fusion strategy in effect (private-profile vendor extension, id: ${activeStrategy}). Every fix in the feed is produced by this strategy.`}
+          >
+            <span style={{ opacity: 0.6 }}>fusion</span>
+            {STRATEGY_LABEL[activeStrategy] || activeStrategy}
+          </span>
+        )}
         {venueName && (
           <span
             style={{
@@ -710,7 +768,7 @@ export function App() {
             <div key={d.assetId}>
               <DeviceItem
                 device={d}
-                state={selected ? deviceState({ position: entry?.position, connected }) : "offline"}
+                state={selected ? deviceState({ position: entry?.position }) : "hidden"}
                 position={entry?.position}
                 selected={selected}
                 coordMode={coordMode}

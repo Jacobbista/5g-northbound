@@ -1,0 +1,22 @@
+/* Minimal reset. Without it the browser default body margin (8px) + white
+   body background painted a white frame around the dark app and pushed the
+   100vh shell past the viewport, producing a stray scroll/overflow. */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: #050816;
+  overflow: hidden;
+}
+
+/* The 3D canvas takes keyboard focus on click (OrbitControls); its default
+   focus ring is a distracting outline over the scene and carries no meaning. */
+canvas:focus,
+canvas:focus-visible {
+  outline: none;
+}
