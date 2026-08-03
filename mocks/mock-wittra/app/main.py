@@ -26,7 +26,10 @@ KNOWN_DEVICES = {
     "wittra-tag-02": {"label": "Tag 02", "height_m": 2.7},
 }
 
-# Reference point near the lab + a per-device random-walk state.
+# Init placeholder only: the lat/lon the synthetic tags start from before the
+# random walk moves them. Its value is not meaningful - a mock exists to drive
+# the real ingest pipeline (rest-adapter pull), not to be geographically
+# correct; a real source emits its own coordinates and never reads the venue.
 _CENTER = (45.064312, 7.659154)
 _state: dict[str, dict] = {}
 
