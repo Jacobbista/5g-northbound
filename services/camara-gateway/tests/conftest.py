@@ -70,11 +70,11 @@ _TEST_ASSETS = {
     "version": 2,
     "assets": [
         {"asset_id": "tool-880", "positioning_id": "wifi-asset-01", "kind": "tool",
-         "source": "wifi", "org": "fiskarheden", "label": "WiFi asset 01"},
+         "source": "wifi", "org": "acme", "label": "WiFi asset 01"},
         {"asset_id": "forklift-7", "positioning_id": "mock-demo-01", "kind": "forklift",
-         "source": "mock", "org": "fiskarheden", "label": "Mock demo 01", "simulated": True},
+         "source": "mock", "org": "acme", "label": "Mock demo 01", "simulated": True},
         {"asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "kind": "pallet",
-         "source": "wittra", "org": "fiskarheden", "label": "Wittra tag 01", "simulated": True},
+         "source": "wittra", "org": "acme", "label": "Wittra tag 01", "simulated": True},
     ],
 }
 
@@ -91,13 +91,16 @@ def settings_env(monkeypatch, tmp_path):
     monkeypatch.setenv("ASSET_STORE_FILE", str(store))
     monkeypatch.setenv("ASSET_SEED_FILE", str(tmp_path / "noseed.json"))
     import app.auth as auth
+    import app.position as position
     from app.config import get_settings
 
     get_settings.cache_clear()
     auth._jwks_cache = {}
+    position.reset_cache()
     yield
     get_settings.cache_clear()
     auth._jwks_cache = {}
+    position.reset_cache()
 
 
 @pytest.fixture

@@ -17,14 +17,10 @@ class CamaraError(Exception):
 
 
 def _envelope(status: int, code: str, message: str, request: Request) -> JSONResponse:
-    headers = {}
-    correlator = request.headers.get("x-correlator")
-    if correlator:
-        headers["x-correlator"] = correlator
+    # x-correlator is set uniformly (success and error) by the app middleware.
     return JSONResponse(
         status_code=status,
         content={"status": status, "code": code, "message": message},
-        headers=headers,
     )
 
 

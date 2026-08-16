@@ -1,5 +1,5 @@
 from datetime import timezone
-from math import asin, cos, radians, sin, sqrt
+from math import acos, asin, cos, pi, radians, sin, sqrt
 
 from fastapi import APIRouter, Depends
 
@@ -24,6 +24,42 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * _EARTH_RADIUS_M * asin(sqrt(a))
 
 
+def _circle_overlap_fraction(d: float, r_fix: float, r_area: float) -> float:
+    """Fraction of the fix circle (radius r_fix) covered by the area circle
+    (radius r_area) whose centres are d apart. Called only when the two circles
+    partially overlap."""
+    if d <= 0:
+        return min(1.0, (r_area * r_area) / (r_fix * r_fix))
+    d2 = d * d
+    inter = (
+        r_fix * r_fix * acos((d2 + r_fix * r_fix - r_area * r_area) / (2 * d * r_fix))
+        + r_area * r_area * acos((d2 + r_area * r_area - r_fix * r_fix) / (2 * d * r_area))
+        - 0.5 * sqrt(
+            max(0.0, (-d + r_fix + r_area) * (d + r_fix - r_area)
+                * (d - r_fix + r_area) * (d + r_fix + r_area))
+        )
+    )
+    return max(0.0, min(1.0, inter / (pi * r_fix * r_fix)))
+
+
+def _classify(pos, area) -> tuple[str, int | None]:
+    """TRUE/FALSE/PARTIAL from the fix's uncertainty circle against the queried
+    area. The fix is a circle (centre, radius = accuracy): TRUE when it lies
+    fully inside the area, FALSE when fully outside, PARTIAL when it straddles
+    the boundary - with matchRate the percentage of the fix circle inside."""
+    d = _haversine_m(
+        pos.latitude, pos.longitude, area.center.latitude, area.center.longitude
+    )
+    r_fix = max(pos.radius_m, 1.0)
+    r_area = area.radius
+    if d + r_fix <= r_area:
+        return "TRUE", None
+    if d >= r_area + r_fix:
+        return "FALSE", None
+    frac = _circle_overlap_fraction(d, r_fix, r_area)
+    return "PARTIAL", min(99, max(1, round(frac * 100)))
+
+
 @router.post("/verify", response_model=VerifyLocationResponse, response_model_exclude_none=True)
 async def verify(
     body: VerifyLocationRequest,
@@ -34,14 +70,13 @@ async def verify(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(asset.positioning_id, asset.source)
-
-    distance = _haversine_m(
-        pos.latitude, pos.longitude, body.area.center.latitude, body.area.center.longitude
+    pos = await get_position(
+        asset.positioning_id, asset.source, body.maxAge, "LOCATION_VERIFICATION"
     )
-    # MVP uses a single-point estimate: inside -> TRUE, otherwise FALSE (no PARTIAL).
-    result = "TRUE" if distance <= body.area.radius else "FALSE"
+
+    result, match_rate = _classify(pos, body.area)
     return VerifyLocationResponse(
         verificationResult=result,
         lastLocationTime=_rfc3339(pos.last_location_time),
+        matchRate=match_rate,
     )

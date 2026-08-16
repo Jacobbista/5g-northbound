@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 
@@ -28,7 +30,7 @@ async def test_retrieve_returns_spec_shaped_circle(client, auth_headers, locatio
 
 async def test_retrieve_via_nai_asset_alias(client, auth_headers, location_validator):
     """networkAccessIdentifier as the `<asset_id>@<org>.assets` alias resolves."""
-    body = {"device": {"networkAccessIdentifier": "tool-880@fiskarheden.assets"}}
+    body = {"device": {"networkAccessIdentifier": "tool-880@acme.assets"}}
     resp = await client.post(RETRIEVE, json=body, headers=auth_headers)
     assert resp.status_code == 200
     location_validator.validate(resp.json())
@@ -53,11 +55,11 @@ async def test_retrieve_unknown_asset_404(client, auth_headers):
     assert resp.json()["code"] == "IDENTIFIER_NOT_FOUND"
 
 
-async def test_retrieve_404_when_engine_has_no_fix(
+async def test_retrieve_422_unable_to_locate_when_engine_has_no_fix(
     client, respx_mock, auth_headers, monkeypatch
 ):
-    """Engine 404 ("no measurements") must surface as a NOT_FOUND CAMARA
-    error rather than being papered over by the gateway's mock fallback."""
+    """Engine 404 ("no measurements") surfaces as the CAMARA
+    LOCATION_RETRIEVAL.UNABLE_TO_LOCATE (422), not as the mock fallback."""
     monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
     from app.config import get_settings
 
@@ -67,8 +69,8 @@ async def test_retrieve_404_when_engine_has_no_fix(
         return_value=httpx.Response(404, json={"detail": "no fix"})
     )
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "NOT_FOUND"
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "LOCATION_RETRIEVAL.UNABLE_TO_LOCATE"
 
 
 async def test_retrieve_503_when_engine_unreachable(
@@ -84,7 +86,7 @@ async def test_retrieve_503_when_engine_unreachable(
     )
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 503
-    assert resp.json()["code"] == "SERVICE_UNAVAILABLE"
+    assert resp.json()["code"] == "UNAVAILABLE"
 
 
 def _engine_ok():
@@ -146,7 +148,7 @@ async def test_retrieve_does_not_retry_on_engine_404(
         return_value=httpx.Response(404, json={"detail": "no fix"})
     )
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
-    assert resp.status_code == 404
+    assert resp.status_code == 422  # UNABLE_TO_LOCATE, not retried
     assert route.call_count == 1
 
 
@@ -164,3 +166,98 @@ async def test_retrieve_retries_once_on_network_error_then_succeeds(
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 200
     assert route.call_count == 2
+
+
+def _engine_ok_fresh():
+    body = _engine_ok().json()
+    body["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return httpx.Response(200, json=body)
+
+
+# --- maxAge freshness contract + cache ---
+
+
+async def test_retrieve_serves_from_cache_within_ttl(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    """A second call within the freshness bound reuses the cached fix instead of
+    calling the engine again."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    route = respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_ok_fresh()
+    )
+    r1 = await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 60}, headers=auth_headers)
+    r2 = await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 60}, headers=auth_headers)
+    assert r1.status_code == r2.status_code == 200
+    assert route.call_count == 1  # second request served from cache
+
+
+async def test_retrieve_maxage_zero_bypasses_cache(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    """maxAge=0 requests a fresh calculation, so the cache is bypassed."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    route = respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_ok_fresh()
+    )
+    await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 0}, headers=auth_headers)
+    await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 0}, headers=auth_headers)
+    assert route.call_count == 2  # each call fetches fresh
+
+
+async def test_retrieve_maxage_unfulfillable_422(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    """A fix older than the requested maxAge cannot be fulfilled."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_ok()  # timestamp far older than maxAge
+    )
+    resp = await client.post(
+        RETRIEVE, json={"device": ASSET, "maxAge": 120}, headers=auth_headers
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE"
+
+
+# --- identity + maxSurface ---
+
+
+async def test_retrieve_public_identifier_422(client, auth_headers):
+    """A public-network identifier is rejected with UNSUPPORTED_IDENTIFIER."""
+    resp = await client.post(
+        RETRIEVE, json={"device": {"phoneNumber": "+123456789"}}, headers=auth_headers
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "UNSUPPORTED_IDENTIFIER"
+
+
+async def test_retrieve_maxsurface_unfulfillable_422(client, auth_headers):
+    """The mock ~50 m radius yields an area (~7854 m2) larger than a tight
+    maxSurface -> 422."""
+    resp = await client.post(
+        RETRIEVE, json={"device": ASSET, "maxSurface": 100}, headers=auth_headers
+    )
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_SURFACE"
+
+
+async def test_retrieve_maxsurface_ok(client, auth_headers, location_validator):
+    """A generous maxSurface is satisfied by the mock fix."""
+    resp = await client.post(
+        RETRIEVE, json={"device": ASSET, "maxSurface": 1000000}, headers=auth_headers
+    )
+    assert resp.status_code == 200
+    location_validator.validate(resp.json())

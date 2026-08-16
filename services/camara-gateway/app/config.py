@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # -> the /anchors/calibration extension returns nothing (degrades).
     wifi_positioning_url: str = ""
 
+    # Freshness cap for the position cache when the request carries no maxAge
+    # ("any age" per CAMARA). A request's maxAge, when present, overrides it.
+    location_cache_ttl_s: float = 5.0
+
     required_role: str = "camara-location-read"
     # Asset Identity Map. The gateway is the network authority for assets,
     # exactly as the engine is for the blueprint: it persists the map on a

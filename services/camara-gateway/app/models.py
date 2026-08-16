@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Device identifier (CAMARA private-asset profile) ---
 
@@ -8,24 +8,24 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class Device(BaseModel):
     """The tracked entity is an ASSET, not a cellular subscriber.
 
-    Private-asset profile (see spec/private-profile/): `assetId` is the
-    first-class identifier. `networkAccessIdentifier` is accepted only as an
-    optional alias carrier using the asset scheme `<asset_id>@<org>.assets`,
-    for consumers that must stay on a stock CAMARA field. No MSISDN/IMSI/IP -
-    those are public-network subscriber identifiers and have no meaning here.
+    Private-asset profile: `assetId` is the first-class identifier.
+    `networkAccessIdentifier` is accepted only as an optional alias carrier
+    using the asset scheme `<asset_id>@<org>.assets`, for consumers that must
+    stay on a stock CAMARA field. The public-network identifiers below are
+    parsed only so the profile can reject them explicitly with
+    UNSUPPORTED_IDENTIFIER (see position.resolve_asset); they carry no meaning
+    for an asset.
     """
 
     model_config = ConfigDict(extra="ignore")
     assetId: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     networkAccessIdentifier: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    ipv4Address: Optional[dict] = None
+    ipv6Address: Optional[str] = None
 
-    @model_validator(mode="after")
-    def _at_least_one(self) -> "Device":
-        if not (self.assetId or self.networkAccessIdentifier):
-            raise ValueError(
-                "device.assetId is required (or networkAccessIdentifier as an asset alias)"
-            )
-        return self
+    def has_public_identifier(self) -> bool:
+        return any((self.phoneNumber, self.ipv4Address, self.ipv6Address))
 
 
 # --- Geometry ---

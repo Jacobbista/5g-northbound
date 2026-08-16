@@ -1,4 +1,5 @@
 from datetime import timezone
+from math import pi
 
 from fastapi import APIRouter, Depends
 
@@ -25,13 +26,22 @@ async def retrieve(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(asset.positioning_id, asset.source)
+    pos = await get_position(
+        asset.positioning_id, asset.source, body.maxAge, "LOCATION_RETRIEVAL"
+    )
+    # CAMARA Circle requires radius >= 1 m; the same radius drives the maxSurface
+    # check, so the area tested is the one actually reported.
+    radius = max(pos.radius_m, 1.0)
+    if body.maxSurface is not None and pi * radius * radius > body.maxSurface:
+        raise CamaraError(
+            422, "LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_SURFACE",
+            "Unable to provide a location within the requested maxSurface.",
+        )
     return Location(
         lastLocationTime=_rfc3339(pos.last_location_time),
         area=Circle(
             center=Point(latitude=pos.latitude, longitude=pos.longitude),
-            # CAMARA Circle requires radius >= 1 m
-            radius=max(pos.radius_m, 1.0),
+            radius=radius,
         ),
         # Private-asset profile extensions.
         source=asset.source,

@@ -1,6 +1,7 @@
 import logging
+import uuid
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -37,7 +38,18 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["x-correlator"],
 )
+
+
+@app.middleware("http")
+async def x_correlator(request: Request, call_next):
+    """Echo the client's x-correlator, or mint one, on every response (success
+    and error), per CAMARA Commonalities."""
+    correlator = request.headers.get("x-correlator") or str(uuid.uuid4())
+    response = await call_next(request)
+    response.headers["x-correlator"] = correlator
+    return response
 
 app.add_exception_handler(CamaraError, camara_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)

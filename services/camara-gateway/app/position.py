@@ -36,6 +36,16 @@ class Position:
     vertical_accuracy_m: float | None = None
 
 
+# Position cache: the last fix seen per (positioning_id, source). Freshness is
+# judged by the fix's own last_location_time, not by insert time, so a single
+# age metric drives both cache reuse and the CAMARA maxAge contract.
+_cache: dict[tuple[str, str | None], "Position"] = {}
+
+
+def reset_cache() -> None:
+    _cache.clear()
+
+
 @dataclass
 class PositionDetails:
     """Richer payload for the /devices/{id}/details vendor endpoint.
@@ -70,10 +80,16 @@ def resolve_asset(device: Device) -> Asset:
     """Resolve a CAMARA device identifier to an asset. No subscriber lookup.
 
     `assetId` is first-class; `networkAccessIdentifier` is accepted only via
-    the `<asset_id>@<org>.assets` alias scheme. An unknown asset is a 404 -
-    there is no "fall back to the raw value" path (that was the public-network
-    assumption this profile rejects).
+    the `<asset_id>@<org>.assets` alias scheme. Public-network identifiers are
+    rejected with UNSUPPORTED_IDENTIFIER (they are the assumption this profile
+    drops); an unknown asset is a 404 - there is no "fall back to the raw
+    value" path.
     """
+    if device.has_public_identifier():
+        raise CamaraError(
+            422, "UNSUPPORTED_IDENTIFIER",
+            "Public-network identifiers are not supported; identify the asset by assetId.",
+        )
     asset_id = device.assetId
     if not asset_id and device.networkAccessIdentifier:
         asset_id = _asset_id_from_nai(device.networkAccessIdentifier)
@@ -140,15 +156,22 @@ def _position_path(device_id: str, source: str | None) -> str:
     return f"/position/{device_id}" + (f"?source={source}" if source else "")
 
 
-async def get_position(device_id: str, source: str | None = None) -> Position:
-    """Single seam between the gateway and the position source.
+def _age_s(pos: Position, now: datetime) -> float:
+    t = pos.last_location_time
+    # Engine timestamps are tz-aware; guard a naive one so subtracting it from
+    # an aware `now` cannot raise.
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    return (now - t).total_seconds()
 
-    When POSITIONING_ENGINE_URL is set, the engine is the source of truth:
-    an HTTP 404 from the engine ("no fix") is propagated to the caller as a
-    NOT_FOUND CAMARA error rather than being smoothed over with a mock fix.
-    Transient 5xx and network errors are retried once before falling through
-    to BAD_GATEWAY / SERVICE_UNAVAILABLE. The mock fallback survives only for
-    the no-engine dev case.
+
+async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> Position:
+    """Fetch one fix from the engine, or the dev mock when no engine is set.
+
+    Maps engine outcomes to CAMARA errors: a 404 ("no measurements") becomes a
+    422 {ns}.UNABLE_TO_LOCATE; a persistent 5xx becomes 502 BAD_GATEWAY; an
+    unreachable engine becomes 503 UNAVAILABLE. Transient 5xx and network errors
+    are retried once inside _engine_get before surfacing here.
     """
     url = get_settings().positioning_engine_url
     if not url:
@@ -157,12 +180,15 @@ async def get_position(device_id: str, source: str | None = None) -> Position:
         d = await _engine_get(_position_path(device_id, source))
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
-            raise CamaraError(404, "NOT_FOUND", "No position fix for this device.") from exc
+            raise CamaraError(
+                422, f"{error_ns}.UNABLE_TO_LOCATE",
+                "No location could be determined for this asset.",
+            ) from exc
         log.warning("engine HTTP error %s for %s", exc.response.status_code, device_id)
         raise CamaraError(502, "BAD_GATEWAY", "Position source returned an error.") from exc
     except httpx.HTTPError as exc:
         log.warning("engine unreachable: %s", exc)
-        raise CamaraError(503, "SERVICE_UNAVAILABLE", "Position source unreachable.") from exc
+        raise CamaraError(503, "UNAVAILABLE", "Position source unreachable.") from exc
     return Position(
         latitude=d["latitude"],
         longitude=d["longitude"],
@@ -171,6 +197,39 @@ async def get_position(device_id: str, source: str | None = None) -> Position:
         altitude_m=d.get("altitude_m"),
         vertical_accuracy_m=d.get("vertical_accuracy_m"),
     )
+
+
+async def get_position(
+    device_id: str,
+    source: str | None = None,
+    max_age: int | None = None,
+    error_ns: str = "LOCATION_RETRIEVAL",
+) -> Position:
+    """Single seam between the gateway and the position source, honouring the
+    CAMARA maxAge freshness contract.
+
+    maxAge semantics (spec): absent means "any age" is acceptable; 0 requests a
+    fresh calculation, so the cache is bypassed; N accepts a fix no older than N
+    seconds. A cached fix is reused only while it still satisfies that bound.
+    When even a freshly fetched fix is older than maxAge, the request cannot be
+    fulfilled -> 422 {ns}.UNABLE_TO_FULFILL_MAX_AGE. `error_ns` namespaces the
+    API-specific codes (LOCATION_RETRIEVAL / LOCATION_VERIFICATION).
+    """
+    now = datetime.now(timezone.utc)
+    key = (device_id, source)
+    if max_age != 0:
+        bound = max_age if max_age is not None else get_settings().location_cache_ttl_s
+        cached = _cache.get(key)
+        if cached is not None and _age_s(cached, now) <= bound:
+            return cached
+    pos = await _fetch_position(device_id, source, error_ns)
+    _cache[key] = pos
+    if max_age is not None and max_age > 0 and _age_s(pos, now) > max_age:
+        raise CamaraError(
+            422, f"{error_ns}.UNABLE_TO_FULFILL_MAX_AGE",
+            "Unable to provide a location fresh enough for the requested maxAge.",
+        )
+    return pos
 
 
 async def get_position_details(device_id: str, source: str | None = None) -> PositionDetails | None:
