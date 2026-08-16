@@ -67,4 +67,4 @@ Look up exact formats once you know the model.
 The Kubernetes manifests live in the companion repository
 [`kelt`](https://github.com/Jacobbista/kelt); this repo defines the contracts
 those manifests consume. Repo conventions (code style, tests, security) are in
-`CLAUDE.md` at the repository root.
+`AGENTS.md` at the repository root.

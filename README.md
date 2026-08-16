@@ -86,7 +86,7 @@ Asset structure, authoring, seeding, and tenancy: [`docs/asset-registry.md`](doc
 
 ## Documentation
 
-The guided index is [`docs/README.md`](docs/README.md) - grouped by reader intent, starting from [`docs/overview.md`](docs/overview.md). The folder tree is mapped in [`STRUCTURE.md`](STRUCTURE.md); repository conventions (code style, tests, security) in [`CLAUDE.md`](CLAUDE.md).
+The guided index is [`docs/README.md`](docs/README.md) - grouped by reader intent, starting from [`docs/overview.md`](docs/overview.md). The folder tree is mapped in [`STRUCTURE.md`](STRUCTURE.md); repository conventions (code style, tests, security) in [`AGENTS.md`](AGENTS.md).
 
 ## Configuration
 

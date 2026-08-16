@@ -6,7 +6,7 @@ engine evicts entries that stop beating. On shutdown the adapter best-effort
 DELETEs itself. Disabled (no-op) when the required env is not set, so the
 adapter still runs standalone.
 
-Bundled per adapter (no cross-service import, per CLAUDE.md); identical shape
+Bundled per adapter (no cross-service import, per AGENTS.md); identical shape
 in every adapter.
 """
 

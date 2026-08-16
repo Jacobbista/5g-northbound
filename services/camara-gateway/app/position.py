@@ -294,7 +294,7 @@ async def get_engine_devices() -> list[dict] | None:
 
 async def get_blueprint() -> dict | None:
     """Vendor extension: proxy the engine's GET /blueprint so the demo (which
-    talks only to the gateway, per the MEC constraint in CLAUDE.md) can read
+    talks only to the gateway, per the MEC constraint in AGENTS.md) can read
     the venue blueprint without reaching the engine directly.
 
     Returns the raw blueprint dict, or None when the engine is not configured,

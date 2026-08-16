@@ -1,7 +1,7 @@
 # Repository structure
 
 Quick orientation guide. For architecture, contracts and deployment shape see
-[`docs/`](docs/); for code conventions see [`CLAUDE.md`](CLAUDE.md).
+[`docs/`](docs/); for code conventions see [`AGENTS.md`](AGENTS.md).
 
 ## Tier 1 - Production services (ship to the testbed)
 
@@ -51,15 +51,17 @@ Code that runs OUTSIDE the cluster. Not a container.
 |---------------------|-----------------------------------------------------------------------|
 | `dev/`              | Static fixtures mounted as volumes (`floor-plan.json`, `keycloak-realm.json`, `wifi-config.json`, `assets.json`) |
 | `docs/`             | Architecture, data contracts, adapters, deployment notes              |
-| `.github/workflows/`| CI: `test.yml` runs each service's pytest matrix; `build.yml` publishes images on tag |
+| `spec/`             | The CAMARA private-asset profile: OpenAPI overlays + AsyncAPI over the pinned base |
+| `.github/workflows/`| CI: `test.yml` runs each service's pytest matrix; `checks.yml` runs env/compose/overlay/leak checks; `build.yml` publishes images on tag |
 
 ## Root files
 
 | File                              | Role                                                        |
 |-----------------------------------|-------------------------------------------------------------|
-| `deploy/compose/docker-compose.yml` | Local dev stack - wires all ten services on one bridge net |
+| `deploy/compose/docker-compose.yml` | Local dev stack - wires all nine services on one bridge net |
 | `Makefile`                        | Common dev verbs (`make demo`, `make test`, etc.)           |
-| `CLAUDE.md`                       | Conventions for contributors + AI assistants                |
+| `AGENTS.md`                       | Entry point: conventions for contributors + AI assistants   |
+| `CLAUDE.md`                       | Fallback pointer to `AGENTS.md`                             |
 | `README.md`                       | Project overview                                            |
 | `STRUCTURE.md`                    | This file                                                   |
 

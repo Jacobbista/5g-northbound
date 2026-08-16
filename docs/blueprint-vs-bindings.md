@@ -54,7 +54,7 @@ flowchart TD
 | Authority     | positioning-engine | Persists it (`BLUEPRINT_PATH`, a writable PVC); serves GET/PUT; derives `gps_origin` for the WGS84 conversion |
 | Write-client  | placement-editor   | `GET/PUT` over HTTP (`POSITIONING_ENGINE_URL`); its `/api/layout` proxies the engine. No local blueprint file |
 | Read-client   | wifi-positioning   | `GET /blueprint` from the engine at boot (retry + degraded), joins anchors to BSSIDs |
-| Read-client   | positioning-demo   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (CLAUDE.md) |
+| Read-client   | positioning-demo   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (AGENTS.md) |
 | Proxy         | camara-gateway     | Read-only `GET /blueprint` proxy so the demo reaches it through its single allowed backend |
 | Not a consumer| mock-positioning   | Synthetic walker; uses `WIDTH_M`/`DEPTH_M` env, no real geometry |
 | Not a consumer| rest-adapter       | Vendor cloud returns positioned WGS84 fixes; pass-through. (The editor's `↻ sync vendor` imports those at authoring time only) |

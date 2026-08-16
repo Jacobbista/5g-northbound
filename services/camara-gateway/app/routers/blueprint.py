@@ -1,7 +1,7 @@
 """Vendor extension: read-only proxy of the engine's blueprint.
 
 The demo renders the venue (rooms, walls, anchors, georef) from the blueprint
-but, per the MEC constraint in CLAUDE.md, must not call the engine directly.
+but, per the MEC constraint in AGENTS.md, must not call the engine directly.
 The gateway proxies the engine's `GET /blueprint` so the demo reads it through
 its single allowed backend. Read-only: authoring goes editor -> engine, never
 through here.
