@@ -1,0 +1,109 @@
+asyncapi: 3.0.0
+info:
+  title: CAMARA private-asset profile - streaming delivery
+  version: 0.1.0
+  description: |
+    The streaming half of the private-asset profile (delivery gap). OpenAPI
+    covers the pull request/response surface (see the overlays in this folder);
+    this AsyncAPI document formalises the push channel, which is a WebSocket and
+    therefore outside OpenAPI's scope.
+
+    The gateway enriches the engine broadcast into asset-shaped events and drops
+    any positioning id with no registered asset behind it (same no-raw-id rule
+    and org-scoping as the pull path).
+servers:
+  gateway:
+    host: localhost:8087
+    protocol: ws
+    description: CAMARA gateway. Production is `wss` behind the ingress.
+    security:
+      - $ref: '#/components/securitySchemes/bearerQuery'
+channels:
+  positions:
+    address: /positions/stream
+    description: |
+      Live asset positions. The bearer token is passed as the `token` query
+      parameter because browsers cannot set an Authorization header on a
+      WebSocket handshake. Close codes: 4401 (auth failed), 1011 (upstream
+      engine unavailable), 1000 (clean shutdown).
+    messages:
+      positionBatch:
+        $ref: '#/components/messages/positionBatch'
+operations:
+  receivePositions:
+    action: receive
+    channel:
+      $ref: '#/channels/positions'
+    summary: Receive live asset-position batches pushed by the gateway.
+    messages:
+      - $ref: '#/channels/positions/messages/positionBatch'
+components:
+  securitySchemes:
+    bearerQuery:
+      type: httpApiKey
+      in: query
+      name: token
+      description: A Keycloak-issued JWT (realm role `camara-location-read`).
+  messages:
+    positionBatch:
+      name: positionBatch
+      title: Asset position batch
+      contentType: application/json
+      summary: One JSON array, one entry per asset that currently has a fix.
+      payload:
+        $ref: '#/components/schemas/PositionEventArray'
+  schemas:
+    PositionEventArray:
+      type: array
+      items:
+        $ref: '#/components/schemas/PositionEvent'
+    PositionEvent:
+      type: object
+      required:
+        - asset_id
+        - latitude
+        - longitude
+        - timestamp
+      properties:
+        asset_id:
+          type: string
+          description: CAMARA asset identifier (private-asset profile).
+          example: pkg-4471
+        positioning_id:
+          type: string
+          description: Internal/vendor-native id the engine fuses on.
+          example: wittra-tag-01
+        source:
+          type: string
+          example: wittra
+        kind:
+          type: string
+          example: pallet
+        org:
+          type: string
+          description: Tenant; the gateway drops cross-tenant entries before sending.
+          example: acme
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        altitude_m:
+          type: number
+          format: double
+          nullable: true
+        accuracy_m:
+          type: number
+          format: double
+        timestamp:
+          type: string
+          format: date-time
+          description: The estimate time (lastLocationTime), not the send time.
+        sources:
+          type: array
+          items:
+            type: string
+        strategy:
+          type: string
+          example: weighted_avg

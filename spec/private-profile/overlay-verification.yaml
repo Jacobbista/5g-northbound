@@ -1,0 +1,28 @@
+overlay: 1.0.0
+info:
+  title: CAMARA Device Location Verification - private-asset profile overlay
+  version: 0.1.0
+# Applies to ../../services/camara-gateway/spec/location-verification.yaml
+# (CAMARA r3.2, pinned). Same asset-identity delta as the retrieval overlay; the
+# verification response (TRUE/FALSE/PARTIAL + matchRate) is already in the base.
+# Apply with `make profile-spec` (or any OpenAPI Overlay tool, e.g. Redocly).
+actions:
+  - target: $.components.schemas.Device.description
+    update: |
+      Private-asset profile: the tracked entity is an ASSET, identified by
+      `assetId`. `networkAccessIdentifier` is accepted only as the asset alias
+      `<asset_id>@<org>.assets`. Public-network identifiers (phoneNumber, IP)
+      are not part of this profile.
+  - target: $.components.schemas.Device.properties
+    update:
+      assetId:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+        description: First-class asset identifier (private-asset profile).
+        example: pkg-4471
+  - target: $.components.schemas.Device.properties.phoneNumber
+    remove: true
+  - target: $.components.schemas.Device.properties.ipv4Address
+    remove: true
+  - target: $.components.schemas.Device.properties.ipv6Address
+    remove: true
