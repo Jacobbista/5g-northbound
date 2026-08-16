@@ -22,7 +22,7 @@ help:
 	@echo "  make stop     Stop everything (keeps data)."
 	@echo "  make test     Run every service's test suite."
 	@echo ""
-	@echo "  make smoke    Token + curl both devices (sanity check the backend)."
+	@echo "  make smoke    Token + curl a couple of assets (sanity check the backend)."
 	@echo "  make logs     Tail logs from all services."
 	@echo "  make clean    Stop and remove containers + volumes."
 	@echo ""
@@ -76,16 +76,10 @@ demo: env-config
 stop:
 	$(COMPOSE) down
 
+# Runs every suite and prints a single pass/fail roundup at the end (a failing
+# suite dumps its output inline). See deploy/tools/run-tests.sh.
 test:
-	cd services/camara-gateway      && .venv/bin/pytest
-	cd services/positioning-engine  && .venv/bin/pytest
-	cd services/wifi-positioning    && .venv/bin/pytest
-	cd services/placement-editor    && .venv/bin/pytest
-	cd services/rest-adapter        && .venv/bin/pytest
-	cd mocks/mock-positioning       && .venv/bin/pytest
-	cd mocks/mock-wittra            && .venv/bin/pytest
-	npm --prefix services/positioning-demo test
-	npm --prefix services/placement-editor/frontend test
+	@bash deploy/tools/run-tests.sh
 
 # --- Occasional helpers ---
 
@@ -101,6 +95,22 @@ env-check:
 .PHONY: positioning-check
 positioning-check:
 	@python3 deploy/tools/positioning_check.py
+
+# Apply the private-asset profile overlays to the pinned CAMARA base specs,
+# producing the profiled OpenAPI documents (derived artefacts, gitignored). The
+# committed contribution is the overlays under spec/private-profile/.
+.PHONY: profile-spec
+profile-spec:
+	@mkdir -p spec/private-profile/generated
+	@python3 deploy/tools/apply_overlay.py \
+	  services/camara-gateway/spec/location-retrieval.yaml \
+	  spec/private-profile/overlay-retrieval.yaml \
+	  spec/private-profile/generated/location-retrieval.profiled.yaml
+	@python3 deploy/tools/apply_overlay.py \
+	  services/camara-gateway/spec/location-verification.yaml \
+	  spec/private-profile/overlay-verification.yaml \
+	  spec/private-profile/generated/location-verification.profiled.yaml
+	@echo "  profiled specs written to spec/private-profile/generated/"
 
 # Contract hygiene + the machine-readable sensitivity manifest KELT consumes
 # (var -> tier -> Secret/ConfigMap + provenance). Lint fails on hard problems.
@@ -122,9 +132,9 @@ token:
 
 smoke:
 	@TOKEN=$$($(MAKE) -s token); \
-	for phone in +390111234567 +390117654321; do \
-	  echo "=== $$phone ==="; \
+	for asset in forklift-7 pkg-4471; do \
+	  echo "=== $$asset ==="; \
 	  curl -s -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
 	    -H "Authorization: Bearer $$TOKEN" -H "Content-Type: application/json" \
-	    -d "{\"device\":{\"phoneNumber\":\"$$phone\"}}" | python3 -m json.tool; \
+	    -d "{\"device\":{\"assetId\":\"$$asset\"}}" | python3 -m json.tool; \
 	done

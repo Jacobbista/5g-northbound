@@ -106,14 +106,14 @@ GET /devices  ->  { "origin": "inventory" | "observed",
                                    "last_seen"?: <epoch>, "position"?: {…} } ] }
 ```
 
-`origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud — bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested — a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
+`origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud - bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested - a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
 
 `role` and `source_class` are the two classification axes from the [private-asset paper](https://github.com/Jacobbista/5g-northbound):
 
-- **`role`** — `asset` (a tracked entity: tool, pallet, forklift, worker) vs `infrastructure` (a fixed sensor: UWB anchor, BLE gateway — outside the 3GPP trust domain, **never onboarded** as an asset). Leave it off when the source can't classify; the consumer then treats every candidate as onboardable.
-- **`source_class`** — the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
+- **`role`** - `asset` (a tracked entity: tool, pallet, forklift, worker) vs `infrastructure` (a fixed sensor: UWB anchor, BLE gateway - outside the 3GPP trust domain, **never onboarded** as an asset). Leave it off when the source can't classify; the consumer then treats every candidate as onboardable.
+- **`source_class`** - the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
 
-wifi/mock only ever surface `role: asset` (their infrastructure lives elsewhere — wifi APs are in the bindings). A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `rest-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields — no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+wifi/mock only ever surface `role: asset` (their infrastructure lives elsewhere - wifi APs are in the bindings). A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `rest-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields - no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Lifecycle
 

@@ -1,7 +1,7 @@
 # Asset registry
 
 The **Asset Identity Map** is the list of tracked things the platform knows
-about — a UWB tag, a tool, a pallet, a forklift. It is the private-asset
+about - a UWB tag, a tool, a pallet, a forklift. It is the private-asset
 equivalent of a subscriber directory, except an asset has no phone number: it
 is identified by a business id the enterprise chooses (`pkg-4471`,
 `forklift-7`).
@@ -9,7 +9,7 @@ is identified by a business id the enterprise chooses (`pkg-4471`,
 The gateway is the authority for this registry, exactly as the engine is for
 the blueprint. You read it with `GET /assets`, replace it with `PUT /assets`,
 and it persists to a PVC-backed store. **At runtime it is never a mounted
-file** — mounting one has shadowed live state before. The committed
+file** - mounting one has shadowed live state before. The committed
 `dev/assets.json` is a dev seed only.
 
 ## Structure
@@ -23,7 +23,7 @@ The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-no
 | `positioning_id` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | Internal id the engine routes on (`/position/{positioning_id}`) |
 | `kind`           | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
 | `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `mock`    | Positioning modality / adapter, surfaced as profile `source` |
-| `org`            | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim — a consumer sees only its own |
+| `org`            | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
 | `label`          |     | string                                               | Human-readable name for UIs |
 | `simulated`      |     | boolean (default `false`)                            | Wired to a synthetic source (mock). UIs show a `MOCK` badge |
 | `metadata`       |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
@@ -41,7 +41,7 @@ as your starting point:
       "positioning_id": "wittra-tag-01",
       "kind": "pallet",
       "source": "wittra",
-      "org": "fiskarheden",
+      "org": "acme",
       "label": "Wittra tag 01",
       "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }
@@ -69,7 +69,7 @@ REST API: [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Adding a device
 
-Runtime is authoritative, so add through the gateway — do **not** edit a file on
+Runtime is authoritative, so add through the gateway - do **not** edit a file on
 the running pod.
 
 `PUT /assets` **replaces the whole map**. Never blind-write: read, merge your
@@ -121,40 +121,40 @@ The candidate `id` becomes the new asset's `positioning_id`; the operator adds
 
 | `origin`     | Source        | Meaning                                                                 | Onboarding |
 |--------------|---------------|-------------------------------------------------------------------------|------------|
-| `inventory`  | vendor (REST) | a **registry**: the vendor cloud maintains a stable, pre-named list, present whether or not the tag is moving | bulk-safe — the ids are the vendor's own |
-| `observed`   | wifi          | **activity-seen**: an id appears once a scan tagged with it is ingested, and lapses when it stops | claim + label — a human confirms the id is asset X |
+| `inventory`  | vendor (REST) | a **registry**: the vendor cloud maintains a stable, pre-named list, present whether or not the tag is moving | bulk-safe - the ids are the vendor's own |
+| `observed`   | wifi          | **activity-seen**: an id appears once a scan tagged with it is ingested, and lapses when it stops | claim + label - a human confirms the id is asset X |
 
 Both are discovery; the difference is that a vendor exports its inventory while
-wifi only reveals what is currently emitting. Neither auto-creates an asset —
+wifi only reveals what is currently emitting. Neither auto-creates an asset -
 onboarding is always an explicit `PUT /assets`.
 
 ### Infrastructure is not an asset
 
-A vendor's device list mixes **assets** (the mobile things you track — tools,
-pallets, forklifts, workers) with **infrastructure** (fixed sensors — UWB
+A vendor's device list mixes **assets** (the mobile things you track - tools,
+pallets, forklifts, workers) with **infrastructure** (fixed sensors - UWB
 anchors, BLE gateways). The paper places infrastructure *outside* the 3GPP
 trust domain: it feeds the fusion engine but is never a tracked asset.
 Onboarding a sensor as an asset is wrong, so each candidate carries:
 
-- **`role`** — `asset` vs `infrastructure`. The management UI separates
+- **`role`** - `asset` vs `infrastructure`. The management UI separates
   infrastructure into its own non-onboardable section.
-- **`source_class`** — the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
+- **`source_class`** - the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
   `cellular`/`other`), surfaced as a badge and a hint for the asset's kind.
 
-Classification is **schema-declared per vendor**, never guessed — a source that
+Classification is **schema-declared per vendor**, never guessed - a source that
 doesn't classify leaves `role`/`source_class` off and every candidate stays
 onboardable. wifi/mock only ever report `role: asset` (their infrastructure
 lives in the bindings / blueprint, not the device list). For a vendor, the
 `rest-adapter`'s `discover.classify` block maps structural predicates on the
-vendor's own record to the two axes — see
+vendor's own record to the two axes - see
 [integrating a vendor REST API](integrating-a-vendor-rest-api.md#classifying-devices-for-asset-onboarding).
 
 ## Tenancy and sensitivity
 
-`GET /assets` filters by the token's `org` claim — a consumer only ever sees
+`GET /assets` filters by the token's `org` claim - a consumer only ever sees
 its own tenant's assets, and `GET /assets/{id}/details` returns `404` (not
 `403`) for a cross-tenant id so existence never leaks.
 
 The asset inventory is **sensitive** (Tier-1: org + asset list). It is
-gitignored in dev and lives on a PVC in prod — never commit a real map. Only
+gitignored in dev and lives on a PVC in prod - never commit a real map. Only
 the placeholder `dev/assets.json` is in the repo.

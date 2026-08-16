@@ -77,16 +77,16 @@ The two contracts an operator must get right (see step 5):
        valueFrom: { secretKeyRef: { name: wittra-credentials, key: api-key } }
    ```
 
-3. **Build the schema from live data, don't hand-write it blind.** There is no cross-vendor standard — every cloud has its own field names — so the schema is authored per deployment by the operator, guided by the vendor's actual response. Point a bare adapter (auth + `path` + `discover.path` set, mapping/classify still empty) at the vendor and read the raw records:
+3. **Build the schema from live data, don't hand-write it blind.** There is no cross-vendor standard - every cloud has its own field names - so the schema is authored per deployment by the operator, guided by the vendor's actual response. Point a bare adapter (auth + `path` + `discover.path` set, mapping/classify still empty) at the vendor and read the raw records:
 
    ```bash
    curl 'http://rest-adapter-wittra:8080/discover?raw=1' | jq '.raw[0]'
    # -> { "deviceId": "...", "deviceType": "beacon", "fixedLocation": {...}, "name": "...", ... }
    ```
 
-   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/examples/wittra-schema.json) is a worked **reference** for this — not a config to ship as-is.
+   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/examples/wittra-schema.json) is a worked **reference** for this - not a config to ship as-is.
 
-4. **Persist the schema as a ConfigMap + rollout — this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
+4. **Persist the schema as a ConfigMap + rollout - this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
 
    ```bash
    kubectl create configmap rest-adapter-wittra-schema \
@@ -95,26 +95,26 @@ The two contracts an operator must get right (see step 5):
    kubectl rollout restart deploy/rest-adapter-wittra   # picks up the new schema
    ```
 
-   Set `ADAPTER_NAME=wittra` on the adapter — the routing key (see step 5).
+   Set `ADAPTER_NAME=wittra` on the adapter - the routing key (see step 5).
 
-   `PUT /schema` exists for **dev / preview only** — a hot-patch to try a schema against a running pod without a rollout. On a ConfigMap (read-only) mount it applies live but returns `persisted:false` + a `warning`, and the **ConfigMap re-wins on the next restart**. Do not use it as the production write path; land the real change in the ConfigMap. (The read-only-mount footgun is shared with the wifi bindings and the asset map — see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes). The editor's Export/Import of a whole schema/bindings set is a **testbed-to-testbed** transfer, not part of normal operation.)
+   `PUT /schema` exists for **dev / preview only** - a hot-patch to try a schema against a running pod without a rollout. On a ConfigMap (read-only) mount it applies live but returns `persisted:false` + a `warning`, and the **ConfigMap re-wins on the next restart**. Do not use it as the production write path; land the real change in the ConfigMap. (The read-only-mount footgun is shared with the wifi bindings and the asset map - see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes). The editor's Export/Import of a whole schema/bindings set is a **testbed-to-testbed** transfer, not part of normal operation.)
 
-5. **Routing is capability-driven — no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
+5. **Routing is capability-driven - no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
 
 6. **Register the asset.** PUT an entry into the gateway's Asset Identity Map (`GET/PUT /assets`; fixture `dev/assets.json`). The fields that matter:
 
-   - `asset_id` — the business identifier the consumer queries (`device.assetId`). **Not** a phone number.
-   - `positioning_id` — **must equal the vendor-native device id**: it is substituted verbatim into the vendor telemetry path (`?deviceId={device_id}`), so it is the key the vendor cloud knows. (The editor's vendor-sync reads `discover.vendor_device_id` separately — same value, different code path.)
-   - `source` — **must equal the adapter's `ADAPTER_NAME`** (drives routing, step 4).
-   - `org` — tenant; the gateway gates consumers by it.
-   - `kind` — asset class (`uwb-tag`/`pallet`/…), descriptive.
+   - `asset_id` - the business identifier the consumer queries (`device.assetId`). **Not** a phone number.
+   - `positioning_id` - **must equal the vendor-native device id**: it is substituted verbatim into the vendor telemetry path (`?deviceId={device_id}`), so it is the key the vendor cloud knows. (The editor's vendor-sync reads `discover.vendor_device_id` separately - same value, different code path.)
+   - `source` - **must equal the adapter's `ADAPTER_NAME`** (drives routing, step 4).
+   - `org` - tenant; the gateway gates consumers by it.
+   - `kind` - asset class (`uwb-tag`/`pallet`/…), descriptive.
 
    ```json
    {
      "asset_id": "pkg-4471",
      "positioning_id": "D00124B00249ECBB2",
      "source": "wittra",
-     "org": "fiskarheden",
+     "org": "acme",
      "kind": "pallet",
      "label": "Timber bundle 01"
    }
@@ -199,12 +199,12 @@ The full HTTP surface is `GET /discover` on the rest-adapter, proxied by the pla
 
 ### Classifying devices for asset onboarding
 
-The same list also feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` — see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Two things differ from the editor sync:
+The same list also feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` - see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Two things differ from the editor sync:
 
 1. **Onboarding reads the list unfiltered.** The editor's `filter` keeps only anchors; onboarding wants the *tags* that filter drops, so `/devices` bypasses it.
 2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `source_class` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
 
-Classification is a set of **predicates** the schema author writes against the vendor's own fields. The rule is honesty: **classify only what the vendor record actually states, never a guess.** Vendors differ in how they expose type — some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` — match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` — match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic and asserts nothing on its own — it applies the operator's schema. The Wittra example classifies role only:
+Classification is a set of **predicates** the schema author writes against the vendor's own fields. The rule is honesty: **classify only what the vendor record actually states, never a guess.** Vendors differ in how they expose type - some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` - match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` - match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic and asserts nothing on its own - it applies the operator's schema. The Wittra example classifies role only:
 
 ```json
 "discover": {
@@ -219,12 +219,12 @@ Classification is a set of **predicates** the schema author writes against the v
 }
 ```
 
-**Role — declare exactly one of two predicates; the choice sets the default for an *unknown* device:**
+**Role - declare exactly one of two predicates; the choice sets the default for an *unknown* device:**
 
-- **`asset_when`** — match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable — the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them — key off `deviceType`, not location).
-- **`infrastructure_when`** — match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
+- **`asset_when`** - match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable - the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them - key off `deviceType`, not location).
+- **`infrastructure_when`** - match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
 
-**`source_class`** (the positioning technology) — first matching `source_class_rules` predicate wins its `value`, `source_class_default` applies otherwise; recommended values `uwb` / `ble` / `wifi` / `gnss` / `cellular` / `mioty` / `other`. It is **optional and operator-authored — only add it when the vendor record carries a real per-unit signal.** The Wittra example deliberately omits it: `GET /devices` exposes `deviceType` (the role) but not the radio, and a UWB `beacon` and a non-UWB one are byte-identical there — Wittra's UWB module lives in `Config.tof` on a separate endpoint (`GET /devices/configs`). Asserting `source_class` from the device list alone would be a guess, so the schema leaves it out; a deployment that needs per-unit precision maps the field that genuinely encodes it (a structural rule like `{ "when": { "require_path": "miotyConfig" }, "value": "mioty" }`, or the `Config.tof` join) rather than a blanket default.
+**`source_class`** (the positioning technology) - first matching `source_class_rules` predicate wins its `value`, `source_class_default` applies otherwise; recommended values `uwb` / `ble` / `wifi` / `gnss` / `cellular` / `mioty` / `other`. It is **optional and operator-authored - only add it when the vendor record carries a real per-unit signal.** The Wittra example deliberately omits it: `GET /devices` exposes `deviceType` (the role) but not the radio, and a UWB `beacon` and a non-UWB one are byte-identical there - Wittra's UWB module lives in `Config.tof` on a separate endpoint (`GET /devices/configs`). Asserting `source_class` from the device list alone would be a guess, so the schema leaves it out; a deployment that needs per-unit precision maps the field that genuinely encodes it (a structural rule like `{ "when": { "require_path": "miotyConfig" }, "value": "mioty" }`, or the `Config.tof` join) rather than a blanket default.
 
 A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `source_class` (everything stays onboardable).
 
@@ -261,4 +261,4 @@ curl -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
 | `discover` block absent in schema                             | `GET /discover` returns `404`; editor's sync panel shows "vendor has no discover block" |
 | `discover` block present but vendor list endpoint unreachable | `GET /discover` returns `503`; editor's sync panel surfaces the error and stays empty |
 
-In every case the gateway downstream behaves correctly: a CAMARA `retrieve` for a device with no current fix returns a `NOT_FOUND` envelope rather than a stale or made-up position.
+In every case the gateway downstream behaves correctly: a CAMARA `retrieve` for a device with no current fix returns a `422 LOCATION_RETRIEVAL.UNABLE_TO_LOCATE` envelope rather than a stale or made-up position.

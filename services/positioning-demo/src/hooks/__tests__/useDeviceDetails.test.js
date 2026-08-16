@@ -7,7 +7,7 @@ const MOCK_DETAILS = {
   positioning_id: "wittra-tag-01",
   kind: "pallet",
   source: "wittra",
-  org: "fiskarheden",
+  org: "acme",
   label: "Wittra tag 01",
   telemetry: {
     latitude: 45.064,

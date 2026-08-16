@@ -35,8 +35,7 @@ Brought in directly, no folder, no build.
 
 | Service     | Image                                    | Role                                |
 |-------------|------------------------------------------|-------------------------------------|
-| `keycloak`  | `quay.io/keycloak/keycloak:24.0`         | IdP for JWT issuance + introspection |
-| `mock-smf`  | `python:3.11-slim` + `dev/mock_smf.py`   | Session validation stub             |
+| `keycloak`  | `quay.io/keycloak/keycloak:24.0`         | IdP for JWT issuance (realm `5g-testbed`) |
 
 ## Tier 4 - Edge / out-of-cluster
 
@@ -50,7 +49,7 @@ Code that runs OUTSIDE the cluster. Not a container.
 
 | Folder              | Contents                                                              |
 |---------------------|-----------------------------------------------------------------------|
-| `dev/`              | Static fixtures mounted as volumes (`floor-plan.json`, `keycloak-realm.json`, `wifi-config.json`, `mock_smf.py`) |
+| `dev/`              | Static fixtures mounted as volumes (`floor-plan.json`, `keycloak-realm.json`, `wifi-config.json`, `assets.json`) |
 | `docs/`             | Architecture, data contracts, adapters, deployment notes              |
 | `.github/workflows/`| CI: `test.yml` runs each service's pytest matrix; `build.yml` publishes images on tag |
 

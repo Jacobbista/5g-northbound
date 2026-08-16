@@ -44,6 +44,10 @@ dev/calibration-backups/
 dev/*.local.json
 dev/*.local.*
 
+# Profiled OpenAPI specs, derived by `make profile-spec` from the pinned CAMARA
+# base + the committed overlays under spec/private-profile/. Build artefact.
+spec/private-profile/generated/
+
 # Docker compose local overrides
 docker-compose.override.yml
 
@@ -53,5 +57,6 @@ docker-compose.override.yml
 **/.vscode/
 site/
 
-# Other
+# Local-only reference documents (papers, thesis drafts, working notes).
+reference/
 *.pdf

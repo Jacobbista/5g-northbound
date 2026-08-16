@@ -170,7 +170,7 @@ Synthetic random-walk adapter. No external configuration file; bounds and motion
 
 ### rest-adapter
 
-Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor. In production the schema is durable cluster config: a **ConfigMap mounted at `SCHEMA_FILE`, changed + `kubectl rollout restart`** (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). `PUT /schema` is a dev / preview hot-patch only — on a ConfigMap mount it applies live but does not persist, and the ConfigMap re-wins on restart.
+Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor. In production the schema is durable cluster config: a **ConfigMap mounted at `SCHEMA_FILE`, changed + `kubectl rollout restart`** (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). `PUT /schema` is a dev / preview hot-patch only - on a ConfigMap mount it applies live but does not persist, and the ConfigMap re-wins on restart.
 
 | Variable        | Default                       | Notes |
 |-----------------|-------------------------------|-------|
@@ -218,7 +218,7 @@ Assets live in the gateway's **Asset Identity Map**, a writable JSON store the g
   "positioning_id": "wittra-tag-01",
   "source":         "wittra",
   "kind":           "pallet",
-  "org":            "fiskarheden",
+  "org":            "acme",
   "label":          "Timber bundle 01"
 }
 ```

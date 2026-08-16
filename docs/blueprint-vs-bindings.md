@@ -8,8 +8,8 @@ makes sense without the distinction.
 
 ```mermaid
 flowchart TD
-    BP["<b>blueprint</b><br/>rooms, walls, openings<br/>anchor id + x/y/z + tech<br/>georef (lat/lon)<br/><i>portable, geometry only — only the placeholder is committable</i>"]
-    BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware — never committed</i>"]
+    BP["<b>blueprint</b><br/>rooms, walls, openings<br/>anchor id + x/y/z + tech<br/>georef (lat/lon)<br/><i>portable, geometry only - only the placeholder is committable</i>"]
+    BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware - never committed</i>"]
     WIFI["<b>wifi-positioning service</b><br/>joins blueprint + bindings on anchor id at startup<br/>exposes GET /measurement/{positioning_id}<br/>calibration tool persists samples + per-AP params"]
     BP --> WIFI
     BN -->|"read AND write<br/>(calibration writes back here)"| WIFI
@@ -181,7 +181,7 @@ samples) is the portable calibration artefact. Calibrate on one cluster
 (e.g. the local demo), carry the file to another (e.g. the testbed):
 
 - `⇩ export bindings` (calibration panel) downloads the live
-  `wifi-config.json` from `wifi-positioning`, full fidelity — BSSIDs, per-AP
+  `wifi-config.json` from `wifi-positioning`, full fidelity - BSSIDs, per-AP
   `tx_power`/`path_loss_n`, and survey samples.
 - `⇪ import bindings` uploads such a file and **replaces** the live bindings
   wholesale, then hot-reloads. Replace-semantics, like blueprint import and

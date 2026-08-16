@@ -28,17 +28,24 @@ This is the **private-asset profile** of the CAMARA `device` object: the tracked
 
 The gateway resolves `assetId` to a positioning source and tenant via the [Asset Identity Map](#asset-identity-map).
 
-Errors use the CAMARA envelope `{status, code, message}`. Standard codes:
+Errors use the CAMARA envelope `{status, code, message}`. API-specific codes are
+namespaced with the API name, per Commonalities; generic codes are bare. Every
+response (success or error) carries an `x-correlator` header, echoed or minted.
 
 | HTTP | `code`                  | When                                              |
 |------|-------------------------|---------------------------------------------------|
 | 401  | `UNAUTHENTICATED`       | Missing or invalid JWT                            |
 | 403  | `PERMISSION_DENIED`     | JWT lacks the `camara-location-read` realm role   |
 | 404  | `IDENTIFIER_NOT_FOUND`  | `assetId` not in the asset map, **or** it belongs to another tenant (cross-tenant lookups 404 rather than leaking existence) |
-| 404  | `NOT_FOUND`             | Asset exists but the engine has no fix            |
-| 422  | `MISSING_IDENTIFIER`    | `device` body is absent                           |
+| 422  | `MISSING_IDENTIFIER`    | `device` body is absent, or carries no identifier |
+| 422  | `UNSUPPORTED_IDENTIFIER`| A public-network identifier (`phoneNumber`/`ipv4Address`/`ipv6Address`) was supplied |
+| 422  | `LOCATION_RETRIEVAL.UNABLE_TO_LOCATE` / `LOCATION_VERIFICATION.UNABLE_TO_LOCATE` | Asset exists but the engine has no fix |
+| 422  | `LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE` / `LOCATION_VERIFICATION.UNABLE_TO_FULFILL_MAX_AGE` | No fix fresh enough for the requested `maxAge` |
+| 422  | `LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_SURFACE` | Fix area exceeds the requested `maxSurface` |
 | 502  | `BAD_GATEWAY`           | Engine reachable but returned 5xx                 |
-| 503  | `SERVICE_UNAVAILABLE`   | Engine unreachable (network / DNS / timeout)      |
+| 503  | `UNAVAILABLE`           | Engine unreachable (network / DNS / timeout)      |
+
+Full profile rationale and semantics: [the private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md).
 
 ### Location Retrieval v0.5
 
@@ -49,6 +56,13 @@ Request:
 ```json
 { "device": { "assetId": "pkg-4471" }, "maxAge": 120 }
 ```
+
+`maxAge` (seconds) bounds fix freshness against `lastLocationTime`: absent = any
+age; `N` = no older than `N` (else `422 …UNABLE_TO_FULFILL_MAX_AGE`); `0` =
+bypass the cache and fetch live. `maxSurface` (m²) rejects a fix whose area
+(`π·radius²`) is larger (`422 …UNABLE_TO_FULFILL_MAX_SURFACE`). A cache reuses
+the last fix per asset only while it still satisfies the request's `maxAge` (or
+`LOCATION_CACHE_TTL_S`, default 5 s, when absent).
 
 Response (`Location`):
 
@@ -89,7 +103,7 @@ Response (`VerifyLocationResponse`):
 { "verificationResult": "TRUE", "lastLocationTime": "2024-01-01T12:00:00Z" }
 ```
 
-`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). `matchRate` (1–99) is present only when the result is `PARTIAL`. The current single-point implementation returns only `TRUE` and `FALSE`.
+`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + accuracy radius) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.
 
 ### Authentication
 
@@ -114,8 +128,8 @@ These endpoints live on the same gateway service but are **not part of CAMARA De
 ```json
 {
   "assets": [
-    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "fiskarheden", "label": "Cordless drill 880", "simulated": false },
-    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "fiskarheden", "label": "Timber bundle 01",  "simulated": false }
+    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "acme", "label": "Cordless drill 880", "simulated": false },
+    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "acme", "label": "Timber bundle 01",  "simulated": false }
   ]
 }
 ```
@@ -136,7 +150,7 @@ The list is read from the [Asset Identity Map](#asset-identity-map) and filtered
   "positioning_id": "wittra-tag-01",
   "source":         "wittra",
   "kind":           "pallet",
-  "org":            "fiskarheden",
+  "org":            "acme",
   "label":          "Timber bundle 01",
   "telemetry": {
     "latitude":         45.064547,
@@ -216,7 +230,7 @@ Token is supplied as a query parameter because browsers cannot set `Authorizatio
     "positioning_id":  "wittra-tag-01",
     "source":          "wittra",
     "kind":            "pallet",
-    "org":             "fiskarheden",
+    "org":             "acme",
     "latitude":        45.064547,
     "longitude":       7.659272,
     "altitude_m":      240.4,
@@ -274,12 +288,12 @@ Status codes the engine returns:
 
 The gateway propagates these:
 
-| Engine response          | Gateway response                                  |
-|--------------------------|---------------------------------------------------|
-| 200                      | 200 with CAMARA `Location`                         |
-| 404                      | 404 `NOT_FOUND` (CAMARA envelope)                  |
-| 5xx                      | 502 `BAD_GATEWAY` (after one short retry)          |
-| network error / timeout  | 503 `SERVICE_UNAVAILABLE` (after one short retry)  |
+| Engine response          | Gateway response                                            |
+|--------------------------|------------------------------------------------------------|
+| 200                      | 200 with CAMARA `Location`                                  |
+| 404                      | 422 `LOCATION_{RETRIEVAL,VERIFICATION}.UNABLE_TO_LOCATE`    |
+| 5xx                      | 502 `BAD_GATEWAY` (after one short retry)                   |
+| network error / timeout  | 503 `UNAVAILABLE` (after one short retry)                   |
 
 Transient engine failures (`5xx`, connect errors, read timeouts) are retried once after a 200 ms backoff before the gateway gives up. `404` is **not** retried (it's a legitimate "no fix", not a failure to reach the engine).
 
@@ -332,7 +346,7 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
   "positioning_id": "wittra-tag-01",
   "source":         "wittra",
   "kind":           "pallet",
-  "org":            "fiskarheden",
+  "org":            "acme",
   "label":          "Timber bundle 01",
   "simulated":      false
 }

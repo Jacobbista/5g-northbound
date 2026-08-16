@@ -78,9 +78,9 @@ Every adapter pod implements:
 
 | Method · path                          | Returns                          | Notes                                                                  |
 |----------------------------------------|----------------------------------|------------------------------------------------------------------------|
-| `GET    /discover`                     | `{"vendor","devices":[…]}`       | Normalised vendor device list (mapping + classify applied). `?raw=1` → `{"vendor","raw":[…]}` instead: the vendor records **verbatim**, for the guided schema builder (operator points paths at real field names). ⚠️ raw is the full vendor payload — may carry secrets; keep behind operator auth, never log |
+| `GET    /discover`                     | `{"vendor","devices":[…]}`       | Normalised vendor device list (mapping + classify applied). `?raw=1` → `{"vendor","raw":[…]}` instead: the vendor records **verbatim**, for the guided schema builder (operator points paths at real field names). ⚠️ raw is the full vendor payload - may carry secrets; keep behind operator auth, never log |
 | `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
-| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | **Dev / preview hot-patch only** — applies live + clears cache. Production schema changes go through the ConfigMap + `rollout restart` ([`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). On a read-only ConfigMap/subPath mount returns `persisted:false` + a `warning` and the ConfigMap re-wins on restart |
+| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | **Dev / preview hot-patch only** - applies live + clears cache. Production schema changes go through the ConfigMap + `rollout restart` ([`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). On a read-only ConfigMap/subPath mount returns `persisted:false` + a `warning` and the ConfigMap re-wins on restart |
 
 `mock-wittra` is the demo-only fake Wittra cloud, not an adapter; it implements one path: `GET /v1/organizations/{org}/projects/{prj}/devices/{device_id}` returning Wittra-shaped JSON behind HTTP Basic auth.
 
@@ -93,7 +93,7 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 | `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
 | `GET    /api/layout`                   | blueprint JSON                             | Proxies the engine's `GET /blueprint` (the editor is a blueprint client, no local file). `404` when none authored yet |
 | `PUT    /api/layout`                   | `{"status":"ok",…}`                        | Proxies the engine's `PUT /blueprint`. Unknown fields preserved verbatim |
-| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-positioning `GET/PUT /bindings` — the bindings export/import (config transfer). Operator plane; carries BSSIDs |
+| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-positioning `GET/PUT /bindings` - the bindings export/import (config transfer). Operator plane; carries BSSIDs |
 | `*      /api/wifi/calibration/*`       | (various)                                  | Proxies wifi-positioning `/calibration/*` (guided survey) |
 | `GET    /api/capabilities`             | `{"adapters":[…]}`                         | Proxies engine `/adapters`; drives the capability-aware toolbar |
 | `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |

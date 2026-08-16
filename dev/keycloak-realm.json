@@ -8,9 +8,18 @@
   "resetPasswordAllowed": false,
   "editUsernameAllowed": false,
   "bruteForceProtected": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "camara-location-read",
+        "description": "Read device location through the CAMARA gateway (private-asset profile)."
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "camara-gateway",
+      "description": "Operator/service client. No org attribute -> sees every tenant (fail-open operator token).",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -23,7 +32,38 @@
       "attributes": {}
     },
     {
+      "clientId": "camara-api-demo",
+      "description": "Per-consumer API client (2-legged client_credentials), tenant-scoped via the org claim.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "changeme",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {},
+      "protocolMappers": [
+        {
+          "name": "org",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "org",
+            "claim.name": "org",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "positioning-demo",
+      "description": "Browser demo (3-legged PKCE). A human operator logs in; the token carries the user's role + org.",
       "enabled": true,
       "publicClient": true,
       "clientAuthenticatorType": "client-secret",
@@ -36,7 +76,23 @@
       "webOrigins": ["http://localhost:3002"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "org",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "org",
+            "claim.name": "org",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -47,6 +103,8 @@
       "email": "testuser@5g-testbed.local",
       "firstName": "Test",
       "lastName": "User",
+      "attributes": { "org": ["acme"] },
+      "realmRoles": ["camara-location-read"],
       "credentials": [
         {
           "type": "password",
@@ -54,6 +112,19 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "service-account-camara-gateway",
+      "enabled": true,
+      "serviceAccountClientId": "camara-gateway",
+      "realmRoles": ["camara-location-read"]
+    },
+    {
+      "username": "service-account-camara-api-demo",
+      "enabled": true,
+      "serviceAccountClientId": "camara-api-demo",
+      "attributes": { "org": ["acme"] },
+      "realmRoles": ["camara-location-read"]
     }
   ]
 }

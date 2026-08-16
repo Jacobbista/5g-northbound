@@ -259,7 +259,7 @@ function ApPanel({ ap, onClose, coordMode, token }) {
       ) : (
         ap.technology === "wifi" && (
           <div style={{ color: "#7a8aab", padding: "10px 16px 14px", fontSize: 11 }}>
-            No calibration yet — run the WiFi calibration to fit this anchor's RF model.
+            No calibration yet - run the WiFi calibration to fit this anchor's RF model.
           </div>
         )
       )}

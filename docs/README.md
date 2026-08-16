@@ -35,6 +35,7 @@ Read these to understand how the system is designed.
 | Document | Description |
 |----------|-------------|
 | [Overview](overview.md) | What it is, the sense → fuse → expose model, key concepts. Start here. |
+| [Private-asset profile](../spec/private-profile/README.md) | The CAMARA Device Location profile this stack implements: asset identity, source/altitude metadata, streaming, 2-legged org-scoped authz, and the base-contract conformance (`maxAge`, `maxSurface`, error codes) |
 | [Architecture](architecture.md) | Services, request flow, adapter routing, coordinate frames; the 3GPP-to-CAMARA mapping |
 | [Blueprint vs bindings](blueprint-vs-bindings.md) | Portable venue geometry vs per-venue secrets (BSSIDs, MACs) |
 | [Georeferencing](georeferencing.md) | Anchoring the local metric frame to the world: datums, tile drift, N-point calibration |

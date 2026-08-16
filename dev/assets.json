@@ -6,7 +6,7 @@
       "positioning_id": "wifi-asset-01",
       "kind": "tool",
       "source": "wifi",
-      "org": "fiskarheden",
+      "org": "acme",
       "label": "WiFi asset 01",
       "simulated": false,
       "metadata": { "floor": 0 }
@@ -16,7 +16,7 @@
       "positioning_id": "mock-demo-01",
       "kind": "forklift",
       "source": "mock",
-      "org": "fiskarheden",
+      "org": "acme",
       "label": "Mock demo 01",
       "simulated": true,
       "metadata": { "floor": 0 }
@@ -26,7 +26,7 @@
       "positioning_id": "wittra-tag-01",
       "kind": "pallet",
       "source": "wittra",
-      "org": "fiskarheden",
+      "org": "acme",
       "label": "Wittra tag 01",
       "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }

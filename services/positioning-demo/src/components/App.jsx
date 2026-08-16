@@ -644,10 +644,10 @@ export function App() {
       <header style={header}>
         <div
           style={dot(connected ? "#5dffb0" : "#7a8aab", connected)}
-          title={connected ? "Live position feed connected" : "Position feed disconnected — reconnecting"}
+          title={connected ? "Live position feed connected" : "Position feed disconnected - reconnecting"}
         />
-        <h2 style={title}>5G Positioning</h2>
-        <span style={subtitle}>· CAMARA · {connected ? "live" : "offline"}</span>
+        <h2 style={title}>Asset Location</h2>
+        <span style={subtitle}>· CAMARA Device Location · {connected ? "live" : "offline"}</span>
         {activeStrategy && (
           <span
             style={{
