@@ -35,18 +35,18 @@ help:
 # absent, so existing local edits (real Mapbox tokens, the real venue
 # blueprint) are never overwritten.
 env-config:
-	@for d in services/positioning-demo/public services/placement-editor/frontend/public; do \
+	@for d in services/location-app/public services/placement-editor/frontend/public; do \
 		if [ ! -f "$$d/env-config.js" ] && [ -f "$$d/env-config.example.js" ]; then \
 			cp "$$d/env-config.example.js" "$$d/env-config.js"; \
 			echo "  -> bootstrapped $$d/env-config.js from example"; \
 		fi; \
 	done
-	@if [ ! -f services/positioning-demo/public/layout.json ] && [ -f services/positioning-demo/public/layout.example.json ]; then \
-		cp services/positioning-demo/public/layout.example.json services/positioning-demo/public/layout.json; \
+	@if [ ! -f services/location-app/public/layout.json ] && [ -f services/location-app/public/layout.example.json ]; then \
+		cp services/location-app/public/layout.example.json services/location-app/public/layout.json; \
 		echo "  -> bootstrapped layout.json from example (generic demo venue)"; \
 	fi
 # `make demo` auto-detects dev/wifi-config.local.json (gitignored, real
-# BSSIDs) and mounts it into wifi-positioning. Falls back to the committed
+# BSSIDs) and mounts it into wifi-adapter. Falls back to the committed
 # placeholder dev/wifi-config.json when the local file is absent.
 demo: env-config
 	@export HOST_UID=$$(id -u); export HOST_GID=$$(id -g); \
@@ -56,15 +56,15 @@ demo: env-config
 	else \
 		echo "  -> using dev/wifi-config.json (placeholder bindings; create dev/wifi-config.local.json for real BSSIDs)"; \
 	fi; \
-	if [ -f services/rest-adapter/.env ]; then \
-		if grep -q 'CHANGE-ME' services/rest-adapter/.env; then \
-			echo "  !! services/rest-adapter/.env contains CHANGE-ME placeholders; skipped, using mock-wittra"; \
+	if [ -f services/vendor-adapter/.env ]; then \
+		if grep -q 'CHANGE-ME' services/vendor-adapter/.env; then \
+			echo "  !! services/vendor-adapter/.env contains CHANGE-ME placeholders; skipped, using mock-vendor"; \
 		else \
-			echo "  -> using services/rest-adapter/.env (real vendor credentials)"; \
-			set -a; . ./services/rest-adapter/.env; set +a; \
+			echo "  -> using services/vendor-adapter/.env (real vendor credentials)"; \
+			set -a; . ./services/vendor-adapter/.env; set +a; \
 		fi; \
 	else \
-		echo "  -> using rest-adapter demo credentials (mock-wittra; create services/rest-adapter/.env from .env.example for the real cloud)"; \
+		echo "  -> using vendor-adapter demo credentials (mock-vendor; create services/vendor-adapter/.env from .env.example for the real cloud)"; \
 	fi; \
 	$(COMPOSE) up --build -d
 	@echo ""

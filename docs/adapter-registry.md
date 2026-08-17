@@ -10,9 +10,9 @@ the data network, exactly like the WiFi scanner already posts scans.
 
 ```mermaid
 flowchart LR
-    M["mock-positioning"] -->|"POST /adapters {name, base_url, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
-    W["wifi-positioning"] --> E
-    R["rest-adapter"] --> E
+    M["synthetic-adapter"] -->|"POST /adapters {name, base_url, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
+    W["wifi-adapter"] --> E
+    R["vendor-adapter"] --> E
     E["positioning-engine<br/><i>registry authority:<br/>persists · evicts · polls</i>"]
 ```
 

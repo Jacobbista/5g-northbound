@@ -8,11 +8,11 @@ Live OpenAPI docs (FastAPI):
 |----------------------|----------------------------------------------------|
 | `camara-gateway`     | http://localhost:8087/docs · http://localhost:8087/openapi.json |
 | `positioning-engine` | http://localhost:8081/docs · http://localhost:8081/openapi.json |
-| `wifi-positioning`   | http://localhost:8089/docs · http://localhost:8089/openapi.json |
-| `mock-positioning`   | http://localhost:8090/docs · http://localhost:8090/openapi.json |
+| `wifi-adapter`   | http://localhost:8089/docs · http://localhost:8089/openapi.json |
+| `synthetic-adapter`   | http://localhost:8090/docs · http://localhost:8090/openapi.json |
 | `placement-editor`   | http://localhost:3003/docs · http://localhost:3003/openapi.json |
 
-`positioning-demo` is a static SPA, no HTTP surface.
+`location-app` is a static SPA, no HTTP surface.
 
 ## camara-gateway
 
@@ -29,7 +29,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | `GET    /assets/{assetId}/details`                     | `{…,"telemetry":…}`          | **Vendor extension**: asset entry + engine telemetry. `telemetry: null` when offline; `404` for a missing or cross-tenant id |
 | `GET    /assets/discoverable`                          | `{"candidates":[…]}`         | **Vendor extension**: devices the live sources report (engine `/devices`) that are **not yet onboarded** as assets, `{id, source, origin, role?, source_class?, device_type?, label?, last_seen?}`. `id` becomes the asset's `positioning_id`; `role: infrastructure` marks fixed sensors (not onboardable); `source_class` is the positioning tech; `org` is assigned at onboarding. Drives KELT's onboarding wizard |
 | `GET    /capabilities`                                 | `{"adapters","sources","kinds"}` | **Vendor extension**: live adapter capabilities + the tenant's asset sources/kinds |
-| `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-positioning. No BSSIDs. Empty when `WIFI_POSITIONING_URL` unset |
+| `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-adapter. No BSSIDs. Empty when `WIFI_ADAPTER_URL` unset |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
 | `GET    /blueprint`                                    | blueprint JSON               | **Vendor extension**: read-only proxy of the engine's blueprint so the demo (MEC: gateway only) can render the venue. `404` when the engine has none |
 | `WS     /positions/stream?token=<jwt>`                 | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated browser clients. Token is supplied as a query parameter because browsers cannot set `Authorization` on a WebSocket handshake. Closes with code 4401 on auth failure, 1011 on upstream failure |
@@ -63,7 +63,7 @@ Every adapter pod implements:
 | `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
 | `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, source_class?, device_type?, label?, last_seen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `asset` or `infrastructure` (fixed sensor, not onboardable). `source_class`: positioning tech (`uwb`/`ble`/`wifi`/`gnss`/`cellular`/`other`). Advertised via the `devices` capability; aggregated by the engine |
 
-`wifi-positioning` also exposes:
+`wifi-adapter` also exposes:
 
 | Method · path                          | Returns         | Notes                                                                  |
 |----------------------------------------|-----------------|------------------------------------------------------------------------|
@@ -72,9 +72,9 @@ Every adapter pod implements:
 | `PUT    /bindings`                     | `{"status":"ok",…}` | **Operator plane**: replace the bindings file wholesale + hot-reload (accepts `bindings[]` or legacy `routers[]`). The config-transfer import. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
 | `POST   /calibration/{...}`            | (various)       | Guided calibration survey (capture / state / derive / apply / params). Proxied by the editor at `/api/wifi/calibration/*`. `/calibration/params` returns per-AP RF **without** BSSIDs |
 
-`mock-positioning` exposes only the contract endpoints, no ingest path (data is synthesised internally).
+`synthetic-adapter` exposes only the contract endpoints, no ingest path (data is synthesised internally).
 
-`rest-adapter` also exposes admin endpoints for runtime schema management:
+`vendor-adapter` also exposes admin endpoints for runtime schema management:
 
 | Method · path                          | Returns                          | Notes                                                                  |
 |----------------------------------------|----------------------------------|------------------------------------------------------------------------|
@@ -82,7 +82,7 @@ Every adapter pod implements:
 | `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
 | `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | **Dev / preview hot-patch only** - applies live + clears cache. Production schema changes go through the ConfigMap + `rollout restart` ([`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). On a read-only ConfigMap/subPath mount returns `persisted:false` + a `warning` and the ConfigMap re-wins on restart |
 
-`mock-wittra` is the demo-only fake Wittra cloud, not an adapter; it implements one path: `GET /v1/organizations/{org}/projects/{prj}/devices/{device_id}` returning Wittra-shaped JSON behind HTTP Basic auth.
+`mock-vendor` is the schema-driven vendor cloud double, not an adapter. It reads the same schema `vendor-adapter` consumes and serves telemetry + device-list responses on the URL paths that schema declares, behind its auth. See [`mocks/mock-vendor/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/mocks/mock-vendor/README.md).
 
 ## placement-editor
 
@@ -93,8 +93,8 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 | `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
 | `GET    /api/layout`                   | blueprint JSON                             | Proxies the engine's `GET /blueprint` (the editor is a blueprint client, no local file). `404` when none authored yet |
 | `PUT    /api/layout`                   | `{"status":"ok",…}`                        | Proxies the engine's `PUT /blueprint`. Unknown fields preserved verbatim |
-| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-positioning `GET/PUT /bindings` - the bindings export/import (config transfer). Operator plane; carries BSSIDs |
-| `*      /api/wifi/calibration/*`       | (various)                                  | Proxies wifi-positioning `/calibration/*` (guided survey) |
+| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-adapter `GET/PUT /bindings` - the bindings export/import (config transfer). Operator plane; carries BSSIDs |
+| `*      /api/wifi/calibration/*`       | (various)                                  | Proxies wifi-adapter `/calibration/*` (guided survey) |
 | `GET    /api/capabilities`             | `{"adapters":[…]}`                         | Proxies engine `/adapters`; drives the capability-aware toolbar |
 | `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |
 
@@ -102,7 +102,7 @@ No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-prot
 
 - All Python services: FastAPI, multi-stage `python:3.11-slim` Dockerfile, non-root user (uid 1001), `uvicorn` as PID 1 on port `8080` internally.
 - Health endpoints (`/health`) are always unauthenticated and return `{"status":"ok"}` with HTTP 200. `/health` is liveness; services that load business config at startup also expose `/ready` (503 until that config loads) for the k8s readiness probe.
-- The six configurable services (camara-gateway, positioning-engine, wifi-positioning, rest-adapter, placement-editor, positioning-demo) expose **`GET /contract`** (unauthenticated, no dependency on business config so it answers even on a misconfigured pod). The mocks do not. It returns the service's `env.contract.yaml` as JSON - `{service, kind, external_origin, description, env:{required, recommended, optional}}` - describing which environment variables it expects. Schema only: it never returns a runtime value, and sensitive entries drop their `default`/`example`. positioning-demo (static nginx) serves the same shape from a `contract.json` baked at build. A deploy dashboard reads `/contract` from the live pod to drive a config wizard; the **blueprint** (`layout.json`) is *not* part of the contract - that is shared venue data on a PVC, see [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md).
+- The six configurable services (camara-gateway, positioning-engine, wifi-adapter, vendor-adapter, placement-editor, location-app) expose **`GET /contract`** (unauthenticated, no dependency on business config so it answers even on a misconfigured pod). The mock and the synthetic adapter do not. It returns the service's `env.contract.yaml` as JSON - `{service, kind, external_origin, description, env:{required, recommended, optional}}` - describing which environment variables it expects. Schema only: it never returns a runtime value, and sensitive entries drop their `default`/`example`. location-app (static nginx) serves the same shape from a `contract.json` baked at build. A deploy dashboard reads `/contract` from the live pod to drive a config wizard; the **blueprint** (`layout.json`) is *not* part of the contract - that is shared venue data on a PVC, see [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md).
 - Schemas validate request and response bodies; unknown fields are silently dropped (`ConfigDict(extra="ignore")`) except in `placement-editor` where `extra="allow"` lets the layout schema evolve without backend changes.
 - Time fields are RFC 3339 UTC strings (`...Z` suffix). Unix epoch seconds are used only on the adapter contract (`Measurement.timestamp`).
 - Distances are metres, angles WGS84 decimal degrees.

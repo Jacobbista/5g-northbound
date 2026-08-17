@@ -21,17 +21,27 @@ Three roles, left to right:
 
 ```mermaid
 flowchart LR
-    W["WiFi adapter"] --> E
-    U["UWB / vendor adapter"] --> E
-    M["mock adapter"] --> E
-    E["positioning-engine<br/>fuses sources · owns coordinates"] --> G
-    G["camara-gateway<br/>CAMARA API · identity · tenant auth"] --> C["consumer app"]
+    subgraph adapters["adapters · ingest"]
+      W["wifi-adapter"]
+      V["vendor-adapter"]
+      S["synthetic-adapter"]
+    end
+    W --> E
+    V --> E
+    S --> E
+    E["positioning-engine<br/>fuse sources · own coordinates"] --> G
+    G["camara-gateway<br/>CAMARA API · identity · tenant auth"] --> C["location-app<br/>consumer"]
     ED["placement-editor<br/>author the venue"] -. blueprint .-> E
 ```
 
+Names follow `<flavor>-<role>` (see
+[naming and roles](https://github.com/Jacobbista/5g-northbound/blob/main/AGENTS.md#component-naming-and-roles)):
+the suffix is the role in this flow (`-adapter` ingests, `-engine` fuses,
+`-gateway` exposes, `-app` consumes, `-editor` authors).
+
 - **Adapters sense.** Each positioning technology is its own service speaking
   one tiny HTTP contract (`GET /measurement/{id}`). WiFi RSSI, a vendor UWB
-  cloud, a synthetic mock - all look the same to the engine.
+  cloud, a synthetic source - all look the same to the engine.
 - **The engine fuses.** It merges the measurements, owns the coordinate frame,
   and converts to WGS84. It is the authority for the venue **blueprint**.
 - **The gateway exposes.** It speaks CAMARA to consumers, resolves identity,

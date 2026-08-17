@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from .blueprint import DEFAULT_FLOOR_PLAN, floor_plan_from_blueprint, load_blueprint
 from .config import settings
 from .fusion.registry import get_strategy
+from .obs import install_hop_logging
 from .registry import SEED, AdapterRegistry, _safe_aclose
 from .routers import adapters as adapters_router
 from .routers import blueprint as blueprint_router
@@ -101,6 +102,8 @@ async def _evict_loop(app: FastAPI):
 
 
 app = FastAPI(title="Positioning Engine", lifespan=lifespan)
+# Log one hop line per request, keyed by the x-correlator the gateway propagates.
+install_hop_logging(app, "positioning-engine")
 app.include_router(health.router)
 app.include_router(contract.router)
 app.include_router(blueprint_router.router)

@@ -27,7 +27,7 @@ async def test_contract_exposes_required_names_only_no_values():
     r = await _get("/contract")
     body = r.json()
     all_names = [e["name"] for tier in body["env"].values() for e in tier]
-    assert "WIFI_POSITIONING_URL" in all_names
+    assert "WIFI_ADAPTER_URL" in all_names
     # Schema only: entries describe vars, they never carry a runtime value.
     for tier in body["env"].values():
         for entry in tier:

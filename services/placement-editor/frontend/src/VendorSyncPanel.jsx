@@ -250,7 +250,7 @@ export function VendorSyncPanel({
       <div style={sectionTitle}>· cloud devices ({cloudSamples.length})</div>
       {cloudSamples.length === 0 && !loading && (
         <div style={{ color: "#5a6987", fontSize: 10, padding: "4px 0" }}>
-          none. check the rest-adapter schema and credentials.
+          none. check the vendor-adapter schema and credentials.
         </div>
       )}
       <div style={{ maxHeight: 360, overflowY: "auto" }}>

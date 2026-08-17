@@ -62,7 +62,7 @@
       ]
     },
     {
-      "clientId": "positioning-demo",
+      "clientId": "location-app",
       "description": "Browser demo (3-legged PKCE). A human operator logs in; the token carries the user's role + org.",
       "enabled": true,
       "publicClient": true,

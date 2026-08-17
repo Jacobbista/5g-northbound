@@ -1,6 +1,6 @@
 // Thin client for the vendor-discovery flow. Calls go through the
 // placement-editor backend (/api/vendor/*), which proxies to whichever
-// rest-adapter pod the editor is wired to. No vendor-specific code here;
+// vendor-adapter pod the editor is wired to. No vendor-specific code here;
 // shape of `devices[]` is whatever the active schema's discover mapping
 // produces.
 

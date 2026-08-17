@@ -32,11 +32,11 @@ jobs:
           declare -A MAP=(
             [camara-gateway]=services/camara-gateway
             [positioning-engine]=services/positioning-engine
-            [wifi-positioning]=services/wifi-positioning
-            [rest-adapter]=services/rest-adapter
+            [wifi-adapter]=services/wifi-adapter
+            [vendor-adapter]=services/vendor-adapter
             [placement-editor]=services/placement-editor
-            [positioning-demo]=services/positioning-demo
-            [mock-positioning]=mocks/mock-positioning
+            [location-app]=services/location-app
+            [synthetic-adapter]=services/synthetic-adapter
           )
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BASE=""                       # manual run -> build everything
@@ -93,8 +93,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-# mock-wittra is NOT published: it is a local fake of the Wittra cloud for
-# `make demo` only. In the testbed you point rest-adapter at the real vendor.
+# mock-vendor is NOT published: it is a local schema-driven vendor cloud double for
+# `make demo` only. In the testbed you point vendor-adapter at the real vendor.
 #
 # Package visibility: GitHub Packages default to private. Set each package to
 # Public once (Repo > Packages > <pkg> > Package settings > Change visibility).

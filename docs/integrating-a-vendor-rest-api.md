@@ -1,14 +1,14 @@
 # Integrating a vendor's REST positioning API
 
-This guide walks through plugging a third-party RTLS / positioning cloud into the stack via the [`rest-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/) image. The worked example is Wittra; the same flow applies to any vendor whose public REST API returns a polished positioning fix per device.
+This guide walks through plugging a third-party RTLS / positioning cloud into the stack via the [`vendor-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/) image. The worked example is Wittra; the same flow applies to any vendor whose public REST API returns a polished positioning fix per device.
 
 ## When this is the right pattern
 
 | Vendor exposes …                                                                  | Path                                       |
 |----------------------------------------------------------------------------------|--------------------------------------------|
-| `GET` per-device position over REST, JSON body, simple auth (Basic / Bearer / API-Key) | **`rest-adapter` + schema file**          |
-| Live MQTT topic per device or organisation                                       | Future `mqtt-adapter` (out of scope here)  |
-| HTTP webhook into our cluster                                                    | Future `webhook-adapter` (out of scope)    |
+| `GET` per-device position over REST, JSON body, simple auth (Basic / Bearer / API-Key) | **`vendor-adapter` + schema file**          |
+| Live MQTT topic per device or organisation                                       | `vendor-adapter` + schema `transport: mqtt` (future transport) |
+| HTTP webhook into our cluster                                                    | `vendor-adapter` + schema `transport: webhook` (future transport) |
 | Proprietary SDK, NDA traffic, signed requests, OAuth refresh                     | Private per-vendor image; same engine contract |
 
 The Wittra REST API recommends MQTT for sensor data, but REST is enough for a demo / MVP integration and proves the gateway is vendor-agnostic.
@@ -17,13 +17,13 @@ The Wittra REST API recommends MQTT for sensor data, but REST is enough for a de
 
 ```mermaid
 flowchart LR
-    ENG["positioning-engine"] -->|"GET /measurement/{positioning_id}"| RA["rest-adapter<br/>(this image)"]
+    ENG["positioning-engine"] -->|"GET /measurement/{positioning_id}"| RA["vendor-adapter<br/>(this image)"]
     RA -->|"HTTPS GET (Basic auth)"| W[("Wittra cloud<br/>api.wittra.se")]
     RA -.->|Measurement| ENG
     DASH["testbed dashboard"] -.->|"PUT schema.json (runtime)"| RA
 ```
 
-The engine sees the rest-adapter as just another adapter URL in `ADAPTER_URLS`. Switching from `mock-wittra` (dev) to `api.wittra.se` (prod) is a single env-var change.
+The engine sees the vendor-adapter as just another adapter URL in `ADAPTER_URLS`. Switching from `mock-vendor` (dev) to `api.wittra.se` (prod) is a single env-var change.
 
 ## Identity & resolution: from a CAMARA `assetId` to a vendor fix
 
@@ -34,7 +34,7 @@ each hop:
 flowchart TD
     C["consumer"] -->|"POST /location-retrieval/v0.5/retrieve<br/>{ device.assetId: pkg-4471 }"| GW["camara-gateway"]
     GW -->|"Asset Identity Map: assetId → positioning_id + source<br/>org claim gated vs asset.org"| ENG["positioning-engine"]
-    ENG -->|"GET /position/{positioning_id}?source=wittra<br/>route: source → ADAPTER_NAME<br/>(else DEVICE_MAP, else fan-out + fuse)"| RA["rest-adapter (wittra)"]
+    ENG -->|"GET /position/{positioning_id}?source=wittra<br/>route: source → ADAPTER_NAME<br/>(else DEVICE_MAP, else fan-out + fuse)"| RA["vendor-adapter (wittra)"]
     RA -->|"GET /measurement/{positioning_id}<br/>id substituted verbatim → ?deviceId="| V[("vendor cloud<br/>api.wittra.se")]
     V -.->|"Measurement → fused → WGS84 → CAMARA Location"| C
 ```
@@ -63,7 +63,7 @@ The two contracts an operator must get right (see step 5):
      --from-literal=org-id=<...> --from-literal=api-key=<...> --from-literal=project-id=<...>
    ```
 
-2. **Deploy the adapter.** One `Deployment` per vendor, image `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`, with the schema ConfigMap mounted at `SCHEMA_FILE` (read-only; step 4) and the Secret keys mapped to env:
+2. **Deploy the adapter.** One `Deployment` per vendor, image `ghcr.io/jacobbista/5g-northbound/vendor-adapter:<tag>`, with the schema ConfigMap mounted at `SCHEMA_FILE` (read-only; step 4) and the Secret keys mapped to env:
 
    ```yaml
    env:
@@ -80,19 +80,19 @@ The two contracts an operator must get right (see step 5):
 3. **Build the schema from live data, don't hand-write it blind.** There is no cross-vendor standard - every cloud has its own field names - so the schema is authored per deployment by the operator, guided by the vendor's actual response. Point a bare adapter (auth + `path` + `discover.path` set, mapping/classify still empty) at the vendor and read the raw records:
 
    ```bash
-   curl 'http://rest-adapter-wittra:8080/discover?raw=1' | jq '.raw[0]'
+   curl 'http://vendor-adapter-wittra:8080/discover?raw=1' | jq '.raw[0]'
    # -> { "deviceId": "...", "deviceType": "beacon", "fixedLocation": {...}, "name": "...", ... }
    ```
 
-   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/examples/wittra-schema.json) is a worked **reference** for this - not a config to ship as-is.
+   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json) is a worked **reference** for this - not a config to ship as-is.
 
 4. **Persist the schema as a ConfigMap + rollout - this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
 
    ```bash
-   kubectl create configmap rest-adapter-wittra-schema \
+   kubectl create configmap vendor-adapter-wittra-schema \
      --from-file=schema.json=wittra-schema.json --dry-run=client -o yaml \
      | kubectl apply -f -
-   kubectl rollout restart deploy/rest-adapter-wittra   # picks up the new schema
+   kubectl rollout restart deploy/vendor-adapter-wittra   # picks up the new schema
    ```
 
    Set `ADAPTER_NAME=wittra` on the adapter - the routing key (see step 5).
@@ -195,7 +195,7 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 
 Vendors with no positions exposed simply omit `latitude`/`longitude`/`height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
-The full HTTP surface is `GET /discover` on the rest-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
+The full HTTP surface is `GET /discover` on the vendor-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
 
 ### Classifying devices for asset onboarding
 
@@ -228,9 +228,9 @@ Classification is a set of **predicates** the schema author writes against the v
 
 A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `source_class` (everything stays onboardable).
 
-## Local dev: end-to-end with `mock-wittra`
+## Local dev: end-to-end with `mock-vendor`
 
-`make demo` brings up [`mock-wittra`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-wittra/), the rest-adapter, and the rest of the stack. The compose file pre-loads the example schema and points the adapter at the mock:
+`make demo` brings up [`mock-vendor`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-vendor/), the vendor-adapter, and the rest of the stack. The compose file mounts the example schema into **both**: the adapter parses it, the mock serves responses that satisfy it. Swap the schema and the same demo runs against a different vendor's shape.
 
 ```bash
 make demo
@@ -239,14 +239,14 @@ make demo
 curl http://localhost:8092/health
 curl http://localhost:8092/measurement/wittra-tag-01 | jq .
 
-# Full CAMARA chain (gateway → engine → rest-adapter → mock-wittra)
+# Full CAMARA chain (gateway → engine → vendor-adapter → mock-vendor)
 curl -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
   -H "Authorization: Bearer dev-token" \
   -H "Content-Type: application/json" \
   -d '{"device":{"assetId":"pkg-4471"}}'
 ```
 
-`mock-wittra` is **not** included in production deployments. It exists so a fresh clone of the repo can demonstrate the full chain without an internet round-trip.
+`mock-vendor` is **not** included in production deployments. It exists so a fresh clone of the repo can demonstrate the full chain without an internet round-trip.
 
 ## Failure modes worth knowing
 

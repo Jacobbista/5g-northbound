@@ -1,10 +1,10 @@
 import logging
-import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from .obs import install_hop_logging
 from .errors import (
     CamaraError,
     camara_error_handler,
@@ -42,14 +42,9 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def x_correlator(request: Request, call_next):
-    """Echo the client's x-correlator, or mint one, on every response (success
-    and error), per CAMARA Commonalities."""
-    correlator = request.headers.get("x-correlator") or str(uuid.uuid4())
-    response = await call_next(request)
-    response.headers["x-correlator"] = correlator
-    return response
+# Mint/echo the x-correlator (CAMARA Commonalities) and log one hop line per
+# request. The gateway is the entry point, so it mints when the client sends none.
+install_hop_logging(app, "camara-gateway", mint=True)
 
 app.add_exception_handler(CamaraError, camara_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)

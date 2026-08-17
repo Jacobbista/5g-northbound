@@ -1,6 +1,6 @@
 # WiFi Scanner - edge client
 
-Reference edge client for the [`wifi-positioning`](../../) adapter. Runs on a Raspberry Pi (or any Linux host with `nmcli`), scans nearby access points, and posts the per-BSSID RSSI readings to the adapter's `POST /ingest/wifi-scan` endpoint over the 5G data network. The adapter performs the multilateration; this client only scans and posts.
+Reference edge client for the [`wifi-adapter`](../../) adapter. Runs on a Raspberry Pi (or any Linux host with `nmcli`), scans nearby access points, and posts the per-BSSID RSSI readings to the adapter's `POST /ingest/wifi-scan` endpoint over the 5G data network. The adapter performs the multilateration; this client only scans and posts.
 
 ## Files
 
@@ -15,7 +15,7 @@ Reference edge client for the [`wifi-positioning`](../../) adapter. Runs on a Ra
 
 | Variable        | Default                            | Notes                                                                 |
 |-----------------|------------------------------------|-----------------------------------------------------------------------|
-| `ADAPTER_URL`   | `http://wifi-positioning:8080`     | Base URL of the wifi-positioning adapter on the cluster data network. |
+| `ADAPTER_URL`   | `http://wifi-adapter:8080`     | Base URL of the wifi-adapter adapter on the cluster data network. |
 | `DEVICE_ID`     | hostname                           | Stable identifier for the asset. Must match the gateway's `DEVICE_REGISTRY` value for this device's CAMARA identifier. |
 | `INTERFACE`     | `wlan0`                            | NetworkManager interface to scan.                                     |
 | `SEND_INTERVAL` | `1.0`                              | Seconds between scans.                                                |

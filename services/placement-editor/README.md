@@ -2,7 +2,7 @@
 
 Operator-facing service that owns the floor-plan / room / anchor layout JSON. Lives in this repository so the published image can be pulled by the [`kelt`](https://github.com/Jacobbista/kelt) dashboard - keeping a single source for the artefact, while the testbed only consumes it.
 
-`positioning-demo` is the **end-user / CAMARA consumer**; `placement-editor` is the **operator** sibling. They never talk to each other directly - only through the shared `layout.json` file the editor writes and the demo (and the engine) read.
+`location-app` is the **end-user / CAMARA consumer**; `placement-editor` is the **operator** sibling. They never talk to each other directly - only through the shared `layout.json` file the editor writes and the demo (and the engine) read.
 
 ## Status
 
@@ -131,7 +131,7 @@ A single drag collapses into one undoable step via a transient stack - intermedi
 
 ### Backward compatibility
 
-Legacy v1 layouts (top-level `room_w / room_h / gps_origin / aps / walls / floor_plan_image`) are normalised into a single `floor_plans[0]` + `rooms[0]` at read time, so existing fixtures keep loading. Writes always emit v2 **plus** the legacy top-level keys derived from the first floor plan + first room, so the positioning-demo (which still reads `layout.aps`, `layout.gps_origin`, etc.) keeps working unchanged until it migrates to v2 itself.
+Legacy v1 layouts (top-level `room_w / room_h / gps_origin / aps / walls / floor_plan_image`) are normalised into a single `floor_plans[0]` + `rooms[0]` at read time, so existing fixtures keep loading. Writes always emit v2 **plus** the legacy top-level keys derived from the first floor plan + first room, so the location-app (which still reads `layout.aps`, `layout.gps_origin`, etc.) keeps working unchanged until it migrates to v2 itself.
 
 ## HTTP surface
 
@@ -164,7 +164,7 @@ The compose service mounts the demo's `public/layout.json` so the editor reads/w
 **File-permission gotcha on bind-mounted writes:** the editor runs as `uid 1001` inside the container. If the host file is owned by your user, the container can read it but writing fails with `PermissionError`. One-shot fix on the dev machine:
 
 ```bash
-chmod 666 positioning-demo/public/layout.json
+chmod 666 location-app/public/layout.json
 ```
 
 In Kubernetes use a ConfigMap (read-only at runtime - apply via `kubectl apply -f cm.yaml`) for the engine/demo consumers, and a separate PVC mounted only on the editor pod with the right `fsGroup` for writes.

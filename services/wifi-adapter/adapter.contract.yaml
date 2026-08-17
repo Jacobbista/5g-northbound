@@ -1,0 +1,14 @@
+# Adapter capability contract for wifi-adapter.
+# Declarative source of truth; runtime value travels in ADAPTER_CAPABILITIES
+# (JSON). `make positioning-check` asserts the two agree.
+adapter: wifi
+description: WiFi RSSI trilateration against calibrated anchors.
+capabilities:
+  source: wifi
+  kinds: [tool, asset]
+  frame: local          # floor-plan-local, north-up
+  streaming: false
+  z: false              # 2D trilateration, no height estimate
+  accuracy_class: metre
+  calibration: true     # exposes the /calibration tool; editor shows CALIBRATE
+  devices: true         # exposes /devices (observed device enumeration for onboarding)

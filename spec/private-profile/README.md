@@ -25,9 +25,10 @@ edited:
   delta (the verification response is already `TRUE`/`FALSE`/`PARTIAL` in the base).
 
 `make profile-spec` applies them and writes the profiled OpenAPI documents to
-`generated/` (a derived artefact; any Overlay tool, e.g. Redocly, produces the
-same result). The committed contribution is the base (pinned) plus these
-overlays.
+[`generated/`](generated/). Those files are committed so a client can pin a
+single self-contained contract; CI regenerates them and fails if they drift from
+the base + overlays (any Overlay tool, e.g. Redocly, produces the same result).
+The authored contribution is still the base (pinned) plus these overlays.
 
 The streaming channel is a WebSocket, outside OpenAPI's scope, so it is
 formalised separately as [AsyncAPI 3.0](https://www.asyncapi.com/):
@@ -107,7 +108,7 @@ The `Location` response gains optional fields (omitted when absent):
 
 | field | meaning |
 |-------|---------|
-| `source` | positioning modality (`wittra`/`wifi`/`fiveg`/`gnss`/`mock`) - a UWB fix is trusted differently from a WiFi fix at the same radius |
+| `source` | positioning modality (`wittra`/`wifi`/`fiveg`/`gnss`/`synthetic`) - a UWB fix is trusted differently from a WiFi fix at the same radius |
 | `kind` | asset class (`uwb-tag`/`tool`/`pallet`/`forklift`/…) |
 | `altitude` | fused vertical position (m); multi-floor / stacked storage that CAMARA's 2D Circle drops |
 | `verticalAccuracy` | vertical 1-sigma (m), when available |

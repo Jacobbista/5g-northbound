@@ -135,8 +135,8 @@ async def _proxy(target_base: str, suffix: str, request: Request, label: str) ->
     methods=["GET", "POST", "DELETE", "PUT"],
 )
 async def proxy_calibration(path: str, request: Request) -> Response:
-    base = get_settings().wifi_positioning_url
-    return await _proxy(base, f"/calibration/{path}", request, "wifi-positioning")
+    base = get_settings().wifi_adapter_url
+    return await _proxy(base, f"/calibration/{path}", request, "wifi-adapter")
 
 
 # --- WiFi bindings transfer (export / import) ------------------------------
@@ -144,28 +144,28 @@ async def proxy_calibration(path: str, request: Request) -> Response:
 # GET/PUT the whole per-venue bindings file (BSSIDs + RF + samples) so an
 # operator can calibrate on one cluster, export, and import on another. This
 # is the operator plane (behind placement-admin); BSSIDs never leave here for
-# the demo/gateway. PUT replaces wholesale + hot-reloads wifi-positioning.
+# the demo/gateway. PUT replaces wholesale + hot-reloads wifi-adapter.
 @app.api_route(
     "/api/wifi/bindings",
     methods=["GET", "PUT"],
 )
 async def proxy_wifi_bindings(request: Request) -> Response:
-    base = get_settings().wifi_positioning_url
-    return await _proxy(base, "/bindings", request, "wifi-positioning")
+    base = get_settings().wifi_adapter_url
+    return await _proxy(base, "/bindings", request, "wifi-adapter")
 
 
 # --- Vendor discovery proxy -------------------------------------------------
 #
 # Browser hits /api/vendor/discover. Editor backend forwards to the
-# rest-adapter's GET /discover, which uses the currently loaded vendor
+# vendor-adapter's GET /discover, which uses the currently loaded vendor
 # schema (Wittra by default in dev) to walk the vendor's device list.
 @app.api_route(
     "/api/vendor/discover",
     methods=["GET"],
 )
 async def proxy_vendor_discover(request: Request) -> Response:
-    base = get_settings().rest_adapter_url
-    return await _proxy(base, "/discover", request, "rest-adapter")
+    base = get_settings().vendor_adapter_url
+    return await _proxy(base, "/discover", request, "vendor-adapter")
 
 
 # --- Asset Identity Map proxy ----------------------------------------------
@@ -190,8 +190,8 @@ async def proxy_assets(request: Request) -> Response:
 async def proxy_vendor_schema(request: Request) -> Response:
     """Lets the editor read the current vendor schema (mostly to surface
     the vendor name in the sync panel header). Read-only proxy."""
-    base = get_settings().rest_adapter_url
-    return await _proxy(base, "/schema", request, "rest-adapter")
+    base = get_settings().vendor_adapter_url
+    return await _proxy(base, "/schema", request, "vendor-adapter")
 
 
 # --- Live adapter capabilities ---------------------------------------------

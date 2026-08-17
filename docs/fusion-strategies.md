@@ -18,7 +18,7 @@ flowchart LR
   subgraph poll[per-device poll]
     M1[(wifi M)]
     M2[(uwb  M)]
-    M3[(mock M)]
+    M3[(synthetic M)]
   end
   M1 --> PRI[primary strategy<br/>FUSION_STRATEGY]
   M2 --> PRI
@@ -54,7 +54,7 @@ Maintain per-device state `(x, z, vx, vz)` with a constant-velocity process mode
 - **Weaknesses:** introduces lag at direction changes; tuning of process noise `Q` and measurement noise `R` is per-deployment; assumes Gaussian errors.
 - **When to prefer:** moving assets (people, vehicles, mobile robots) where temporal continuity matters more than raw accuracy.
 
-**Implementation note:** the `wifi-positioning` service already runs a per-device Kalman filter internally over WiFi-only measurements. Lifting that pattern up to the engine, across heterogeneous adapters, with adapter-supplied `accuracy_m` driving `R`: is the obvious next step.
+**Implementation note:** the `wifi-adapter` service already runs a per-device Kalman filter internally over WiFi-only measurements. Lifting that pattern up to the engine, across heterogeneous adapters, with adapter-supplied `accuracy_m` driving `R`: is the obvious next step.
 
 ### 3. Outlier-rejected weighted average (`outlier_reject`)
 
@@ -66,7 +66,7 @@ Before averaging, drop measurements whose distance from the median (or geometric
 
 ### 4. Confidence gating (`gated`)
 
-Pick the single highest-`confidence × (1/accuracy_m)` measurement. Optionally fall through to a configured fallback chain (`gated_chain="wittra-uwb,wifi-positioning,fiveg"`), first source whose measurement is non-null wins, no fusion.
+Pick the single highest-`confidence × (1/accuracy_m)` measurement. Optionally fall through to a configured fallback chain (`gated_chain="wittra-uwb,wifi-adapter,fiveg"`), first source whose measurement is non-null wins, no fusion.
 
 - **Strengths:** trivial to reason about for operators. No "averaged into nowhere" surprises when one adapter is clearly better in a zone.
 - **Weaknesses:** wastes information from other adapters; introduces step discontinuities when handoff between sources occurs.
@@ -87,7 +87,7 @@ Each strategy under `services/positioning-engine/app/fusion/` has a unit test ex
 3. **One outlier among three**: `outlier_reject` and `gated` drop it; `weighted_avg` is dragged.
 4. **All adapters drop**: `kalman` keeps predicting; stateless strategies return `None`.
 
-Integration tests with the `mock-positioning` adapter generating a known trajectory let strategies be compared on RMSE against ground truth.
+Integration tests with the `synthetic-adapter` adapter generating a known trajectory let strategies be compared on RMSE against ground truth.
 
 ## Implementation shape
 

@@ -13,11 +13,11 @@
     },
     {
       "asset_id": "forklift-7",
-      "positioning_id": "mock-demo-01",
+      "positioning_id": "synthetic-demo-01",
       "kind": "forklift",
-      "source": "mock",
+      "source": "synthetic",
       "org": "acme",
-      "label": "Mock demo 01",
+      "label": "Synthetic demo 01",
       "simulated": true,
       "metadata": { "floor": 0 }
     },

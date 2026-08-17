@@ -40,7 +40,7 @@
         },
         "source": {
           "type": "string",
-          "enum": ["wittra", "wifi", "fiveg", "gnss", "mock"],
+          "enum": ["wittra", "wifi", "fiveg", "gnss", "synthetic"],
           "description": "Positioning modality / adapter. Surfaced as profile `source` (a UWB fix is trusted differently from a WiFi fix at the same radius)."
         },
         "org": {
@@ -55,7 +55,7 @@
         "simulated": {
           "type": "boolean",
           "default": false,
-          "description": "True when wired to a synthetic/demo source (mock-positioning, mock-wittra). UIs show a MOCK badge."
+          "description": "True when wired to a synthetic/demo source (synthetic-adapter, mock-vendor). UIs show a synthetic badge."
         },
         "metadata": {
           "type": "object",

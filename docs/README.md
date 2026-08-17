@@ -47,7 +47,7 @@ Task-focused, follow top to bottom.
 | Document | Description |
 |----------|-------------|
 | [Adapters](adapters.md) | The HTTP contract every adapter implements, with a minimal Python skeleton |
-| [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) | Wrap a vendor cloud with the schema-driven `rest-adapter`; the full identity chain |
+| [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) | Wrap a vendor cloud with the schema-driven `vendor-adapter`; the full identity chain |
 | [Adapter registry](adapter-registry.md) | How adapters self-register, heartbeat, and route by `source` |
 | [Asset registry](asset-registry.md) | The Asset Identity Map: asset structure, authoring, seeding, tenancy |
 | [Fusion strategies](fusion-strategies.md) | Fusion algorithms and how to switch between them |
@@ -61,6 +61,7 @@ Look up exact formats once you know the model.
 |----------|-------------|
 | [Data contracts](data-contracts.md) | Exact wire formats across CAMARA, vendor extensions, engine, and the adapter contract |
 | [API reference](api-reference.md) | One row per endpoint across every service |
+| [Latency instrumentation](latency-instrumentation.md) | The per-hop latency trace: x-correlator propagation and the hop log-line contract |
 
 ---
 

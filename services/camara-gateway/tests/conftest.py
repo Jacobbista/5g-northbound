@@ -71,8 +71,8 @@ _TEST_ASSETS = {
     "assets": [
         {"asset_id": "tool-880", "positioning_id": "wifi-asset-01", "kind": "tool",
          "source": "wifi", "org": "acme", "label": "WiFi asset 01"},
-        {"asset_id": "forklift-7", "positioning_id": "mock-demo-01", "kind": "forklift",
-         "source": "mock", "org": "acme", "label": "Mock demo 01", "simulated": True},
+        {"asset_id": "forklift-7", "positioning_id": "synthetic-demo-01", "kind": "forklift",
+         "source": "synthetic", "org": "acme", "label": "Synthetic demo 01", "simulated": True},
         {"asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "kind": "pallet",
          "source": "wittra", "org": "acme", "label": "Wittra tag 01", "simulated": True},
     ],

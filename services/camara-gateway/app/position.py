@@ -10,6 +10,7 @@ from .assets import Asset, asset_by_id
 from .config import get_settings
 from .errors import CamaraError
 from .models import Device
+from .obs import corr_headers
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ async def _engine_get(path: str, *, timeout: float = _ENGINE_REQUEST_TIMEOUT_S) 
     for attempt in range(_RETRY_ATTEMPTS):
         try:
             async with httpx.AsyncClient(base_url=base) as client:
-                resp = await client.get(path, timeout=timeout)
+                resp = await client.get(path, timeout=timeout, headers=corr_headers())
                 resp.raise_for_status()
                 return resp.json()
         except httpx.HTTPStatusError as exc:
@@ -317,16 +318,16 @@ async def get_blueprint() -> dict | None:
 
 
 async def get_wifi_calibration() -> dict | None:
-    """Vendor extension: proxy wifi-positioning's per-AP calibration params
+    """Vendor extension: proxy wifi-adapter's per-AP calibration params
     (real tx_power ref + path-loss n) so the demo's anchor panel shows measured
     RF instead of nominal placeholders. Returns the {id: {...}} map, or None
-    when wifi-positioning is not configured / unreachable (demo degrades)."""
-    url = get_settings().wifi_positioning_url.rstrip("/")
+    when wifi-adapter is not configured / unreachable (demo degrades)."""
+    url = get_settings().wifi_adapter_url.rstrip("/")
     if not url:
         return None
     try:
         async with httpx.AsyncClient(base_url=url) as client:
-            resp = await client.get("/calibration/params", timeout=_ADAPTERS_REQUEST_TIMEOUT_S)
+            resp = await client.get("/calibration/params", timeout=_ADAPTERS_REQUEST_TIMEOUT_S, headers=corr_headers())
             resp.raise_for_status()
             return resp.json().get("params", {})
     except Exception as exc:

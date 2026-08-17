@@ -5,6 +5,7 @@ from typing import Callable, Optional
 import httpx
 
 from .base import Adapter, Measurement
+from ..obs import corr_headers
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class HttpAdapter(Adapter):
     """Generic HTTP adapter - pulls a Measurement from any service that speaks
     the contract: GET {base_url}/measurement/{device_id}.
 
-    The same engine talks to wifi-positioning (open algo, in this repo) and to
+    The same engine talks to wifi-adapter (open algo, in this repo) and to
     vendor pods (private images) without code changes. Switching backends is a
     deployment concern: change ADAPTER_URLS, not the engine image.
 
@@ -85,7 +86,7 @@ class HttpAdapter(Adapter):
         if self._in_cooldown():
             return None
         try:
-            r = await self._client.get(f"{self.base_url}/measurement/{device_id}")
+            r = await self._client.get(f"{self.base_url}/measurement/{device_id}", headers=corr_headers())
         except httpx.HTTPError as exc:
             log.warning("adapter %s unreachable: %s", self.base_url, exc)
             self._record_failure()
@@ -130,7 +131,7 @@ class HttpAdapter(Adapter):
         if self._in_cooldown():
             return None
         try:
-            r = await self._client.get(f"{self.base_url}/devices")
+            r = await self._client.get(f"{self.base_url}/devices", headers=corr_headers())
         except httpx.HTTPError as exc:
             log.warning("adapter %s /devices unreachable: %s", self.base_url, exc)
             return None

@@ -15,14 +15,14 @@ services/camara-gateway/.env
 services/positioning-engine/.env
 # Edge scanner deploy.sh reads from a local .env (template: .env.example).
 edge/wifi-scanner/.env
-# rest-adapter local credentials for the Wittra (or any other vendor)
-# integration. Template: services/rest-adapter/.env.example.
-services/rest-adapter/.env
+# vendor-adapter local credentials for the Wittra (or any other vendor)
+# integration. Template: services/vendor-adapter/.env.example.
+services/vendor-adapter/.env
 
 # Runtime env-config.js for both frontends. The .example.js sibling is the
 # committed template; the .js file is the operator's working copy (may carry
 # real tokens, never committed).
-services/positioning-demo/public/env-config.js
+services/location-app/public/env-config.js
 services/placement-editor/frontend/public/env-config.js
 # placement-editor's static/ is a Vite build artifact (the Dockerfile builds
 # the frontend itself); never commit generated bundles or the runtime
@@ -33,7 +33,7 @@ services/placement-editor/static/
 # imagery, building georef, anchor positions) never enters the repo; the
 # committed template is layout.example.json and `make demo` bootstraps the
 # working copy from it. See docs/blueprint-vs-bindings.md.
-services/positioning-demo/public/layout.json
+services/location-app/public/layout.json
 
 # Calibration backups taken before risky georef experiments. Same sensitivity
 # as the live blueprint.
@@ -43,10 +43,6 @@ dev/calibration-backups/
 # Stays on the developer's machine; the .json defaults in dev/ are placeholders.
 dev/*.local.json
 dev/*.local.*
-
-# Profiled OpenAPI specs, derived by `make profile-spec` from the pinned CAMARA
-# base + the committed overlays under spec/private-profile/. Build artefact.
-spec/private-profile/generated/
 
 # Docker compose local overrides
 docker-compose.override.yml

@@ -9,8 +9,8 @@ metadata:
   namespace: 5g-northbound
 data:
   LAYOUT_FILE: /app/data/layout.json
-  WIFI_POSITIONING_URL: http://wifi-positioning:8080
-  REST_ADAPTER_URL: http://rest-adapter:8080
+  WIFI_ADAPTER_URL: http://wifi-adapter:8080
+  VENDOR_ADAPTER_URL: http://vendor-adapter:8080
 ---
 apiVersion: v1
 kind: Secret

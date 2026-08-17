@@ -3,18 +3,35 @@ import respx
 from httpx import Response
 
 from app.adapters.http import HttpAdapter
+from app.obs import correlator_var
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_propagates_correlator():
+    route = respx.get("http://x/measurement/dev1").mock(
+        return_value=Response(200, json={
+            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "accuracy_m": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
+        })
+    )
+    correlator_var.set("corr-engine")
+    a = HttpAdapter("x", "http://x")
+    await a.get_measurement("dev1")
+    await a.aclose()
+    assert route.calls.last.request.headers.get("x-correlator") == "corr-engine"
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_http_adapter_decodes_local_measurement():
-    respx.get("http://wifi-positioning:8080/measurement/dev1").mock(
+    respx.get("http://wifi-adapter:8080/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "wifi", "x": 5.0, "y": 0.0, "z": 12.3,
             "accuracy_m": 1.5, "confidence": 0.7, "timestamp": 1700000000.0,
         })
     )
-    a = HttpAdapter("wifi", "http://wifi-positioning:8080")
+    a = HttpAdapter("wifi", "http://wifi-adapter:8080")
     m = await a.get_measurement("dev1")
     await a.aclose()
     assert m is not None

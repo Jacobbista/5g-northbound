@@ -29,7 +29,7 @@ async def test_adapters_proxies_engine_response(client, make_token, monkeypatch,
             "adapters": [
                 {
                     "name": "wifi",
-                    "base_url": "http://wifi-positioning:8080",
+                    "base_url": "http://wifi-adapter:8080",
                     "fail_count": 0,
                     "in_cooldown": False,
                     "cooldown_seconds_remaining": 0.0,

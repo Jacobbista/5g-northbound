@@ -17,7 +17,7 @@ def registry(tmp_path):
         persist_path=str(tmp_path / "adapters.json"), clock=clock,
     )
     # Two seed adapters; force one into cooldown without any HTTP.
-    reg.upsert("wifi", "http://wifi-positioning:8080", "adapter", SEED)
+    reg.upsert("wifi", "http://wifi-adapter:8080", "adapter", SEED)
     reg.upsert("wittra", "http://wittra:8080", "adapter", SEED)
     degraded = reg.adapters["wittra"]
     degraded._fail_count = 5
@@ -55,7 +55,7 @@ async def test_cooldown_surfaces_as_unreachable(registry):
 async def test_exposes_base_url_kind_provenance(registry):
     r = await _get("/adapters")
     by = {a["name"]: a for a in r.json()["adapters"]}
-    assert by["wifi"]["base_url"] == "http://wifi-positioning:8080"
+    assert by["wifi"]["base_url"] == "http://wifi-adapter:8080"
     assert by["wifi"]["registered_via"] == "seed"
     assert "last_seen_s_ago" in by["wifi"]
 

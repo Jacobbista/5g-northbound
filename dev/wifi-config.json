@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-venue WiFi adapter bindings. Each entry maps an anchor `id` (defined in the placement-editor blueprint at positioning-demo/public/layout.json) to its physical BSSIDs. Positions are NOT here - they come from the blueprint. BSSIDs below are placeholders; for a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real values and `export WIFI_CONFIG=./dev/wifi-config.local.json` before `make demo`.",
+  "_comment": "Per-venue WiFi adapter bindings. Each entry maps an anchor `id` (defined in the placement-editor blueprint at location-app/public/layout.json) to its physical BSSIDs. Positions are NOT here - they come from the blueprint. BSSIDs below are placeholders; for a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real values and `export WIFI_CONFIG=./dev/wifi-config.local.json` before `make demo`.",
   "tx_power": -42,
   "path_loss_n": 2.7,
   "algorithm": "trilateration",

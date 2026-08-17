@@ -10,7 +10,7 @@ makes sense without the distinction.
 flowchart TD
     BP["<b>blueprint</b><br/>rooms, walls, openings<br/>anchor id + x/y/z + tech<br/>georef (lat/lon)<br/><i>portable, geometry only - only the placeholder is committable</i>"]
     BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware - never committed</i>"]
-    WIFI["<b>wifi-positioning service</b><br/>joins blueprint + bindings on anchor id at startup<br/>exposes GET /measurement/{positioning_id}<br/>calibration tool persists samples + per-AP params"]
+    WIFI["<b>wifi-adapter service</b><br/>joins blueprint + bindings on anchor id at startup<br/>exposes GET /measurement/{positioning_id}<br/>calibration tool persists samples + per-AP params"]
     BP --> WIFI
     BN -->|"read AND write<br/>(calibration writes back here)"| WIFI
 ```
@@ -43,21 +43,21 @@ and from the editor's uptime.
 ```mermaid
 flowchart TD
     ED["placement-editor<br/>(write-client)"] -->|"PUT /blueprint"| ENG
-    WIFI["wifi-positioning<br/>(read-client, retries while engine boots)"] -->|"GET /blueprint"| ENG
+    WIFI["wifi-adapter<br/>(read-client, retries while engine boots)"] -->|"GET /blueprint"| ENG
     ENG["positioning-engine<br/><b>AUTHORITY</b>: owns persistence, GET/PUT"]
     GW["camara-gateway"] -->|"GET /blueprint (proxy)"| ENG
-    DEMO["positioning-demo<br/>(MEC: gateway only)"] -->|"GET /blueprint"| GW
+    DEMO["location-app<br/>(MEC: gateway only)"] -->|"GET /blueprint"| GW
 ```
 
 | Role          | Service            | How it touches the blueprint                                   |
 |---------------|--------------------|----------------------------------------------------------------|
 | Authority     | positioning-engine | Persists it (`BLUEPRINT_PATH`, a writable PVC); serves GET/PUT; derives `gps_origin` for the WGS84 conversion |
 | Write-client  | placement-editor   | `GET/PUT` over HTTP (`POSITIONING_ENGINE_URL`); its `/api/layout` proxies the engine. No local blueprint file |
-| Read-client   | wifi-positioning   | `GET /blueprint` from the engine at boot (retry + degraded), joins anchors to BSSIDs |
-| Read-client   | positioning-demo   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (AGENTS.md) |
+| Read-client   | wifi-adapter   | `GET /blueprint` from the engine at boot (retry + degraded), joins anchors to BSSIDs |
+| Read-client   | location-app   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (AGENTS.md) |
 | Proxy         | camara-gateway     | Read-only `GET /blueprint` proxy so the demo reaches it through its single allowed backend |
-| Not a consumer| mock-positioning   | Synthetic walker; uses `WIDTH_M`/`DEPTH_M` env, no real geometry |
-| Not a consumer| rest-adapter       | Vendor cloud returns positioned WGS84 fixes; pass-through. (The editor's `↻ sync vendor` imports those at authoring time only) |
+| Not a consumer| synthetic-adapter   | Synthetic walker; uses `WIDTH_M`/`DEPTH_M` env, no real geometry |
+| Not a consumer| vendor-adapter       | Vendor cloud returns positioned WGS84 fixes; pass-through. (The editor's `↻ sync vendor` imports those at authoring time only) |
 
 Write authorisation is the **placement-editor's front-door gate**
 (oauth2-proxy / admin), not the engine: the engine is `ClusterIP`, never
@@ -69,14 +69,14 @@ adapters unauthenticated in-cluster). This is a deliberate, declared choice.
 
 | File                                        | Role                                                      |
 | ------------------------------------------- | --------------------------------------------------------- |
-| `services/positioning-demo/public/layout.example.json` (committed) | generic demo venue; `make demo` bootstraps `layout.json` from it |
-| `services/positioning-demo/public/layout.json` (gitignored)        | **seed only**: mounted read-only into the engine as `BLUEPRINT_SEED_PATH`; the engine copies it into its volume on first boot, then owns it. Editor edits go to the engine, not back to this file |
-| `dev/wifi-config.json` (placeholder)        | bindings, wifi-positioning (legacy / demo)                |
+| `services/location-app/public/layout.example.json` (committed) | generic demo venue; `make demo` bootstraps `layout.json` from it |
+| `services/location-app/public/layout.json` (gitignored)        | **seed only**: mounted read-only into the engine as `BLUEPRINT_SEED_PATH`; the engine copies it into its volume on first boot, then owns it. Editor edits go to the engine, not back to this file |
+| `dev/wifi-config.json` (placeholder)        | bindings, wifi-adapter (legacy / demo)                |
 | `dev/wifi-config.local.json` (real venue)   | bindings, gitignored, auto-mounted by `make demo`         |
 
 The bindings file (`wifi-config.json`) is **not** network-distributed: it is
 read-write, mutated at runtime by the calibration tool, and local to
-wifi-positioning. It stays a file / PVC. See "Deploying to Kubernetes" below.
+wifi-adapter. It stays a file / PVC. See "Deploying to Kubernetes" below.
 
 ## Authoring flow
 
@@ -90,7 +90,7 @@ steps:
 3. **Room**: drop anchors (`+ UWB`, `+ WiFi`, …), draw inner walls,
    set ceiling height + per-wall openings.
 
-The editor auto-saves to `services/positioning-demo/public/layout.json` after
+The editor auto-saves to `services/location-app/public/layout.json` after
 every committed action. No manual save needed in the dev stack.
 
 ### 2. Export the blueprint (when you need to move it)
@@ -100,8 +100,8 @@ Header → `↓ export`. Downloads `blueprint-<timestamp>.json`. This is the
 
 Move it onto the target cluster by:
 
-- copying into the PVC the wifi-positioning ConfigMap reads from,
-- or replacing `services/positioning-demo/public/layout.json` on the dev host,
+- copying into the PVC the wifi-adapter ConfigMap reads from,
+- or replacing `services/location-app/public/layout.json` on the dev host,
 - or sharing it with another operator (no BSSIDs in it).
 
 ### 3. Import a blueprint into a fresh editor
@@ -137,7 +137,7 @@ The `id` here MUST match an anchor id in the blueprint with
 unbound anchors don't position; unmatched bindings don't pollute the
 adapter.
 
-Restart `wifi-positioning` to pick up changes (or roll the deployment in
+Restart `wifi-adapter` to pick up changes (or roll the deployment in
 production). The calibration tool described below hot-reloads the live
 config on apply, so an in-flight calibration session does not need a
 restart.
@@ -181,7 +181,7 @@ samples) is the portable calibration artefact. Calibrate on one cluster
 (e.g. the local demo), carry the file to another (e.g. the testbed):
 
 - `⇩ export bindings` (calibration panel) downloads the live
-  `wifi-config.json` from `wifi-positioning`, full fidelity - BSSIDs, per-AP
+  `wifi-config.json` from `wifi-adapter`, full fidelity - BSSIDs, per-AP
   `tx_power`/`path_loss_n`, and survey samples.
 - `⇪ import bindings` uploads such a file and **replaces** the live bindings
   wholesale, then hot-reloads. Replace-semantics, like blueprint import and
@@ -191,16 +191,16 @@ samples) is the portable calibration artefact. Calibrate on one cluster
 
 This is how an operator seeds a fresh cluster whose PVC has no BSSIDs yet:
 without them the blueprint's anchors have no radio to match scans against and
-`wifi-positioning` comes up with `0 routers`. Import supplies the id → BSSID
+`wifi-adapter` comes up with `0 routers`. Import supplies the id → BSSID
 table and positioning starts.
 
-Under the hood these are `GET`/`PUT /bindings` on `wifi-positioning`, proxied
+Under the hood these are `GET`/`PUT /bindings` on `wifi-adapter`, proxied
 by the editor at `/api/wifi/bindings`. BSSIDs ride this **operator plane** only
 (the editor is gated by `placement-admin`); they are never proxied to the demo
 or gateway. Untrusted clients read RF params without BSSIDs via
 `/calibration/params` (engine) and `/anchors/calibration` (gateway).
 
-## What the wifi-positioning service does at startup
+## What the wifi-adapter service does at startup
 
 ```mermaid
 flowchart TD
@@ -209,7 +209,7 @@ flowchart TD
     Q -->|no| N["legacy mode: bindings file MUST carry positions inline<br/>(routers: [{id, x, y, bssids}])<br/>used by tests and single-file demos"]
 ```
 
-See [`services/wifi-positioning/app/assemble.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/assemble.py)
+See [`services/wifi-adapter/app/assemble.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/assemble.py)
 for the exact code.
 
 ## Deploying to Kubernetes
@@ -222,7 +222,7 @@ nothing is shared across pods. Everything else moves over HTTP.
 PVC: positioning-blueprint   (RWO, ~1 MB)  ── mounted ONLY by positioning-engine
   └─ /app/data/blueprint.json   (the canonical blueprint; engine owns it)
 
-PVC: wifi-positioning-bindings (RWO, ~5 MB) ── mounted ONLY by wifi-positioning
+PVC: wifi-adapter-bindings (RWO, ~5 MB) ── mounted ONLY by wifi-adapter
   └─ /app/config/wifi-config.json  (BSSIDs, tunables, calibration data)
 ```
 
@@ -230,11 +230,11 @@ PVC: wifi-positioning-bindings (RWO, ~5 MB) ── mounted ONLY by wifi-position
 |---------------------|------------------|----------------------------------------------------|
 | positioning-engine  | RW (authority)   | persists + serves it; `BLUEPRINT_PATH=/app/data/blueprint.json` |
 | placement-editor    | none             | `GET/PUT` over HTTP, `POSITIONING_ENGINE_URL`       |
-| wifi-positioning    | none             | `GET /blueprint` from the engine, `POSITIONING_ENGINE_URL` |
-| positioning-demo    | none             | `GET /blueprint` via the gateway proxy (`CAMARA_API_BASE`) |
-| mock-positioning    | none             | env dimensions only                                |
+| wifi-adapter    | none             | `GET /blueprint` from the engine, `POSITIONING_ENGINE_URL` |
+| location-app    | none             | `GET /blueprint` via the gateway proxy (`CAMARA_API_BASE`) |
+| synthetic-adapter    | none             | env dimensions only                                |
 
-Only the engine and wifi-positioning carry a PVC. The engine's blueprint PVC
+Only the engine and wifi-adapter carry a PVC. The engine's blueprint PVC
 must be writable by its non-root `app` user (uid 1001) - `fsGroup: 1001`:
 
 ```yaml
@@ -261,7 +261,7 @@ spec:
             claimName: positioning-blueprint
 ```
 
-wifi-positioning mounts only its bindings PVC (same `fsGroup: 1001` pattern),
+wifi-adapter mounts only its bindings PVC (same `fsGroup: 1001` pattern),
 with `WIFI_CONFIG_PATH=/app/config/wifi-config.json` and
 `POSITIONING_ENGINE_URL` pointing at the engine Service. It fetches the
 blueprint over HTTP at boot, retrying while the engine comes up, and serves
@@ -280,7 +280,7 @@ The blueprint PVC starts empty. Two ways to put the first venue in:
   owns it; the seed mount can be removed afterwards.
 
 The bindings PVC seeds the same way it did before (tunables + `id → BSSIDs`):
-`kubectl cp` into the wifi-positioning pod, or an init container that copies a
+`kubectl cp` into the wifi-adapter pod, or an init container that copies a
 seed payload from a Secret when the file is absent.
 
 The placement editor can also write the blueprint PVC directly (its
@@ -290,13 +290,13 @@ mount the same PVC into both pods.
 ### What about the `HOST_UID` trick on docker compose?
 
 The compose stack works around the same ownership problem in dev by
-passing the host user's uid:gid into the wifi-positioning container
+passing the host user's uid:gid into the wifi-adapter container
 (`make demo` sets `HOST_UID` automatically). The Kubernetes equivalent
 is `fsGroup` above. Same idea, different machinery.
 
 ## What the placeholder blueprint in the repo is for
 
-`services/positioning-demo/public/layout.json` ships with a generic test layout
+`services/location-app/public/layout.json` ships with a generic test layout
 so `make demo` works on a fresh clone. **Do not commit your real venue
 to that file.** Either:
 
@@ -315,8 +315,8 @@ positions (the vendor's deployment app puts them on a map). The editor
 can pull that list via the `↻ sync vendor` toolbar button in section 3:
 
 1. The button drives the placement editor's `/api/vendor/discover`
-   proxy, which calls the rest-adapter's `GET /discover`.
-2. The active schema's optional `discover` block tells the rest-adapter
+   proxy, which calls the vendor-adapter's `GET /discover`.
+2. The active schema's optional `discover` block tells the vendor-adapter
    how to walk the vendor's list endpoint (path, pagination, field
    mapping). No code change to support a new vendor; only a new schema.
 3. The right-rail panel lists every device, projects its cloud lat/lon
@@ -336,7 +336,7 @@ The full schema + workflow is in [`integrating-a-vendor-rest-api.md`](./integrat
 - **Move config to a new cluster** → export blueprint, copy to cluster,
   wire bindings there.
 - **Demo on a laptop without the cluster** → blueprint is enough;
-  bindings get the placeholder file; mock devices walk the room.
+  bindings get the placeholder file; synthetic devices walk the room.
 - **Swap an AP** → only the bindings file changes; blueprint stays.
 - **Renovate the building** → blueprint changes; bindings only update
   if anchor IDs change.

@@ -136,7 +136,7 @@ These endpoints live on the same gateway service but are **not part of CAMARA De
 
 The list is read from the [Asset Identity Map](#asset-identity-map) and filtered to the caller's `org`. Order matches the store. Empty list (`{"assets": []}`) when the tenant owns nothing, not a 404.
 
-`simulated` is `true` when the asset is wired to a synthetic source (`mock-positioning`, `mock-wittra`, or any demo fixture). The UI renders a `MOCK` badge. Real assets omit the field (defaults to `false`).
+`simulated` is `true` when the asset is wired to a synthetic source (`synthetic-adapter`, `mock-vendor`, or any demo fixture). The UI renders a `MOCK` badge. Real assets omit the field (defaults to `false`).
 
 `PUT /assets` replaces the map (operator action; the editor proxies it). Body is `{"assets":[…]}` conforming to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json).
 
@@ -184,7 +184,7 @@ The list is read from the [Asset Identity Map](#asset-identity-map) and filtered
 
 ### Anchor calibration
 
-`GET /anchors/calibration` → real per-AP RF parameters, proxied from wifi-positioning's `/calibration/params`.
+`GET /anchors/calibration` → real per-AP RF parameters, proxied from wifi-adapter's `/calibration/params`.
 
 ```json
 {
@@ -194,7 +194,7 @@ The list is read from the [Asset Identity Map](#asset-identity-map) and filtered
 }
 ```
 
-Exposes the *measured* RF (from the calibration tool, persisted in the bindings) so the demo shows true radio parameters instead of the editor's placeholder defaults. No BSSIDs cross this boundary. Empty / disabled when `WIFI_POSITIONING_URL` is unset.
+Exposes the *measured* RF (from the calibration tool, persisted in the bindings) so the demo shows true radio parameters instead of the editor's placeholder defaults. No BSSIDs cross this boundary. Empty / disabled when `WIFI_ADAPTER_URL` is unset.
 
 ### Adapter health
 
@@ -203,7 +203,7 @@ Exposes the *measured* RF (from the calibration tool, persisted in the bindings)
 ```json
 {
   "adapters": [
-    { "name": "wifi",   "base_url": "http://wifi-positioning:8080",   "fail_count": 0, "in_cooldown": false, "cooldown_seconds_remaining": 0.0 },
+    { "name": "wifi",   "base_url": "http://wifi-adapter:8080",   "fail_count": 0, "in_cooldown": false, "cooldown_seconds_remaining": 0.0 },
     { "name": "wittra", "base_url": "https://api.wittra.example.com", "fail_count": 5, "in_cooldown": true,  "cooldown_seconds_remaining": 23.5 }
   ]
 }
@@ -358,7 +358,7 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
 - `kind`: asset class (`tool` / `pallet` / `forklift` / `uwb-tag` / …), descriptive.
 - `org`: tenant; the gateway gates consumers by it.
 - `label`: human-readable name surfaced by the demo. Optional; defaults to `asset_id`.
-- `simulated`: optional boolean (default `false`). `true` for assets wired to a fixture, so the UI can render a `MOCK` badge.
+- `simulated`: optional boolean (default `false`). `true` for assets wired to a fixture, so the UI can render a `synthetic` badge.
 
 ## Floor plan
 
@@ -414,7 +414,7 @@ Liveness, no auth.
 
 Read the current layout.
 
-The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys preserved for backward compatibility (the positioning-demo still reads `layout.aps`, `layout.gps_origin`, etc.):
+The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys preserved for backward compatibility (the location-app still reads `layout.aps`, `layout.gps_origin`, etc.):
 
 ```json
 {
@@ -493,4 +493,4 @@ Auth: not yet wired in (`v0.0.1` scaffold). When wired, the realm role will be `
 
 ## Blueprint vs bindings
 
-Venue config splits into two files, geometry (portable, no secrets) and per-venue bindings (BSSIDs / MACs / vendor IDs, never committed). The wifi-positioning service joins them on anchor `id` at startup. The full rationale, layout, and deployment flow live in [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).
+Venue config splits into two files, geometry (portable, no secrets) and per-venue bindings (BSSIDs / MACs / vendor IDs, never committed). The wifi-adapter service joins them on anchor `id` at startup. The full rationale, layout, and deployment flow live in [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).

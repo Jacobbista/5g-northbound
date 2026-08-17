@@ -6,10 +6,10 @@ Each production service ships its own `env.contract.yaml` next to its code:
 |---------------------|---------------------------------------------------------------------------|
 | camara-gateway      | [`../../services/camara-gateway/env.contract.yaml`](../../services/camara-gateway/env.contract.yaml)         |
 | positioning-engine  | [`../../services/positioning-engine/env.contract.yaml`](../../services/positioning-engine/env.contract.yaml) |
-| wifi-positioning    | [`../../services/wifi-positioning/env.contract.yaml`](../../services/wifi-positioning/env.contract.yaml)     |
+| wifi-adapter    | [`../../services/wifi-adapter/env.contract.yaml`](../../services/wifi-adapter/env.contract.yaml)     |
 | placement-editor    | [`../../services/placement-editor/env.contract.yaml`](../../services/placement-editor/env.contract.yaml)     |
-| rest-adapter        | [`../../services/rest-adapter/env.contract.yaml`](../../services/rest-adapter/env.contract.yaml)             |
-| positioning-demo    | [`../../services/positioning-demo/env.contract.yaml`](../../services/positioning-demo/env.contract.yaml)     |
+| vendor-adapter        | [`../../services/vendor-adapter/env.contract.yaml`](../../services/vendor-adapter/env.contract.yaml)             |
+| location-app    | [`../../services/location-app/env.contract.yaml`](../../services/location-app/env.contract.yaml)     |
 
 The deploy portal discovers these by scanning `services/*/env.contract.yaml`
 (no central registry to keep in sync) and renders one form per service.

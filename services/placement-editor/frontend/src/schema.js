@@ -278,7 +278,7 @@ export function centroidOfPolygon(shape) {
 }
 
 // Save side: emit v2 alongside legacy top-level fields derived from the
-// first floor-plan / first room. The positioning-demo and any v1 consumer
+// first floor-plan / first room. The location-app and any v1 consumer
 // keep working unchanged; v2-aware consumers pick up floor_plans / rooms.
 export function denormalizeForCompat(layout) {
   if (!layout || layout.version !== 2) return layout;

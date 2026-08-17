@@ -39,13 +39,13 @@ Once running:
 | Service              | URL                     | Notes                                          |
 |----------------------|-------------------------|------------------------------------------------|
 | `camara-gateway`     | http://localhost:8087   | CAMARA Location API (host 8080 reserved)        |
-| `positioning-demo`   | http://localhost:3002   | 3D browser application (Keycloak login)         |
+| `location-app`   | http://localhost:3002   | 3D browser application (Keycloak login)         |
 | `placement-editor`   | http://localhost:3003   | Operator UI + `/api/layout`                      |
 | `positioning-engine` | http://localhost:8081   | Engine REST + WebSocket on `:8082`              |
-| `wifi-positioning`   | http://localhost:8089   | Reference adapter (RSSI multilateration)         |
-| `mock-positioning`   | http://localhost:8090   | Reference adapter (waypoint walker)              |
-| `rest-adapter`       | http://localhost:8092   | Schema-driven vendor translator (Wittra demo)    |
-| `mock-wittra`        | http://localhost:8091   | Demo-only fake of the Wittra cloud REST API      |
+| `wifi-adapter`   | http://localhost:8089   | Reference adapter (RSSI multilateration)         |
+| `synthetic-adapter`   | http://localhost:8090   | Reference adapter (waypoint walker)              |
+| `vendor-adapter`       | http://localhost:8092   | Schema-driven vendor translator (Wittra demo)    |
+| `mock-vendor`        | http://localhost:8091   | Schema-driven vendor cloud double (Wittra example schema) |
 | Keycloak             | http://localhost:8180   | `admin` / `changeme`; realm `5g-testbed`         |
 
 Keycloak imports the `5g-testbed` realm on first boot (~30 s). The gateway
@@ -72,9 +72,9 @@ The tracked entity is an **asset**, addressed by `assetId` - not a phone number.
 The stack seeds three demo assets in [`dev/assets.json`](dev/assets.json) (the
 first-boot seed for the Asset Identity Map, then authored over `GET/PUT /assets`):
 
-- `forklift-7` → source `mock` (`mock-positioning`). Walks the room, no setup needed.
-- `tool-880` → source `wifi` (`wifi-positioning`). **Offline** until a real WiFi scan is ingested - the expected end-to-end shape, not a bug.
-- `pkg-4471` → source `wittra` (`rest-adapter` → `mock-wittra`). Moves immediately; the worked example for vendor integration.
+- `forklift-7` → source `synthetic` (`synthetic-adapter`). Walks the room, no setup needed.
+- `tool-880` → source `wifi` (`wifi-adapter`). **Offline** until a real WiFi scan is ingested - the expected end-to-end shape, not a bug.
+- `pkg-4471` → source `wittra` (`vendor-adapter` → `mock-vendor`). Moves immediately; the worked example for vendor integration.
 
 Asset structure, authoring, seeding, and tenancy: [`docs/asset-registry.md`](docs/asset-registry.md).
 

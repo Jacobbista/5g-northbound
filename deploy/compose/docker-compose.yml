@@ -18,9 +18,9 @@ services:
     networks:
       - 5g-net
 
-  wifi-positioning:
+  wifi-adapter:
     build:
-      context: ./services/wifi-positioning
+      context: ./services/wifi-adapter
     ports:
       - "8089:8080"
     # Run as the host user so the calibration tool can write back to the
@@ -42,7 +42,7 @@ services:
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "wifi"
       ADAPTER_KIND: "wifi"
-      ADAPTER_BASE_URL: "http://wifi-positioning:8080"
+      ADAPTER_BASE_URL: "http://wifi-adapter:8080"
       # Advertised capabilities (mirrors adapter.contract.yaml; validated by
       # `make positioning-check`). Drives the gateway's GET /capabilities.
       ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"local","streaming":false,"z":false,"accuracy_class":"metre","calibration":true,"devices":true}'
@@ -63,15 +63,24 @@ services:
     networks:
       - 5g-net
 
-  mock-wittra:
+  mock-vendor:
     build:
-      context: ./mocks/mock-wittra
+      context: ./mocks/mock-vendor
     ports:
       - "8091:8080"
+    volumes:
+      # The same schema vendor-adapter consumes. mock-vendor reads it and emits
+      # responses that satisfy its mapping + serves them on the schema's URL
+      # paths, behind the schema's auth, so the demo exercises the real vendor
+      # path end to end. A different schema = a different vendor's shape here.
+      - ./services/vendor-adapter/examples/wittra-schema.json:/app/config/schema.json:ro
     environment:
-      MOCK_WITTRA_ORG_ID: "demo-org"
-      MOCK_WITTRA_PROJECT_ID: "demo-prj"
-      MOCK_WITTRA_API_KEY: "demo-key"
+      SCHEMA_FILE: "/app/config/schema.json"
+      # The account values the schema references via env; the mock checks a
+      # request addresses this org/project and carries these credentials.
+      WITTRA_ORG_ID: "demo-org"
+      WITTRA_PROJECT_ID: "demo-prj"
+      WITTRA_API_KEY: "demo-key"
     healthcheck:
       test: ["CMD", "python3", "-c",
         "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
@@ -82,39 +91,39 @@ services:
     networks:
       - 5g-net
 
-  rest-adapter:
+  vendor-adapter:
     build:
-      context: ./services/rest-adapter
+      context: ./services/vendor-adapter
     ports:
       - "8092:8080"
     volumes:
       # In dev the example schema is mounted as the persistent schema file so
       # the adapter boots configured. In production the testbed PUTs the
       # schema via its vendor-integrations UI and the file lives on a PVC.
-      - ./services/rest-adapter/examples/wittra-schema.json:/app/data/schema.json
+      - ./services/vendor-adapter/examples/wittra-schema.json:/app/data/schema.json
     environment:
-      # Defaults below target the local mock-wittra fake so `make demo` runs
+      # Defaults below target the local mock-vendor fake so `make demo` runs
       # end-to-end on a fresh clone. To talk to a real Wittra cloud, copy
-      # rest-adapter/.env.example to rest-adapter/.env, fill it in, then
-      # `set -a; . rest-adapter/.env; set +a; make demo` (or set the four
+      # vendor-adapter/.env.example to vendor-adapter/.env, fill it in, then
+      # `set -a; . vendor-adapter/.env; set +a; make demo` (or set the four
       # vars any other way). In K8s these come from a Secret instead.
-      WITTRA_BASE_URL: "${WITTRA_BASE_URL:-http://mock-wittra:8080}"
+      WITTRA_BASE_URL: "${WITTRA_BASE_URL:-http://mock-vendor:8080}"
       WITTRA_ORG_ID: "${WITTRA_ORG_ID:-demo-org}"
       WITTRA_PROJECT_ID: "${WITTRA_PROJECT_ID:-demo-prj}"
       WITTRA_API_KEY: "${WITTRA_API_KEY:-demo-key}"
-      # Verbose discover logging. Set REST_ADAPTER_DEBUG=1 in the shell
+      # Verbose discover logging. Set VENDOR_ADAPTER_DEBUG=1 in the shell
       # before `make demo` to dump GET URLs + response previews into the
-      # rest-adapter container's logs (useful when wiring a new vendor
+      # vendor-adapter container's logs (useful when wiring a new vendor
       # schema or chasing a real cloud returning 0 devices).
-      REST_ADAPTER_DEBUG: "${REST_ADAPTER_DEBUG:-0}"
+      VENDOR_ADAPTER_DEBUG: "${VENDOR_ADAPTER_DEBUG:-0}"
       # Self-register with the engine's adapter registry.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "wittra"
       ADAPTER_KIND: "vendor"
-      ADAPTER_BASE_URL: "http://rest-adapter:8080"
+      ADAPTER_BASE_URL: "http://vendor-adapter:8080"
       ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true}'
     depends_on:
-      mock-wittra:
+      mock-vendor:
         condition: service_healthy
       positioning-engine:
         condition: service_healthy
@@ -128,18 +137,18 @@ services:
     networks:
       - 5g-net
 
-  mock-positioning:
+  synthetic-adapter:
     build:
-      context: ./mocks/mock-positioning
+      context: ./services/synthetic-adapter
     ports:
       - "8090:8080"
     volumes:
       # Walk inside the operator's actual room: the walker reads room bounds +
       # walls AND the floor-plan frame (room base + georef height) so it emits
       # in the engine's `local` frame (floor-plan-local, north-up). Same seed
-      # blueprint the engine boots from, so the mock device lands among the
+      # blueprint the engine boots from, so the synthetic device lands among the
       # anchors instead of in an arbitrary box.
-      - ./services/positioning-demo/public/layout.json:/app/config/layout.json:ro
+      - ./services/location-app/public/layout.json:/app/config/layout.json:ro
     environment:
       LAYOUT_PATH: "/app/config/layout.json"
       # Fallback bounds when no layout is mounted; the layout overrides these.
@@ -149,13 +158,18 @@ services:
       SPEED_MPS: "1.0"
       # Self-register with the engine's adapter registry.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
-      ADAPTER_NAME: "mock"
-      ADAPTER_KIND: "mock"
-      ADAPTER_BASE_URL: "http://mock-positioning:8080"
+      ADAPTER_NAME: "synthetic"
+      ADAPTER_KIND: "synthetic"
+      ADAPTER_BASE_URL: "http://synthetic-adapter:8080"
       # The walker can synthesise a position for any id; scope it so it 404s for
       # devices it does not own, keeping engine fan-out (no DEVICE_MAP) clean.
-      DEVICE_IDS: "mock-demo-01"
-      ADAPTER_CAPABILITIES: '{"source":"mock","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse","devices":true}'
+      DEVICE_IDS: "synthetic-demo-01"
+      # Fixed anchors this on-premise RTLS substitute exposes: surfaced on
+      # /devices as role=infrastructure (never onboarded as assets), so the demo
+      # exercises both onboarding classes. SOURCE_CLASS tags the technology.
+      ANCHOR_IDS: "synthetic-anchor-01,synthetic-anchor-02"
+      SOURCE_CLASS: "uwb"
+      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse","devices":true}'
     depends_on:
       positioning-engine:
         condition: service_healthy
@@ -181,19 +195,19 @@ services:
       # On first boot the store is empty, so it seeds once from the committed
       # dev blueprint mounted read-only below.
       - engine-blueprint:/app/data
-      - ./services/positioning-demo/public/layout.json:/app/config/seed-blueprint.json:ro
+      - ./services/location-app/public/layout.json:/app/config/seed-blueprint.json:ro
       # Versioned layout schema (read-only): the engine best-effort validates
       # PUT /blueprint against it. Absent in prod -> validation degrades to no-op.
       - ./schema:/app/schema:ro
     environment:
       BLUEPRINT_SEED_PATH: "/app/config/seed-blueprint.json"
-      DEVICE_IDS: "wifi-asset-01,mock-demo-01,wittra-tag-01"
+      DEVICE_IDS: "wifi-asset-01,synthetic-demo-01,wittra-tag-01"
       # No ADAPTER_URLS: adapters self-register with the engine (POST /adapters)
       # and heartbeat. See docs/adapter-registry.md.
       # No DEVICE_MAP: routing is capability-driven. The CAMARA gateway passes
       # the asset's source (?source=) so the engine polls that adapter directly;
       # the stream fans out to all adapters and each 404s for devices it does
-      # not serve (the mock is scoped via DEVICE_IDS). DEVICE_MAP is still
+      # not serve (the synthetic adapter is scoped via DEVICE_IDS). DEVICE_MAP is still
       # honoured if set, as a cold-start override.
       # Fusion strategy applied to the merged measurements (see docs/fusion-strategies.md).
       FUSION_STRATEGY: "weighted_avg"
@@ -233,7 +247,7 @@ services:
       # throwaway run: `SKIP_AUTH=true make demo`.
       SKIP_AUTH: "${SKIP_AUTH:-false}"
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
-      WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
+      WIFI_ADAPTER_URL: "http://wifi-adapter:8080"
       KEYCLOAK_URL: "http://keycloak:8080"
       KEYCLOAK_REALM: "5g-testbed"
       ASSET_STORE_FILE: "/app/data/assets.json"
@@ -253,16 +267,16 @@ services:
     networks:
       - 5g-net
 
-  positioning-demo:
+  location-app:
     build:
-      context: ./services/positioning-demo
+      context: ./services/location-app
     ports:
       - "3002:80"
     volumes:
       # runtime env (window.__ENV__) - overrides config without a rebuild.
       # The blueprint is NOT mounted: the demo fetches it from the CAMARA
       # gateway (GET /blueprint), which proxies the engine.
-      - ./services/positioning-demo/public/env-config.js:/usr/share/nginx/html/env-config.js:ro
+      - ./services/location-app/public/env-config.js:/usr/share/nginx/html/env-config.js:ro
     depends_on:
       camara-gateway:
         condition: service_healthy
@@ -291,10 +305,10 @@ services:
       # from the engine (the authority). No shared blueprint volume.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       # Upstream for the calibration proxy (browser -> placement-editor ->
-      # wifi-positioning). Internal service name on the compose network.
-      WIFI_POSITIONING_URL: "http://wifi-positioning:8080"
+      # wifi-adapter). Internal service name on the compose network.
+      WIFI_ADAPTER_URL: "http://wifi-adapter:8080"
       # Upstream for the vendor discovery proxy.
-      REST_ADAPTER_URL: "http://rest-adapter:8080"
+      VENDOR_ADAPTER_URL: "http://vendor-adapter:8080"
       # Asset Identity Map authority, proxied at /api/assets (GET/PUT) for an
       # onboarding client. Onboarding UI itself is the KELT dashboard's.
       CAMARA_GATEWAY_URL: "http://camara-gateway:8080"

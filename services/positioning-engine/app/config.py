@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     device_discovery_interval_s: float = 5.0
 
     # Comma-separated named adapter base URLs. Two equivalent forms:
-    #   ADAPTER_URLS="wifi=http://wifi-positioning:8080,uwb=http://wittra-uwb:8080"
-    #   ADAPTER_URLS="http://wifi-positioning:8080"             # auto-named adapter-0
+    #   ADAPTER_URLS="wifi=http://wifi-adapter:8080,uwb=http://wittra-uwb:8080"
+    #   ADAPTER_URLS="http://wifi-adapter:8080"             # auto-named adapter-0
     # Each entry maps to one HttpAdapter polling GET /measurement/{device_id}.
     # Empty -> no adapters configured; the engine returns no measurements.
     adapter_urls: str = ""

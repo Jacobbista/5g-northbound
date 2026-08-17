@@ -10,13 +10,13 @@ Seven images are built and published by CI on every `v*` tag:
 |--------------------------------------------------------------------|------------------------------------------------|--------------|
 | `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/)        | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/)| 8080         |
-| `ghcr.io/jacobbista/5g-northbound/wifi-positioning:<tag>`          | [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/wifi-adapter:<tag>`          | [`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/)    | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-demo:<tag>`          | [`services/positioning-demo/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-demo/)    | 80           |
-| `ghcr.io/jacobbista/5g-northbound/rest-adapter:<tag>`              | [`services/rest-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/)            | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/mock-positioning:<tag>`          | [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/)    | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/location-app:<tag>`          | [`services/location-app/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/location-app/)    | 80           |
+| `ghcr.io/jacobbista/5g-northbound/vendor-adapter:<tag>`              | [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/)            | 8080         |
+| `ghcr.io/jacobbista/5g-northbound/synthetic-adapter:<tag>`          | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/)    | 8080         |
 
-`mock-positioning` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-wittra` is **not** published: it is a local fake of the Wittra cloud used only by `make demo` (compose builds it from source); in the testbed `rest-adapter` points at the real vendor cloud.
+`synthetic-adapter` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-vendor` is **not** published: it is a local schema-driven vendor cloud double used only by `make demo` (compose builds it from source); in the testbed `vendor-adapter` points at the real vendor cloud.
 
 Each tag publishes three references: the semver tag (`0.1.0`), `latest`, and a short-SHA tag (`sha-abcdef0`).
 
@@ -47,7 +47,7 @@ deploy tool can treat all services identically:
   **ConfigMap**; sensitive ones in a **Secret**. Both are wired to the pod with
   `envFrom`. The `sensitive` flag on each `/contract` entry is the only thing
   that decides which.
-- **Frontends are not an exception.** `positioning-demo` and `placement-editor`
+- **Frontends are not an exception.** `location-app` and `placement-editor`
   run in the browser and cannot read pod env vars directly, so their image's
   `entrypoint.sh` renders the same env vars into `env-config.js`
   (`window.__ENV__`) at container start. The *source* is still pod env vars;
@@ -88,8 +88,8 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skelet
 | Artifact                    | Local source                              | Cluster resource                                  |
 |-----------------------------|-------------------------------------------|---------------------------------------------------|
 | Blueprint (geometry)        | editor `↓ export`                         | PVC shared by placement-editor + engine + demo    |
-| Bindings (BSSIDs, calib.)   | `dev/wifi-config.local.json`              | writable PVC on wifi-positioning                  |
-| Vendor credentials          | `services/rest-adapter/.env`              | `Secret` (names come from the active vendor schema) |
+| Bindings (BSSIDs, calib.)   | `dev/wifi-config.local.json`              | writable PVC on wifi-adapter                  |
+| Vendor credentials          | `services/vendor-adapter/.env`              | `Secret` (names come from the active vendor schema) |
 | Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
 | Asset Identity Map          | `dev/assets.json`                         | **PVC** (`ASSET_STORE_FILE`) seeded from `ASSET_SEED_FILE` |
 | Engine floor-plan georef    | `dev/floor-plan.json`                     | `ConfigMap` (`FLOOR_PLAN_PATH`)                   |
@@ -122,7 +122,7 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # preview a ConfigMap + Sec
 | `KEYCLOAK_REALM`          | `5g-testbed`                                           | |
 | `REQUIRED_ROLE`           | `camara-location-read`                                 | Realm role required to call CAMARA endpoints |
 | `POSITIONING_ENGINE_URL`  | empty (mock fallback)                                  | Engine base URL; gateway calls `GET /position/{positioning_id}?source=` |
-| `WIFI_POSITIONING_URL`    | empty                                                  | wifi-positioning base URL, proxied by `/anchors/calibration` so the demo reads real per-AP RF. Empty disables that extension |
+| `WIFI_ADAPTER_URL`    | empty                                                  | wifi-adapter base URL, proxied by `/anchors/calibration` so the demo reads real per-AP RF. Empty disables that extension |
 | `ASSET_STORE_FILE`        | `/app/data/assets.json`                                | **Writable** Asset Identity Map store. Back it with a **PVC** (not a read-only ConfigMap) so `PUT /assets` survives restart/upgrade. Content is tenant inventory (Tier-1): never committed |
 | `ASSET_SEED_FILE`         | `/app/config/assets.seed.json`                         | Read-only seed copied into the store once on first boot when it is empty. Conforms to `schema/asset.schema.json` |
 | `SKIP_AUTH`               | `false`                                                | Development override only, bypasses JWT validation for every endpoint except `/health` |
@@ -133,7 +133,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 
 | Variable                | Default                              | Notes |
 |-------------------------|--------------------------------------|-------|
-| `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-positioning:8080,mock=http://mock-positioning:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
+| `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-adapter:8080,synthetic=http://synthetic-adapter:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
 | `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the asset's `source` (adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
 | `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
 | `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
@@ -144,7 +144,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
 
-### wifi-positioning
+### wifi-adapter
 
 | Variable           | Default                          | Notes |
 |--------------------|----------------------------------|-------|
@@ -153,13 +153,13 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 
 The split into blueprint + bindings is a deliberate architectural choice: blueprints are portable across clusters and never contain secrets, bindings are per-venue and never committed. Skim [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) before configuring a real venue.
 
-### mock-positioning
+### synthetic-adapter
 
-Synthetic random-walk adapter. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-positioning`, so the engine treats them uniformly.
+Synthetic random-walk adapter. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-adapter`, so the engine treats them uniformly.
 
 | Variable      | Default | Notes |
 |---------------|---------|-------|
-| `SOURCE`      | `mock`  | Tag set on every measurement (surfaces in `sources[]` northbound) |
+| `SOURCE`      | `synthetic`  | Tag set on every measurement (surfaces in `sources[]` northbound) |
 | `WIDTH_M`     | `20.0`  | Room width along x (metres); positions are clamped to `[0, WIDTH_M]` |
 | `DEPTH_M`     | `30.0`  | Room depth along z |
 | `HEIGHT_M`    | `3.0`   | Room height along y |
@@ -168,7 +168,7 @@ Synthetic random-walk adapter. No external configuration file; bounds and motion
 | `CONFIDENCE`  | `0.6`   | Fixed confidence reported on every measurement |
 | `RNG_SEED`    | `0`     | Set non-zero for reproducible trajectories in tests / recordings |
 
-### rest-adapter
+### vendor-adapter
 
 Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor. In production the schema is durable cluster config: a **ConfigMap mounted at `SCHEMA_FILE`, changed + `kubectl rollout restart`** (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). `PUT /schema` is a dev / preview hot-patch only - on a ConfigMap mount it applies live but does not persist, and the ConfigMap re-wins on restart.
 
@@ -178,15 +178,15 @@ Generic, schema-driven translator from a vendor REST positioning API onto the en
 
 Vendor-specific env vars (base URL override, credentials, path-template parameters) are referenced *by name* from inside the schema, so the adapter pod needs `WITTRA_API_KEY`, `WITTRA_ORG_ID`, etc. (or your vendor's equivalents) mounted from a Kubernetes `Secret`. The schema itself contains no credentials and is safe to keep in a `ConfigMap`.
 
-### mock-wittra
+### mock-vendor
 
-Toy fake of the Wittra cloud REST API. Demo / CI only, never deployed alongside the real adapter.
+Schema-driven vendor cloud double. Demo / CI only, never deployed alongside the real adapter. It reads the same schema `vendor-adapter` consumes and serves responses that satisfy it, on the URL paths and behind the auth that schema declares.
 
-| Variable                 | Default      | Notes                                  |
-|--------------------------|--------------|----------------------------------------|
-| `MOCK_WITTRA_ORG_ID`     | `demo-org`   | Expected Basic-auth username           |
-| `MOCK_WITTRA_API_KEY`    | `demo-key`   | Expected Basic-auth password           |
-| `MOCK_WITTRA_PROJECT_ID` | `demo-prj`   | Required project segment in the URL    |
+| Variable       | Default                    | Notes                                          |
+|----------------|----------------------------|------------------------------------------------|
+| `SCHEMA_FILE`  | `/app/config/schema.json`  | The vendor schema to serve; mount the same one `vendor-adapter` uses |
+
+The account values and credentials it expects come from the env vars the schema's `path_vars` / `auth` blocks reference (for the Wittra example: `WITTRA_ORG_ID`, `WITTRA_PROJECT_ID`, `WITTRA_API_KEY`).
 
 ### placement-editor
 
@@ -196,11 +196,11 @@ Toy fake of the Wittra cloud REST API. Demo / CI only, never deployed alongside 
 
 The editor's drag-drop UI is not implemented yet (`v0.0.1` is a scaffold). The HTTP surface is stable: `GET /api/layout`, `PUT /api/layout`, `GET /health`. Auth is not wired in for the scaffold, production deployments MUST front it with a Keycloak-protected ingress and the realm role `placement-admin` until the service grows its own JWT middleware (planned).
 
-### positioning-demo
+### location-app
 
 Runtime configuration is injected through `/usr/share/nginx/html/env-config.js`, served `Cache-Control: no-cache`. The image's `entrypoint.sh` regenerates this file from container env vars at every pod start, so a Secret / ConfigMap update only needs a `kubectl rollout restart`. The image build itself does not bake any of these values in.
 
-Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/positioning-demo/env.contract.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-demo/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
+Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/location-app/env.contract.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/services/location-app/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
 
 ## Health probes
 

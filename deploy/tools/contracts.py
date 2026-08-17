@@ -9,9 +9,9 @@ future deploy portal until that UI ships.
 
 Usage:
     deploy/tools/contracts.py list                  # tabella di tutti i contratti
-    deploy/tools/contracts.py list --service rest-adapter
+    deploy/tools/contracts.py list --service vendor-adapter
     deploy/tools/contracts.py validate              # vs docker compose config
-    deploy/tools/contracts.py render-k8s rest-adapter
+    deploy/tools/contracts.py render-k8s vendor-adapter
 """
 
 from __future__ import annotations
@@ -34,16 +34,16 @@ COMPOSE_FILE = REPO_ROOT / "deploy" / "compose" / "docker-compose.yml"
 EDIT_PATH = {
     "camara-gateway":     "deploy/compose/docker-compose.yml (environment: block)",
     "positioning-engine": "deploy/compose/docker-compose.yml (environment: block)",
-    "wifi-positioning":   "deploy/compose/docker-compose.yml (environment: block)",
+    "wifi-adapter":   "deploy/compose/docker-compose.yml (environment: block)",
     "placement-editor":   "deploy/compose/docker-compose.yml (environment: block)",
-    "rest-adapter":       "services/rest-adapter/.env (real creds) - fallback: docker-compose.yml demo defaults",
-    "positioning-demo":   "services/positioning-demo/public/env-config.js (gitignored; copy from .example.js)",
+    "vendor-adapter":       "services/vendor-adapter/.env (real creds) - fallback: docker-compose.yml demo defaults",
+    "location-app":   "services/location-app/public/env-config.js (gitignored; copy from .example.js)",
 }
 
 # Special edit-path for window.__ENV__ vars in placement-editor (Mapbox token).
 ENV_CONFIG_PATH = {
     "placement-editor": "services/placement-editor/frontend/public/env-config.js (gitignored; copy from .example.js)",
-    "positioning-demo": "services/positioning-demo/public/env-config.js (gitignored; copy from .example.js)",
+    "location-app": "services/location-app/public/env-config.js (gitignored; copy from .example.js)",
 }
 
 

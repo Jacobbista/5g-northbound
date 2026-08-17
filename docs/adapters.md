@@ -4,17 +4,17 @@ A *positioning adapter* is any service that produces a position estimate for a d
 
 This repository ships two open adapter implementations + one schema-driven translator as reference:
 
-- [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/): open WiFi RSSI multilateration over a fixed AP map. The right model for any source that ingests raw observations and computes a position itself.
-- [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/): synthetic waypoint walker inside floor bounds. Used by the local demo (and useful in CI) to produce continuous position movement without any real measurement source.
-- [`services/rest-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/): schema-driven translator that maps an arbitrary vendor REST API onto the engine's adapter contract. Reference integration: Wittra UWB cloud (via `mocks/mock-wittra/` in dev).
+- [`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/): open WiFi RSSI multilateration over a fixed AP map. The right model for any source that ingests raw observations and computes a position itself.
+- [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/): synthetic waypoint walker inside floor bounds. Used by the local demo (and useful in CI) to produce continuous position movement without any real measurement source.
+- [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/): schema-driven translator that maps an arbitrary vendor REST API onto the engine's adapter contract. Reference integration: Wittra UWB cloud (via `mocks/mock-vendor/` in dev).
 
 ## Status by technology
 
 | Technology | Adapter | Notes |
 |-----------|---------|-------|
-| **WiFi**  | [`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/) | Production-ready. Reads positions from the placement-editor blueprint, BSSIDs from a per-venue bindings file. See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md). |
-| **UWB (Wittra)** | [`services/rest-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/rest-adapter/) configured with [`rest-adapter/examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/rest-adapter/examples/wittra-schema.json) | Production-ready. Point `WITTRA_BASE_URL` at the real Wittra cloud + set `ADAPTER_WITTRA_API_KEY`; no image rebuild needed. |
-| **Mock**  | [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) | Demo only. Waypoint walker with wall/opening collision against the blueprint. Never deploy this on the testbed for a real device. |
+| **WiFi**  | [`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/) | Production-ready. Reads positions from the placement-editor blueprint, BSSIDs from a per-venue bindings file. See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md). |
+| **UWB (Wittra)** | [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/) configured with [`vendor-adapter/examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/vendor-adapter/examples/wittra-schema.json) | Production-ready. Point `WITTRA_BASE_URL` at the real Wittra cloud + set `ADAPTER_WITTRA_API_KEY`; no image rebuild needed. |
+| **Synthetic** | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) | Demo only. Waypoint walker with wall/opening collision against the blueprint. Never deploy this on the testbed for a real device. |
 | **5G**    | *no adapter yet* | The placement editor + 3D scene render `technology: "fiveg"` anchors (visual only). No measurement source is wired. Devices configured to use a `fiveg` adapter would return `404 NOT_FOUND` from the engine, safe but useless. Write an adapter implementing the contract above when a 5G positioning source becomes available. |
 | **GNSS**  | *no adapter yet* | Same as 5G. Indoor GNSS is generally too coarse to be useful, so this is intentionally deferred. Outdoor / hybrid deployments would need a dedicated adapter. |
 
@@ -113,7 +113,7 @@ GET /devices  ->  { "origin": "inventory" | "observed",
 - **`role`** - `asset` (a tracked entity: tool, pallet, forklift, worker) vs `infrastructure` (a fixed sensor: UWB anchor, BLE gateway - outside the 3GPP trust domain, **never onboarded** as an asset). Leave it off when the source can't classify; the consumer then treats every candidate as onboardable.
 - **`source_class`** - the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
 
-wifi/mock only ever surface `role: asset` (their infrastructure lives elsewhere - wifi APs are in the bindings). A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `rest-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields - no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+wifi only ever surfaces `role: asset` (its infrastructure - the APs - lives in the bindings, not the device list). `synthetic-adapter` mirrors an on-premise RTLS: it surfaces both tracked tags (`role: asset`, from `DEVICE_IDS`) and fixed anchors (`role: infrastructure`, from `ANCHOR_IDS`), each tagged with its `source_class`. A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `vendor-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields - no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Lifecycle
 
@@ -127,7 +127,7 @@ wifi/mock only ever surface `role: asset` (their infrastructure lives elsewhere 
 sequenceDiagram
   autonumber
   participant SRC as Raw observations<br/>(scans · anchor reports · vendor cloud)
-  participant ADP as Adapter (e.g, wifi-positioning)
+  participant ADP as Adapter (e.g, wifi-adapter)
   participant ENG as positioning-engine
 
   Note over ADP: startup<br/>load config, build internal state
@@ -155,7 +155,7 @@ The engine reads `ADAPTER_URLS` at startup. Each entry is a `name=url` pair; the
 ```yaml
 env:
   - name: ADAPTER_URLS
-    value: "wifi=http://wifi-positioning:8080,uwb=http://uwb-adapter:8080"
+    value: "wifi=http://wifi-adapter:8080,uwb=http://uwb-adapter:8080"
   - name: DEVICE_MAP                              # optional, per-device routing
     value: "static-tag-07=uwb"                    # only the named adapter is polled for this device
   - name: FUSION_STRATEGY                         # see fusion-strategies.md
@@ -164,9 +164,9 @@ env:
 
 Each entry becomes one [`HttpAdapter`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-engine/app/adapters/http.py) instance. On every position request the engine selects the relevant adapters for the device (all adapters unless `DEVICE_MAP` overrides), concurrently calls `GET /measurement/{device_id}` on each, normalises WGS84 measurements into the local frame, runs the configured fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md) for the catalogue), and converts the result back to WGS84 using the floor-plan `gps_origin` before returning it on the northbound contract.
 
-A bare URL is also accepted for back-compatibility (`ADAPTER_URLS="http://wifi-positioning:8080"`); the engine assigns it a default name `adapter-N`.
+A bare URL is also accepted for back-compatibility (`ADAPTER_URLS="http://wifi-adapter:8080"`); the engine assigns it a default name `adapter-N`.
 
-To add an adapter to a running cluster: deploy the new Service, append its `name=url` entry to `ADAPTER_URLS`, restart the engine. An empty `ADAPTER_URLS` produces no measurements; deploy the [`mocks/mock-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/mocks/mock-positioning/) adapter (or your own) before pointing the engine at it.
+To add an adapter to a running cluster: deploy the new Service, append its `name=url` entry to `ADAPTER_URLS`, restart the engine. An empty `ADAPTER_URLS` produces no measurements; deploy the [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) adapter (or your own) before pointing the engine at it.
 
 ## Coordinate frame
 
@@ -183,7 +183,7 @@ The engine converts `(x, z)` to WGS84 latitude/longitude using the floor plan's 
 
 The engine talks to adapters over the internal Kubernetes ClusterIP network; in-cluster adapters are not exposed externally and do not need to authenticate engine calls. If your deployment routes adapter traffic over an untrusted network, terminate TLS at an ingress and authenticate engine→adapter calls there; the contract itself is HTTP-only.
 
-If an adapter accepts data pushes from devices on the public 5G data network (the wifi-positioning ingest path is one example), it MUST authenticate or rate-limit those calls itself, the engine cannot help.
+If an adapter accepts data pushes from devices on the public 5G data network (the wifi-adapter ingest path is one example), it MUST authenticate or rate-limit those calls itself, the engine cannot help.
 
 ### Outbound API key (engine → external adapter)
 
@@ -214,7 +214,7 @@ env:
     value: "X-API-Key"
 ```
 
-In-cluster adapters (`wifi-positioning`, `mock-positioning`) do not set these variables and keep talking to the engine over plain HTTP on the cluster network.
+In-cluster adapters (`wifi-adapter`, `synthetic-adapter`) do not set these variables and keep talking to the engine over plain HTTP on the cluster network.
 
 ## Packaging
 
@@ -231,7 +231,7 @@ In-cluster adapters (`wifi-positioning`, `mock-positioning`) do not set these va
 
 ```mermaid
 flowchart LR
-  subgraph adp[wifi-positioning service]
+  subgraph adp[wifi-adapter service]
     CFG[/wifi-config.json<br/>AP map · RSSI calibration/] --> MAIN[app/main.py<br/>lifespan loads config<br/>builds WifiAdapter]
     MAIN --> ST[(app.state<br/>{adapter, cfg})]
 
@@ -249,18 +249,18 @@ flowchart LR
   K8S([kubelet]) --> HEALTH
 ```
 
-[`services/wifi-positioning/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-positioning/) is roughly 250 lines of Python + FastAPI:
+[`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/) is roughly 250 lines of Python + FastAPI:
 
-- [`app/main.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/main.py): loads `wifi-config.json` (AP map, room dimensions, RSSI calibration) into application state, mounts the routers.
-- [`app/wifi.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/wifi.py): `compute_position(scan, cfg)`: RSSI → distance via log-distance path loss, least-squares multilateration with weighted-centroid fallback. `WifiAdapter.ingest(...)` smooths through a per-device Kalman tracker and caches a `Measurement`.
-- [`app/routers/ingest.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/routers/ingest.py): `POST /ingest/wifi-scan` receives `{device_id, scan: {bssid: rssi_dbm}, timestamp?}` from edge clients (for example, the Raspberry Pi scanner; deploy flow in [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md)) over the 5G data network. Adapter-specific endpoint, not part of the engine contract.
-- [`app/routers/measurement.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-positioning/app/routers/measurement.py): implements `GET /measurement/{device_id}` against the cache.
+- [`app/main.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/main.py): loads `wifi-config.json` (AP map, room dimensions, RSSI calibration) into application state, mounts the routers.
+- [`app/wifi.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/wifi.py): `compute_position(scan, cfg)`: RSSI → distance via log-distance path loss, least-squares multilateration with weighted-centroid fallback. `WifiAdapter.ingest(...)` smooths through a per-device Kalman tracker and caches a `Measurement`.
+- [`app/routers/ingest.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/routers/ingest.py): `POST /ingest/wifi-scan` receives `{device_id, scan: {bssid: rssi_dbm}, timestamp?}` from edge clients (for example, the Raspberry Pi scanner; deploy flow in [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md)) over the 5G data network. Adapter-specific endpoint, not part of the engine contract.
+- [`app/routers/measurement.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/routers/measurement.py): implements `GET /measurement/{device_id}` against the cache.
 
 Reading it end-to-end is the fastest way to understand the shape; replicate the structure in your own technology stack.
 
 ### Trying it locally
 
-With the compose stack running, the `wifi-positioning` cache starts empty (its `GET /measurement/wifi-asset-01` returns `404` until a scan arrives). Push one synthetic scan to populate it:
+With the compose stack running, the `wifi-adapter` cache starts empty (its `GET /measurement/wifi-asset-01` returns `404` until a scan arrives). Push one synthetic scan to populate it:
 
 ```bash
 curl -s -X POST http://localhost:8089/ingest/wifi-scan \
@@ -321,14 +321,14 @@ Ship it as a container, deploy a `Deployment` + `ClusterIP Service`, append the 
 
 Adapter configuration splits into two distinct files that travel separately:
 
-1. **Blueprint** (placement-editor JSON), room geometry, anchor positions, georef. Portable, no secrets. The committed template is [`services/positioning-demo/public/layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-demo/public/layout.example.json); `make demo` bootstraps the gitignored working copy `layout.json` from it on first run. Real venue blueprints never enter the repo.
+1. **Blueprint** (placement-editor JSON), room geometry, anchor positions, georef. Portable, no secrets. The committed template is [`services/location-app/public/layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/location-app/public/layout.example.json); `make demo` bootstraps the gitignored working copy `layout.json` from it on first run. Real venue blueprints never enter the repo.
 2. **Bindings** ([`dev/wifi-config.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/wifi-config.json)), propagation tunables (`tx_power`, `path_loss_n`, smoothing) plus the per-AP `id → BSSIDs` mapping. Venue-sensitive; the committed file is a placeholder, real values live in `dev/wifi-config.local.json` (gitignored) or a Kubernetes Secret.
 
-The wifi-positioning service joins the two files on anchor `id` at startup. See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md) for the full architecture rationale and authoring flow.
+The wifi-adapter service joins the two files on anchor `id` at startup. See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md) for the full architecture rationale and authoring flow.
 
 | Environment           | Blueprint source                                                                  | Bindings source                                                                 |
 |-----------------------|-----------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| Local docker compose  | `services/positioning-demo/public/layout.json` (gitignored working copy, bootstrapped from [`layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-demo/public/layout.example.json) by `make demo`), overwritten by the editor's auto-save | [`dev/wifi-config.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/wifi-config.json) (placeholder, committed). Drop your real values into `dev/wifi-config.local.json` (gitignored) and `make demo` auto-mounts it. |
+| Local docker compose  | `services/location-app/public/layout.json` (gitignored working copy, bootstrapped from [`layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/location-app/public/layout.example.json) by `make demo`), overwritten by the editor's auto-save | [`dev/wifi-config.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/wifi-config.json) (placeholder, committed). Drop your real values into `dev/wifi-config.local.json` (gitignored) and `make demo` auto-mounts it. |
 | CI / unit tests       | Inline fixtures in the test files; no JSON loaded                                 | Inline fixtures; no JSON loaded                                                |
 | Cluster runtime       | PVC mounted at `LAYOUT_PATH`. Authored by the operator in the placement editor and exported, or written back by the editor service. | PVC mounted at `WIFI_CONFIG_PATH`. **Must be a PVC, not a ConfigMap or Secret**: the calibration tool writes back samples + per-AP overrides at runtime. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md#deploying-to-kubernetes) for the full Deployment manifest. |
 
@@ -338,10 +338,10 @@ Manual cluster provisioning, until the dashboard lands:
 
 ```bash
 # PVCs are created from your environment's storage class. Once bound:
-POD=$(kubectl -n positioning get pod -l app=wifi-positioning -o name | head -1)
+POD=$(kubectl -n positioning get pod -l app=wifi-adapter -o name | head -1)
 kubectl -n positioning cp ./wifi-config.local.json $POD:/app/config/wifi-config.json
 kubectl -n positioning cp ./exported-blueprint.json $POD:/app/config/layout.json
-kubectl -n positioning rollout restart deployment wifi-positioning
+kubectl -n positioning rollout restart deployment wifi-adapter
 ```
 
 The full Deployment manifest (with `fsGroup: 1001` so the container can

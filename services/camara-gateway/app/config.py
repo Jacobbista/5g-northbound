@@ -13,10 +13,10 @@ class Settings(BaseSettings):
     camara_client_secret: str = "changeme"
     # Empty -> resolve position with the built-in mock
     positioning_engine_url: str = ""
-    # Optional: the wifi-positioning adapter, proxied for the demo's anchor
+    # Optional: the wifi-adapter adapter, proxied for the demo's anchor
     # panel to read real calibration params (tx_power ref + path-loss n). Empty
     # -> the /anchors/calibration extension returns nothing (degrades).
-    wifi_positioning_url: str = ""
+    wifi_adapter_url: str = ""
 
     # Freshness cap for the position cache when the request carries no maxAge
     # ("any age" per CAMARA). A request's maxAge, when present, overrides it.

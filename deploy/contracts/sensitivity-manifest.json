@@ -16,9 +16,9 @@
       "external_origin": "PLACEMENT_EDITOR_EXTERNAL_ORIGIN"
     },
     {
-      "service": "positioning-demo",
+      "service": "location-app",
       "kind": "ui",
-      "external_origin": "POSITIONING_DEMO_EXTERNAL_ORIGIN"
+      "external_origin": "LOCATION_APP_EXTERNAL_ORIGIN"
     },
     {
       "service": "positioning-engine",
@@ -26,12 +26,12 @@
       "external_origin": null
     },
     {
-      "service": "rest-adapter",
+      "service": "vendor-adapter",
       "kind": "internal",
       "external_origin": null
     },
     {
-      "service": "wifi-positioning",
+      "service": "wifi-adapter",
       "kind": "internal",
       "external_origin": null
     }
@@ -45,12 +45,12 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ],
       "services": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ]
     },
     {
@@ -75,12 +75,12 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ],
       "services": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ]
     },
     {
@@ -91,12 +91,12 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ],
       "services": [
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ]
     },
     {
@@ -317,10 +317,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "wifi-positioning"
+        "wifi-adapter"
       ],
       "services": [
-        "wifi-positioning"
+        "wifi-adapter"
       ]
     },
     {
@@ -333,14 +333,14 @@
       "consumed_by": [
         "camara-gateway",
         "placement-editor",
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ],
       "services": [
         "camara-gateway",
         "placement-editor",
-        "rest-adapter",
-        "wifi-positioning"
+        "vendor-adapter",
+        "wifi-adapter"
       ]
     },
     {
@@ -358,21 +358,21 @@
       ]
     },
     {
-      "name": "REST_ADAPTER_DEBUG",
+      "name": "VENDOR_ADAPTER_DEBUG",
       "sensitive": false,
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     },
     {
-      "name": "REST_ADAPTER_URL",
+      "name": "VENDOR_ADAPTER_URL",
       "sensitive": false,
       "tier": "configmap",
       "routes_to": "ConfigMap",
@@ -393,10 +393,10 @@
       "set_by": "compose",
       "writable": true,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     },
     {
@@ -421,10 +421,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -435,10 +435,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -449,10 +449,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -463,10 +463,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -477,10 +477,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -491,10 +491,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -505,10 +505,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -519,10 +519,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -533,10 +533,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "positioning-demo"
+        "location-app"
       ],
       "services": [
-        "positioning-demo"
+        "location-app"
       ]
     },
     {
@@ -575,10 +575,10 @@
       "set_by": "compose",
       "writable": true,
       "consumed_by": [
-        "wifi-positioning"
+        "wifi-adapter"
       ],
       "services": [
-        "wifi-positioning"
+        "wifi-adapter"
       ]
     },
     {
@@ -589,14 +589,14 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "wifi-positioning"
+        "wifi-adapter"
       ],
       "services": [
-        "wifi-positioning"
+        "wifi-adapter"
       ]
     },
     {
-      "name": "WIFI_POSITIONING_URL",
+      "name": "WIFI_ADAPTER_URL",
       "sensitive": false,
       "tier": "configmap",
       "routes_to": "ConfigMap",
@@ -619,10 +619,10 @@
       "set_by": "secret",
       "writable": false,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     },
     {
@@ -633,10 +633,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     },
     {
@@ -647,10 +647,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     },
     {
@@ -661,10 +661,10 @@
       "set_by": "compose",
       "writable": false,
       "consumed_by": [
-        "rest-adapter"
+        "vendor-adapter"
       ],
       "services": [
-        "rest-adapter"
+        "vendor-adapter"
       ]
     }
   ]

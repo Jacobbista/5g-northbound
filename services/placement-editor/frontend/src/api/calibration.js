@@ -1,6 +1,6 @@
 // Thin client for the WiFi calibration tool. Every call goes through the
 // placement-editor backend at `/api/wifi/calibration/*`, which proxies to
-// the wifi-positioning service. Keeps the browser on a single origin so
+// the wifi-adapter service. Keeps the browser on a single origin so
 // no CORS is needed on the adapter.
 
 const BASE = "/api/wifi/calibration";

@@ -2027,7 +2027,7 @@ export function App() {
         <h3 style={sectionTitle}>Name</h3>
         <div style={{ fontSize: 10, color: "#7a8aab", padding: "0 4px 6px", lineHeight: 1.4 }}>
           What to call this floor in the sidebar list, room selector, and any
-          downstream consumer (positioning-demo, configs).
+          downstream consumer (location-app, configs).
         </div>
         <div style={{ padding: "0 4px 8px" }}>
           <TextInput

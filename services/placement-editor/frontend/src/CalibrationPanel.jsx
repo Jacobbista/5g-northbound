@@ -155,7 +155,7 @@ export function CalibrationPanel({
         await reloadState();
         toast(
           out.reloaded === false
-            ? `Imported ${out.bindings} bindings. wifi-positioning is still loading the blueprint; they apply once it is ready.`
+            ? `Imported ${out.bindings} bindings. wifi-adapter is still loading the blueprint; they apply once it is ready.`
             : `Imported ${out.bindings} bindings, ${out.samples} samples. Live config reloaded.`,
           out.reloaded === false ? "warn" : "info"
         );
@@ -277,7 +277,7 @@ export function CalibrationPanel({
       const n = Object.keys(out.applied || {}).length;
       toast(
         out.reloaded === false
-          ? `Saved params for ${n} anchors. wifi-positioning is still loading the blueprint; they apply once it is ready.`
+          ? `Saved params for ${n} anchors. wifi-adapter is still loading the blueprint; they apply once it is ready.`
           : `Applied to ${n} anchors.`,
         out.reloaded === false ? "warn" : "info"
       );
@@ -295,7 +295,7 @@ export function CalibrationPanel({
   for (const a of wifiAnchors) coverage[a.id] = 0;
   // BSSID -> anchor lookup; we don't actually know the bindings here,
   // so coverage is counted via the rssi_by_anchor keys (which are
-  // BSSIDs). The wifi-positioning service maps BSSIDs to anchors at
+  // BSSIDs). The wifi-adapter service maps BSSIDs to anchors at
   // derive time. For the UI we just count samples per anchor by
   // distance: a sample is "covered" by anchor A if at least one BSSID
   // exists in it that matches A. We can't do that without the binding

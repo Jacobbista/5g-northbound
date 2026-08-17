@@ -9,14 +9,14 @@ cd "$(dirname "$0")/../.."  # repo root
 suites=(
   "camara-gateway|services/camara-gateway|.venv/bin/pytest -q"
   "positioning-engine|services/positioning-engine|.venv/bin/pytest -q"
-  "wifi-positioning|services/wifi-positioning|.venv/bin/pytest -q"
+  "wifi-adapter|services/wifi-adapter|.venv/bin/pytest -q"
   "placement-editor|services/placement-editor|.venv/bin/pytest -q"
-  "rest-adapter|services/rest-adapter|.venv/bin/pytest -q"
-  "mock-positioning|mocks/mock-positioning|.venv/bin/pytest -q"
-  "mock-wittra|mocks/mock-wittra|.venv/bin/pytest -q"
-  "positioning-demo (js)|.|npm --prefix services/positioning-demo test"
+  "vendor-adapter|services/vendor-adapter|.venv/bin/pytest -q"
+  "synthetic-adapter|services/synthetic-adapter|.venv/bin/pytest -q"
+  "mock-vendor|mocks/mock-vendor|.venv/bin/pytest -q"
+  "location-app (js)|.|npm --prefix services/location-app test"
   "placement-editor (js)|.|npm --prefix services/placement-editor/frontend test"
-  "profile overlays|.|python3 deploy/tools/apply_overlay.py services/camara-gateway/spec/location-retrieval.yaml spec/private-profile/overlay-retrieval.yaml /tmp/_r.yaml && python3 deploy/tools/apply_overlay.py services/camara-gateway/spec/location-verification.yaml spec/private-profile/overlay-verification.yaml /tmp/_v.yaml && echo '2 overlays applied'"
+  "profiled spec fresh|.|python3 deploy/tools/check-profile-fresh.py"
 )
 
 log=$(mktemp -d)

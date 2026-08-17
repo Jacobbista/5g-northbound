@@ -20,7 +20,7 @@ deploy/k8s/
 Every service is configured through exactly one input: **pod environment
 variables**. Non-sensitive contract entries go in a ConfigMap, sensitive ones
 in a Secret, both wired with `envFrom`. This holds for the frontends too:
-`positioning-demo` and `placement-editor` cannot read pod env from the browser,
+`location-app` and `placement-editor` cannot read pod env from the browser,
 so their `entrypoint.sh` renders the same env vars into `env-config.js`
 (`window.__ENV__`) at container start. The file is an internal step; the input
 is still env vars.
@@ -55,7 +55,7 @@ kubectl -n 5g-northbound edit secret <service>-secrets
 kubectl -n 5g-northbound rollout restart deployment <service>
 ```
 
-Frontend services (positioning-demo, placement-editor) regenerate their
+Frontend services (location-app, placement-editor) regenerate their
 `env-config.js` from env vars at container start via `entrypoint.sh`, so a
 restart is enough - no image rebuild.
 

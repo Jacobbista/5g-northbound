@@ -15,11 +15,11 @@ jobs:
         path:
           - services/camara-gateway
           - services/positioning-engine
-          - services/wifi-positioning
+          - services/wifi-adapter
           - services/placement-editor
-          - services/rest-adapter
-          - mocks/mock-positioning
-          - mocks/mock-wittra
+          - services/vendor-adapter
+          - services/synthetic-adapter
+          - mocks/mock-vendor
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         path:
-          - services/positioning-demo
+          - services/location-app
           - services/placement-editor/frontend
     steps:
       - uses: actions/checkout@v6

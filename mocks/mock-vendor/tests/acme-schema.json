@@ -1,0 +1,40 @@
+{
+  "vendor": "acme",
+  "transport": "rest",
+  "default_base_url": "http://acme.test",
+  "path": "/api/{tenant}/device/{device_id}/pos",
+  "path_vars": {
+    "tenant": { "env": "ACME_TENANT" }
+  },
+  "auth": {
+    "scheme": "bearer",
+    "token": { "env": "ACME_TOKEN" }
+  },
+  "mapping": {
+    "frame": { "const": "wgs84" },
+    "latitude": { "path": "data.lat" },
+    "longitude": { "path": "data.lng" },
+    "accuracy_m": { "path": "data.acc", "default": 5.0 },
+    "confidence": { "const": 0.5 },
+    "y": { "path": "data.alt", "default": 0.0 },
+    "timestamp": { "path": "data.ts", "format": "iso8601" }
+  },
+  "discover": {
+    "path": "/api/{tenant}/devices",
+    "list_path": "items",
+    "path_vars": {
+      "tenant": { "env": "ACME_TENANT" }
+    },
+    "mapping": {
+      "vendor_device_id": { "path": "id" },
+      "label": { "path": "name" },
+      "latitude": { "path": "anchor.lat" },
+      "longitude": { "path": "anchor.lng" },
+      "height_m": { "path": "anchor.h" },
+      "device_type": { "path": "kind" }
+    },
+    "classify": {
+      "asset_when": { "path": "kind", "equals": "mobile" }
+    }
+  }
+}

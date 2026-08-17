@@ -22,10 +22,10 @@ The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-no
 | `asset_id`       | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
 | `positioning_id` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | Internal id the engine routes on (`/position/{positioning_id}`) |
 | `kind`           | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
-| `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `mock`    | Positioning modality / adapter, surfaced as profile `source` |
+| `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `synthetic`    | Positioning modality / adapter, surfaced as profile `source` |
 | `org`            | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
 | `label`          |     | string                                               | Human-readable name for UIs |
-| `simulated`      |     | boolean (default `false`)                            | Wired to a synthetic source (mock). UIs show a `MOCK` badge |
+| `simulated`      |     | boolean (default `false`)                            | Wired to a synthetic source. UIs show a `synthetic` badge |
 | `metadata`       |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
 
 The whole document is `{ "version": 2, "assets": [ … ] }`. Copy
@@ -109,8 +109,8 @@ prefilled.
 
 ```mermaid
 flowchart LR
-    W["wifi-positioning<br/>GET /devices (observed)"] --> E["positioning-engine<br/>GET /devices (aggregate + tag source)"]
-    R["rest-adapter<br/>GET /devices (vendor inventory)"] --> E
+    W["wifi-adapter<br/>GET /devices (observed)"] --> E["positioning-engine<br/>GET /devices (aggregate + tag source)"]
+    R["vendor-adapter<br/>GET /devices (vendor inventory)"] --> E
     E --> G["camara-gateway<br/>GET /assets/discoverable<br/>(minus already-onboarded)"]
     G --> K["KELT Assets tab<br/>one-click onboard → PUT /assets"]
 ```
@@ -143,9 +143,10 @@ Onboarding a sensor as an asset is wrong, so each candidate carries:
 
 Classification is **schema-declared per vendor**, never guessed - a source that
 doesn't classify leaves `role`/`source_class` off and every candidate stays
-onboardable. wifi/mock only ever report `role: asset` (their infrastructure
-lives in the bindings / blueprint, not the device list). For a vendor, the
-`rest-adapter`'s `discover.classify` block maps structural predicates on the
+onboardable. wifi only ever reports `role: asset` (its APs live in the bindings,
+not the device list); `synthetic-adapter` reports both tracked tags (asset) and
+fixed anchors (infrastructure), like an on-premise RTLS. For a vendor, the
+`vendor-adapter`'s `discover.classify` block maps structural predicates on the
 vendor's own record to the two axes - see
 [integrating a vendor REST API](integrating-a-vendor-rest-api.md#classifying-devices-for-asset-onboarding).
 

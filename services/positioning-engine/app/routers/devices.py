@@ -1,7 +1,7 @@
 """GET /devices - aggregate discoverable devices across live adapters.
 
 Each adapter that advertises the `devices` capability exposes its own
-GET /devices (observed ids for wifi, vendor inventory for the rest-adapter).
+GET /devices (observed ids for wifi, vendor inventory for the vendor-adapter).
 The engine polls them, tags each device with its `source` (the adapter name
 the position router routes on) and the adapter's `origin`, and returns one
 flat list. The gateway then subtracts already-onboarded ids for KELT.

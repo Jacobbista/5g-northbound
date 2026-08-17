@@ -11,18 +11,18 @@ class Settings(BaseSettings):
     # so there is no shared blueprint PVC. See docs/blueprint-vs-bindings.md.
     positioning_engine_url: str = "http://positioning-engine:8080"
 
-    # Base URL of the wifi-positioning adapter. The placement-editor proxies
+    # Base URL of the wifi-adapter adapter. The placement-editor proxies
     # calibration requests through to it (so the browser does not need CORS
     # to talk to the adapter directly). Default points at the in-cluster
     # service name; docker compose overrides this via env.
-    wifi_positioning_url: str = "http://wifi-positioning:8080"
+    wifi_adapter_url: str = "http://wifi-adapter:8080"
 
     # Upstream for the vendor discovery proxy (browser -> placement-editor
-    # -> rest-adapter). Lets the editor's sync panel list devices from
-    # whichever vendor the rest-adapter has loaded as its current schema.
-    # Multi-vendor setups would deploy one rest-adapter per vendor and
+    # -> vendor-adapter). Lets the editor's sync panel list devices from
+    # whichever vendor the vendor-adapter has loaded as its current schema.
+    # Multi-vendor setups would deploy one vendor-adapter per vendor and
     # expose them as N URLs; not modelled here yet.
-    rest_adapter_url: str = "http://rest-adapter:8080"
+    vendor_adapter_url: str = "http://vendor-adapter:8080"
 
     # Base URL of the camara-gateway, the Asset Identity Map authority. The
     # editor proxies GET/PUT /assets so an onboarding client (the KELT
