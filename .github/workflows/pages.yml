@@ -34,6 +34,10 @@ jobs:
       # Not --strict: several docs link to repo source files (../services/...)
       # that resolve on GitHub but live outside docs_dir, so they warn here.
       - run: mkdocs build
+      # Publish the machine-readable contracts next to the docs so consumers fetch
+      # them from the Pages CDN (github.io) - no raw.githubusercontent anonymous
+      # rate limit. Paths mirror the repo, so docs/contracts.md URLs resolve.
+      - run: cp -r schema spec site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -24,14 +24,14 @@ Every hop is tied together by the CAMARA `x-correlator` header:
 Each service on the data path logs exactly one line per request, at `INFO` on
 the `hop` logger, as a single JSON object. The machine-readable contract is
 `schema/hop-log.schema.json` (JSON Schema); the aggregator fetches it and
-validates against it. Fetch the **raw** URL (pin a release tag; `main` shown):
+validates against it:
 
 ```
-https://raw.githubusercontent.com/Jacobbista/5g-northbound/main/schema/hop-log.schema.json
+https://jacobbista.github.io/5g-northbound/schema/hop-log.schema.json
 ```
 
-See [Machine-readable contracts](contracts.md) for every published contract and
-how to pin one. Example line:
+See [Machine-readable contracts](contracts.md) for every published contract, the
+Pages vs pinned-tag URLs, and rate-limit notes. Example line:
 
 ```json
 {

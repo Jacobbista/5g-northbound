@@ -1,29 +1,30 @@
 # Machine-readable contracts
 
-Every contract this stack publishes is a versioned file in the (public) repo,
-fetchable over HTTP. Fetch the **raw** URL - the `github.com/.../blob/...` link
-is an HTML page, not the file.
+Every contract this stack publishes is a versioned file, fetchable over HTTP two
+ways. Both take the same repo-relative `<path>` (the table below).
+
+**Fetch the latest - GitHub Pages CDN** (no rate limit, works from anywhere):
 
 ```
-https://raw.githubusercontent.com/Jacobbista/5g-northbound/<ref>/<path>
+https://jacobbista.github.io/5g-northbound/<path>
+# e.g. https://jacobbista.github.io/5g-northbound/schema/hop-log.schema.json
 ```
 
-`<ref>` is `main` for the latest, or a **release tag to pin an immutable
-version** (e.g. `v0.9.0`). Pin a tag when you integrate; the contract may evolve
-on `main`.
-
-Two worked URLs:
+**Pin an immutable version - raw at a release tag:**
 
 ```
-# hop-log schema (latest)
-https://raw.githubusercontent.com/Jacobbista/5g-northbound/main/schema/hop-log.schema.json
-# profiled OpenAPI, pinned to a release
-https://raw.githubusercontent.com/Jacobbista/5g-northbound/v0.9.0/spec/private-profile/generated/location-retrieval.profiled.yaml
+https://raw.githubusercontent.com/Jacobbista/5g-northbound/<tag>/<path>
+# e.g. https://raw.githubusercontent.com/Jacobbista/5g-northbound/v0.9.0/spec/private-profile/generated/location-retrieval.profiled.yaml
 ```
+
+Prefer Pages to fetch; pin a tag via raw when you integrate (the contract may
+evolve). `raw.githubusercontent.com` rate-limits anonymous requests, so behind a
+shared egress IP use Pages or an authenticated request. The
+`github.com/.../blob/...` link is an HTML page, never the file.
 
 ## The contracts
 
-Prefix each `<path>` with the raw base above.
+Take each `<path>` and prefix it with a base above.
 
 | Contract | `<path>` | What |
 |----------|----------|------|
