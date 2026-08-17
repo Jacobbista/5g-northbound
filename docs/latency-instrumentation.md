@@ -22,7 +22,9 @@ Every hop is tied together by the CAMARA `x-correlator` header:
 ## The hop log line
 
 Each service on the data path logs exactly one line per request, at `INFO` on
-the `hop` logger, as a single JSON object:
+the `hop` logger, as a single JSON object. The machine-readable contract is
+[`schema/hop-log.schema.json`](../schema/hop-log.schema.json) (JSON Schema); the
+aggregator validates against it. Example:
 
 ```json
 {

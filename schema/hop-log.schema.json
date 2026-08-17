@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Jacobbista/5g-northbound/blob/main/schema/hop-log.schema.json",
+  "title": "Latency hop log line",
+  "description": "One structured line each data-path service logs per request (logger 'hop', level INFO), keyed by x-correlator, for per-stage latency aggregation. See docs/latency-instrumentation.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event", "service", "stage", "correlator", "status", "t_receive", "t_emit", "span_ms"],
+  "properties": {
+    "event": {
+      "const": "hop",
+      "description": "Selector for these lines in a mixed log stream."
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Emitting service, e.g. camara-gateway, positioning-engine, wifi-adapter, vendor-adapter, synthetic-adapter. Open: a private adapter emits its own name."
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "\"<METHOD> <path>\" the hop served."
+    },
+    "correlator": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The x-correlator; the join key across services."
+    },
+    "status": {
+      "type": "integer",
+      "description": "HTTP status the hop returned."
+    },
+    "t_receive": {
+      "type": "number",
+      "description": "Unix epoch seconds (float) at request receipt."
+    },
+    "t_emit": {
+      "type": "number",
+      "description": "Unix epoch seconds (float) at response emit."
+    },
+    "span_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "t_emit - t_receive in milliseconds; this hop's own service time (includes time waited on downstream hops)."
+    }
+  }
+}
