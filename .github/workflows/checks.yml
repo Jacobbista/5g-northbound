@@ -30,7 +30,7 @@ jobs:
       - run: docker compose -p 5g-northbound --project-directory . -f deploy/compose/docker-compose.yml config --quiet
 
   profile-spec:
-    name: profile overlays apply
+    name: profiled spec freshness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -38,16 +38,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pyyaml
-      # The private-asset profile overlays must still apply cleanly to the pinned
-      # CAMARA base and produce a structurally valid OpenAPI document. Catches a
-      # base-spec bump (or an overlay edit) that breaks the profile.
-      - run: |
-          python3 deploy/tools/apply_overlay.py \
-            services/camara-gateway/spec/location-retrieval.yaml \
-            spec/private-profile/overlay-retrieval.yaml /tmp/retrieval.profiled.yaml
-          python3 deploy/tools/apply_overlay.py \
-            services/camara-gateway/spec/location-verification.yaml \
-            spec/private-profile/overlay-verification.yaml /tmp/verification.profiled.yaml
+      # The committed profiled specs under spec/private-profile/generated/ are the
+      # pinnable contract. This regenerates them from the pinned base + overlays and
+      # fails on any semantic drift, so a base-spec bump or an overlay edit that was
+      # not re-generated (`make profile-spec`) cannot land.
+      - run: python3 deploy/tools/check-profile-fresh.py
 
   leak-scan:
     name: leak scan
