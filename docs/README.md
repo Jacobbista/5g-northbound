@@ -35,7 +35,7 @@ Read these to understand how the system is designed.
 | Document | Description |
 |----------|-------------|
 | [Overview](overview.md) | What it is, the sense → fuse → expose model, key concepts. Start here. |
-| [Private-asset profile](../spec/private-profile/README.md) | The CAMARA Device Location profile this stack implements: asset identity, source/altitude metadata, streaming, 2-legged org-scoped authz, and the base-contract conformance (`maxAge`, `maxSurface`, error codes) |
+| [Private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) | The CAMARA Device Location profile this stack implements: asset identity, source/altitude metadata, streaming, 2-legged org-scoped authz, and the base-contract conformance (`maxAge`, `maxSurface`, error codes) |
 | [Architecture](architecture.md) | Services, request flow, adapter routing, coordinate frames; the 3GPP-to-CAMARA mapping |
 | [Blueprint vs bindings](blueprint-vs-bindings.md) | Portable venue geometry vs per-venue secrets (BSSIDs, MACs) |
 | [Georeferencing](georeferencing.md) | Anchoring the local metric frame to the world: datums, tile drift, N-point calibration |
@@ -60,6 +60,7 @@ Look up exact formats once you know the model.
 | Document | Description |
 |----------|-------------|
 | [Data contracts](data-contracts.md) | Exact wire formats across CAMARA, vendor extensions, engine, and the adapter contract |
+| [Machine-readable contracts](contracts.md) | Every published contract (profiled spec, schemas, overlays) and its raw URL - how to fetch and pin |
 | [API reference](api-reference.md) | One row per endpoint across every service |
 | [Latency instrumentation](latency-instrumentation.md) | The per-hop latency trace: x-correlator propagation and the hop log-line contract |
 

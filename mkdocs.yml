@@ -68,5 +68,7 @@ nav:
       - Deployment: deployment.md
   - Reference:
       - Data contracts: data-contracts.md
+      - Machine-readable contracts: contracts.md
       - API reference: api-reference.md
+      - Latency instrumentation: latency-instrumentation.md
   - CAMARA private-asset profile: https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md

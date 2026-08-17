@@ -30,6 +30,10 @@ single self-contained contract; CI regenerates them and fails if they drift from
 the base + overlays (any Overlay tool, e.g. Redocly, produces the same result).
 The authored contribution is still the base (pinned) plus these overlays.
 
+Pin the profiled spec by its raw URL at a release tag, e.g.
+`https://raw.githubusercontent.com/Jacobbista/5g-northbound/v0.9.0/spec/private-profile/generated/location-retrieval.profiled.yaml`.
+See [docs/contracts.md](../../docs/contracts.md) for every published contract.
+
 The streaming channel is a WebSocket, outside OpenAPI's scope, so it is
 formalised separately as [AsyncAPI 3.0](https://www.asyncapi.com/):
 
