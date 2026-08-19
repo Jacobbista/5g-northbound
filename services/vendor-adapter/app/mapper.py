@@ -70,13 +70,21 @@ def resolve_field(spec: FieldSpec, payload: Any) -> Any:
     return value
 
 
-def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> dict[str, Any]:
+def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional[dict[str, Any]]:
     """Translate a vendor response payload into the engine's Measurement shape.
 
-    Returns a dict ready to be returned as JSON from GET /measurement/{id}.
-    Missing required fields fall back to safe defaults so the engine sees a
-    well-formed reply (the operator is expected to validate the schema first).
+    Returns a dict ready to be returned as JSON from GET /measurement/{id}, or
+    None when the payload carries no resolvable position (either horizontal
+    coordinate absent). None is 'no fix', not a (0,0) phantom: the caller 404s,
+    the engine drops the source this cycle, and the gateway surfaces
+    UNABLE_TO_LOCATE instead of a bogus location at null island. A field the
+    vendor genuinely reports as 0 (a ConstSpec, or a present 0 value) is kept -
+    only an absent/unresolvable coordinate means no fix.
     """
+    lat_raw = resolve_field(mapping.latitude, payload)
+    lon_raw = resolve_field(mapping.longitude, payload)
+    if lat_raw is None or lon_raw is None:
+        return None
     frame = resolve_field(mapping.frame, payload) or "local"
     out: dict[str, Any] = {
         "source": vendor_name,
@@ -85,13 +93,13 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> dict[str
         "confidence": float(resolve_field(mapping.confidence, payload) or 0.0),
     }
     if frame == "wgs84":
-        out["latitude"] = float(resolve_field(mapping.latitude, payload) or 0.0)
-        out["longitude"] = float(resolve_field(mapping.longitude, payload) or 0.0)
+        out["latitude"] = float(lat_raw)
+        out["longitude"] = float(lon_raw)
     else:
         # local frame uses x/z; mapping fields named latitude/longitude carry them
         # by convention so the same spec works for either frame.
-        out["x"] = float(resolve_field(mapping.latitude, payload) or 0.0)
-        out["z"] = float(resolve_field(mapping.longitude, payload) or 0.0)
+        out["x"] = float(lat_raw)
+        out["z"] = float(lon_raw)
     out["y"] = float(resolve_field(mapping.y, payload) or 0.0)
     ts = resolve_field(mapping.timestamp, payload)
     if ts is not None:

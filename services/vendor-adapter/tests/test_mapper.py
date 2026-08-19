@@ -35,13 +35,25 @@ def test_to_measurement_wgs84(wittra_schema, wittra_sample_payload):
     assert isinstance(out["timestamp"], float)
 
 
-def test_to_measurement_uses_default_when_path_missing(wittra_schema):
-    out = to_measurement(wittra_schema.mapping, {}, vendor_name="wittra")
-    assert out["latitude"] == 0.0
-    assert out["longitude"] == 0.0
-    assert out["confidence"] == 0.5  # const declared in the example schema
-    assert out["accuracy_m"] == 5.0  # default declared in the example schema
-    assert out["y"] == 0.0
+def test_to_measurement_none_when_position_missing(wittra_schema):
+    # A vendor record with no resolvable position is 'no fix', not a (0,0)
+    # phantom fix. The adapter must 404 so the gateway surfaces UNABLE_TO_LOCATE.
+    assert to_measurement(wittra_schema.mapping, {}, vendor_name="wittra") is None
+
+
+def test_to_measurement_none_when_position_partial(wittra_schema):
+    # Latitude resolves but longitude is absent: still no fix (a half-position
+    # is not a location).
+    payload = [{"location": {"value": {"latitude": 45.0}, "timestamp": "2026-01-01T00:00:00Z"}}]
+    assert to_measurement(wittra_schema.mapping, payload, vendor_name="wittra") is None
+
+
+def test_to_measurement_keeps_genuine_zero(wittra_schema):
+    # A coordinate the vendor genuinely reports as 0 is a real value, kept.
+    payload = [{"location": {"value": {"latitude": 0.0, "longitude": 0.0}, "timestamp": "2026-01-01T00:00:00Z"}}]
+    out = to_measurement(wittra_schema.mapping, payload, vendor_name="wittra")
+    assert out is not None
+    assert out["latitude"] == 0.0 and out["longitude"] == 0.0
 
 
 def test_to_measurement_applies_linear_transform():

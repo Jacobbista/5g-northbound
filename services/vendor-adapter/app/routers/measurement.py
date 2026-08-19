@@ -35,5 +35,11 @@ async def get_measurement(device_id: str, request: Request):
         raise HTTPException(404, detail="no measurement")
 
     measurement = to_measurement(schema.mapping, payload, schema.vendor)
+    if measurement is None:
+        # Vendor answered but the record has no resolvable position: no fix, not
+        # a (0,0) phantom. 404 = the adapter contract's "no fix" so the engine
+        # drops it this cycle (no cooldown) and the gateway maps it to
+        # LOCATION_RETRIEVAL.UNABLE_TO_LOCATE.
+        raise HTTPException(404, detail="no position in vendor payload")
     state.cache_put(device_id, measurement, schema.cache_ttl_s)
     return measurement
