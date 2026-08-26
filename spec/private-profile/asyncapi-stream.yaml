@@ -99,7 +99,18 @@ components:
         timestamp:
           type: string
           format: date-time
-          description: The estimate time (lastLocationTime), not the send time.
+          description: >-
+            The estimate time (lastLocationTime), not the send time. This is the
+            fix time and freezes while a stationary asset keeps reporting the
+            same fix - use it for position age, not for liveness.
+        observed_at:
+          type: string
+          format: date-time
+          description: >-
+            When this source last answered for the asset (the fix arrived on this
+            broadcast tick). Distinct from `timestamp`: a stationary but reachable
+            asset has a fresh `observed_at` and an old `timestamp`. Use this for
+            liveness / staleness, so a still asset is not shown as lost.
         sources:
           type: array
           items:

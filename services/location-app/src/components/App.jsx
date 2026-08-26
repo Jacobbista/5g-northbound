@@ -66,7 +66,13 @@ const COORD_KEY = "5g-location-app.coord-mode.v1";
 function adaptStreamItem(item) {
   if (!item || item.latitude == null || item.longitude == null) return null;
   return {
+    // Fix time (CAMARA lastLocationTime): freezes while a stationary asset
+    // reports the same fix - drives position-age display, NOT liveness.
     lastLocationTime: item.timestamp,
+    // When the source last answered (this broadcast tick). Drives liveness, so
+    // a still-but-reachable asset stays live. Falls back to the fix time for an
+    // older engine that does not emit observed_at.
+    observedAt: item.observed_at || item.timestamp,
     area: {
       areaType: "CIRCLE",
       center: { latitude: item.latitude, longitude: item.longitude },
@@ -324,8 +330,12 @@ const coordBtn = (active) => ({
 
 function deviceState({ position }) {
   // Called only for a SELECTED device; deselected rows show "hidden" upstream.
-  if (!position?.lastLocationTime) return "offline";
-  const ageMs = Date.now() - new Date(position.lastLocationTime).getTime();
+  // Liveness is measured from observedAt (when the source last answered), NOT
+  // from lastLocationTime (the fix time, which freezes for a stationary asset).
+  // A still but reachable asset is live, not stale.
+  const liveAt = position?.observedAt || position?.lastLocationTime;
+  if (!liveAt) return "offline";
+  const ageMs = Date.now() - new Date(liveAt).getTime();
   if (ageMs > STALE_MS) return "stale";
   const radius = position?.area?.radius;
   if (radius != null && radius > ACCURACY_MAX_M) return "imprecise";

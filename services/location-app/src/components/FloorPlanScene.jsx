@@ -684,12 +684,16 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
 
     const local = smoothedRef.current[phone] || raw;
     const trail = trailsRef.current[phone] || [];
-    const seenAt = lastSeenRef.current[phone];
-    // Grey the marker when the fix is old OR when its reported accuracy is
-    // worse than the display threshold: a device far outside the calibrated
-    // room still yields a fresh fix near the room centre with a huge radius,
-    // and a confident-looking dot there would be a lie.
-    const tooOld = !seenAt || Date.now() - new Date(seenAt).getTime() > STALE_MS;
+    // Liveness is measured from observedAt (when the source last answered), not
+    // from the fix time: a stationary asset keeps the same lastLocationTime yet
+    // is still reachable. The trail above only grows on a NEW fix; staleness
+    // here only greys a source that has gone silent. Grey the marker when the
+    // source is silent OR its reported accuracy is worse than the display
+    // threshold: a device far outside the calibrated room still yields a fresh
+    // fix near the room centre with a huge radius, and a confident-looking dot
+    // there would be a lie.
+    const liveAt = position?.observedAt || position?.lastLocationTime;
+    const tooOld = !liveAt || Date.now() - new Date(liveAt).getTime() > STALE_MS;
     const imprecise = radius != null && radius > ACCURACY_MAX_M;
     const stale = tooOld || imprecise;
     const hasWifi = sources.includes("wifi");

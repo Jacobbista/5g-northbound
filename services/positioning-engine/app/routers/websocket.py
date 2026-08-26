@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ..config import settings
 from ..services.discovery import resolve_broadcast_targets
 from ..services.geo import local_to_gps
-from ..services.position_service import ts_to_iso
+from ..services.position_service import now_iso, ts_to_iso
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +89,13 @@ async def broadcast_loop(app):
                 "longitude": lon,
                 "accuracy_m": round(res.primary.fused.accuracy_m, 4),
                 "altitude_m": alt,
+                # `timestamp` is the fix time (CAMARA lastLocationTime): it
+                # freezes when a stationary asset keeps reporting the same fix.
+                # `observed_at` is when this source last answered - the fix
+                # arrived on THIS tick. Liveness is observed_at; position age is
+                # timestamp. A stationary but reachable asset is live, not stale.
                 "timestamp": ts_to_iso(res.primary.fused.timestamp),
+                "observed_at": now_iso(),
                 "sources": res.primary.fused.sources,
                 "strategy": res.primary.name,
             })
