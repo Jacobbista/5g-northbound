@@ -35,7 +35,7 @@ flowchart TD
     C["consumer"] -->|"POST /location-retrieval/v0.5/retrieve<br/>{ device.assetId: pkg-4471 }"| GW["camara-gateway"]
     GW -->|"Asset Identity Map: assetId → positioning_id + source<br/>org claim gated vs asset.org"| ENG["positioning-engine"]
     ENG -->|"GET /position/{positioning_id}?source=wittra<br/>route: source → ADAPTER_NAME<br/>(else DEVICE_MAP, else fan-out + fuse)"| RA["vendor-adapter (wittra)"]
-    RA -->|"GET /measurement/{positioning_id}<br/>id substituted verbatim → ?deviceId="| V[("vendor cloud<br/>api.wittra.se")]
+    RA -->|"GET /measurement/{positioning_id}<br/>id substituted verbatim → /devices/{id}"| V[("vendor cloud<br/>api.wittra.se")]
     V -.->|"Measurement → fused → WGS84 → CAMARA Location"| C
 ```
 
