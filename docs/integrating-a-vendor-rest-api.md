@@ -112,7 +112,7 @@ The two contracts an operator must get right (see step 5):
    ```json
    {
      "asset_id": "pkg-4471",
-     "positioning_id": "D00124B00249ECBB2",
+     "positioning_id": "DEVTAG00000000001",
      "source": "wittra",
      "org": "acme",
      "kind": "pallet",
@@ -127,7 +127,7 @@ The two contracts an operator must get right (see step 5):
   "vendor": "wittra",
   "default_base_url": "https://api.wittra.se",
   "base_url_env": "WITTRA_BASE_URL",
-  "path": "/v4/organizations/{org_id}/projects/{project_id}/data?deviceId={device_id}&dataType=location",
+  "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
   "path_vars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
     "project_id": { "env": "WITTRA_PROJECT_ID" }
@@ -141,12 +141,12 @@ The two contracts an operator must get right (see step 5):
   "request_timeout_s": 5.0,
   "mapping": {
     "frame":      { "const": "wgs84" },
-    "latitude":   { "path": "-1.location.value.latitude" },
-    "longitude":  { "path": "-1.location.value.longitude" },
-    "accuracy_m": { "path": "-1.location.value.accuracy", "default": 5.0 },
+    "latitude":   { "path": "latest.data.location.value.latitude" },
+    "longitude":  { "path": "latest.data.location.value.longitude" },
+    "accuracy_m": { "path": "latest.data.location.value.accuracy", "default": 5.0 },
     "confidence": { "const": 0.5 },
-    "y":          { "path": "-1.location.value.height", "default": 0.0 },
-    "timestamp":  { "path": "-1.location.timestamp", "format": "iso8601" }
+    "y":          { "path": "latest.data.location.value.height", "default": 0.0 },
+    "timestamp":  { "path": "latest.data.location.timestamp", "format": "iso8601" }
   },
   "discover": {
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
@@ -173,9 +173,10 @@ The two contracts an operator must get right (see step 5):
 }
 ```
 
-- **Array responses + "most recent" via path index.** Wittra v4 `GET /data` returns an *array* of `DeviceDataPoint`. `?dataType=location` filters server-side to location points only, returned ascending by time, so the latest fix is the last element. Dotted paths support list indices including negatives, so `-1.location.value.latitude` reads the latest point's latitude. No code change - the negative index is a mapper feature. (If a vendor returned the array newest-first, use `0.` instead.)
+- **Prefer the vendor's current-fix endpoint.** Point `path` at the resource that returns the device's current state (`GET /devices/{id}` for Wittra), whose `latest.data.location.value.*` carries the live WGS84 fix at full precision. A time-series/history endpoint may round coordinates for storage, so reading a "latest" element off it inherits that quantization; use history for audit or replay, not the live fix.
+- **Array responses + "most recent" via path index.** When a vendor exposes only a time-series array, dotted paths support list indices including negatives: `-1.location.value.latitude` reads the last element (the latest fix when the array is ascending by time), `0.` the first if the vendor returns newest-first. No code change - the index is a mapper feature.
 - **Credentials never live in the schema.** Only `{ "env": "VAR_NAME" }` references. The schema can be committed to a public repo or pasted into a UI without leaking anything.
-- **`mapping.accuracy_m`** pulls from `location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
+- **`mapping.accuracy_m`** pulls from `latest.data.location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
 - **`format: "iso8601"`** parses the timestamp string to a Unix epoch float so the engine can reason about staleness.
 - **`cache_ttl_s`** keeps us off the vendor's rate limit: the engine polls at ~1 Hz, the adapter caches each response for the TTL.
 

@@ -118,7 +118,9 @@ async def test_run_discover_walks_paginated_endpoint(
         "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices"
     ).mock(return_value=httpx.Response(200, json=wittra_sample_discover_page))
 
-    devices = await run_discover(wittra_schema)
+    # Onboarding path (unfiltered) walks the whole list; the anchor-only filter
+    # is exercised separately.
+    devices = await run_discover(wittra_schema, apply_filter=False)
     assert devices is not None
     assert len(devices) == 3
     assert devices[0]["vendor_device_id"] == "D001"
@@ -162,7 +164,9 @@ async def test_discover_route_returns_normalised_devices(
     assert r.status_code == 200
     body = r.json()
     assert body["vendor"] == "wittra"
-    assert len(body["devices"]) == 3
+    # /discover is the editor path: the anchor-only filter keeps the fixed
+    # beacon and drops the meshrouter and tag (no fixedLocation).
+    assert {d["vendor_device_id"] for d in body["devices"]} == {"D001"}
 
 
 @respx.mock

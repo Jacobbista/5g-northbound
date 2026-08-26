@@ -101,7 +101,7 @@ async def test_measurement_end_to_end(
     fresh_state.schema = wittra_schema
 
     respx.get(
-        "http://mock-vendor/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
     ).mock(return_value=httpx.Response(200, json=wittra_sample_payload))
 
     r = await client.get("/measurement/D001")
@@ -124,7 +124,7 @@ async def test_measurement_cached_within_ttl(
     fresh_state.schema = wittra_schema
 
     route = respx.get(
-        "http://mock-vendor/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
     ).mock(return_value=httpx.Response(200, json=wittra_sample_payload))
 
     await client.get("/measurement/D001")
@@ -146,7 +146,7 @@ async def test_measurement_404_when_vendor_has_no_fix(
     fresh_state.schema = wittra_schema
 
     respx.get(
-        "http://mock-vendor/v4/organizations/orgA/projects/prj1/data?deviceId=D001&dataType=location"
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
     ).mock(return_value=httpx.Response(404))
     r = await client.get("/measurement/D001")
     assert r.status_code == 404

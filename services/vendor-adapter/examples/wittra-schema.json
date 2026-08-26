@@ -3,7 +3,7 @@
   "transport": "rest",
   "default_base_url": "https://api.wittra.se",
   "base_url_env": "WITTRA_BASE_URL",
-  "path": "/v4/organizations/{org_id}/projects/{project_id}/data?deviceId={device_id}&dataType=location",
+  "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
   "path_vars": {
     "org_id": {
       "env": "WITTRA_ORG_ID"
@@ -28,29 +28,28 @@
       "const": "wgs84"
     },
     "latitude": {
-      "path": "-1.location.value.latitude"
+      "path": "latest.data.location.value.latitude"
     },
     "longitude": {
-      "path": "-1.location.value.longitude"
+      "path": "latest.data.location.value.longitude"
     },
     "accuracy_m": {
-      "path": "-1.location.value.accuracy",
+      "path": "latest.data.location.value.accuracy",
       "default": 5.0
     },
     "confidence": {
       "const": 0.5
     },
     "y": {
-      "path": "-1.location.value.height",
+      "path": "latest.data.location.value.height",
       "default": 0.0
     },
     "timestamp": {
-      "path": "-1.location.timestamp",
+      "path": "latest.data.location.timestamp",
       "format": "iso8601"
     }
   },
   "discover": {
-    "_comment": "Onboarding reads this list UNFILTERED via /devices. classify derives ONLY what the vendor record honestly states: role from deviceType (tag = trackable asset; beacon/meshrouter/gateway = infrastructure), asset_when so an UNKNOWN type defaults to infrastructure (not auto-onboarded). No source_class here: the /devices endpoint does not expose positioning technology per unit (deviceType is the role, not the radio; Wittra's UWB module lives in Config.tof on a separate endpoint), so asserting a source_class from this list would be a guess. The operator adds source_class in the schema builder when they have a real signal - see docs/integrating-a-vendor-rest-api.md. The editor's anchor sync still applies the filter (fixedLocation present = anchor); onboarding does not.",
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
     "list_path": "",
     "path_vars": {
@@ -85,6 +84,9 @@
       "device_type": {
         "path": "deviceType"
       }
+    },
+    "filter": {
+      "require_path": "fixedLocation.latitude"
     },
     "classify": {
       "asset_when": {

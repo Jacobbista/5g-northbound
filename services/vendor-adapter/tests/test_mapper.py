@@ -44,13 +44,13 @@ def test_to_measurement_none_when_position_missing(wittra_schema):
 def test_to_measurement_none_when_position_partial(wittra_schema):
     # Latitude resolves but longitude is absent: still no fix (a half-position
     # is not a location).
-    payload = [{"location": {"value": {"latitude": 45.0}, "timestamp": "2026-01-01T00:00:00Z"}}]
+    payload = {"latest": {"data": {"location": {"timestamp": "2026-01-01T00:00:00Z", "value": {"latitude": 45.0}}}}}
     assert to_measurement(wittra_schema.mapping, payload, vendor_name="wittra") is None
 
 
 def test_to_measurement_keeps_genuine_zero(wittra_schema):
     # A coordinate the vendor genuinely reports as 0 is a real value, kept.
-    payload = [{"location": {"value": {"latitude": 0.0, "longitude": 0.0}, "timestamp": "2026-01-01T00:00:00Z"}}]
+    payload = {"latest": {"data": {"location": {"timestamp": "2026-01-01T00:00:00Z", "value": {"latitude": 0.0, "longitude": 0.0}}}}}
     out = to_measurement(wittra_schema.mapping, payload, vendor_name="wittra")
     assert out is not None
     assert out["latitude"] == 0.0 and out["longitude"] == 0.0
