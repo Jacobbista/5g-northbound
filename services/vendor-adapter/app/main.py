@@ -9,6 +9,7 @@ from .config import settings
 from .obs import install_hop_logging
 from .routers import contract as contract_router
 from .routers import devices as devices_router
+from .routers import diagnostics as diagnostics_router
 from .routers import discover as discover_router
 from .routers import health, measurement
 from .routers import schema as schema_router
@@ -59,3 +60,4 @@ app.include_router(schema_router.router)
 app.include_router(measurement.router)
 app.include_router(discover_router.router)
 app.include_router(devices_router.router)
+app.include_router(diagnostics_router.router)

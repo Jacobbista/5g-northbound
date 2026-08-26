@@ -118,6 +118,41 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
         return None
 
 
+async def fetch_path(schema: Schema, device_id: str, override_path: str, path_vars: dict) -> Optional[dict]:
+    """GET an arbitrary vendor path (with {device_id} + the given path_vars)
+    using the schema's base_url and auth. Reused by the on-demand diagnostics
+    fetches. Returns parsed JSON on 200, or None on any error."""
+    values: dict[str, str] = {"device_id": device_id}
+    for name, ref in path_vars.items():
+        val = _resolve_env(ref.env)
+        if val is None:
+            log.warning("missing env %s for diagnostics path var %s", ref.env, name)
+            return None
+        values[name] = val
+    try:
+        rendered = override_path.format(**values)
+    except KeyError as exc:
+        log.warning("diagnostics path references unknown variable %s", exc)
+        return None
+    headers = build_auth_headers(schema)
+    if headers is None:
+        return None
+    headers.update(corr_headers())
+    url = f"{base_url(schema)}{rendered}"
+    try:
+        async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        log.warning("vendor %s diagnostics unreachable: %s", schema.vendor, exc)
+        return None
+    if resp.status_code != 200:
+        return None
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+
 def _substitute_discover_path_vars(schema: Schema) -> Optional[str]:
     """Render the discover endpoint path from the schema + env vars. No
     {device_id} substitution here (it is a list endpoint, not per-device).
