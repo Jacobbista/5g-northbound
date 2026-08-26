@@ -112,6 +112,7 @@ class HttpAdapter(Adapter):
                 latitude=float(body.get("latitude", 0.0)),
                 longitude=float(body.get("longitude", 0.0)),
                 timestamp=body.get("timestamp"),
+                diagnostics=body.get("diagnostics") or {},
             )
         except (KeyError, ValueError, TypeError) as exc:
             log.warning("adapter %s returned malformed body: %s", self.name, exc)

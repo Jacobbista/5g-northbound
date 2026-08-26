@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 
@@ -25,6 +25,8 @@ class Measurement:
     latitude: float = 0.0
     longitude: float = 0.0
     timestamp: Optional[float] = None
+    # Optional vendor fidelity (stream tier, e.g. {"motion": ...}); passthrough.
+    diagnostics: dict = field(default_factory=dict)
 
 
 class Adapter(ABC):

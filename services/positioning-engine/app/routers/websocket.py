@@ -31,6 +31,33 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+def build_payload_item(did, res, origin):
+    """One broadcast item from a fused result. `timestamp` is the fix time
+    (freezes for a stationary asset); `observed_at` is this tick. `diagnostics`
+    (stream tier, e.g. motion) is attached only when the routed source reports
+    it."""
+    lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.z, origin)
+    alt = None
+    if res.primary.fused.y is not None:
+        base = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
+        alt = round(base + res.primary.fused.y, 3)
+    item = {
+        "device_id": did,
+        "latitude": lat,
+        "longitude": lon,
+        "accuracy_m": round(res.primary.fused.accuracy_m, 4),
+        "altitude_m": alt,
+        "timestamp": ts_to_iso(res.primary.fused.timestamp),
+        "observed_at": now_iso(),
+        "sources": res.primary.fused.sources,
+        "strategy": res.primary.name,
+    }
+    diag = getattr(res.primary.fused, "diagnostics", None)
+    if diag:
+        item["diagnostics"] = diag
+    return item
+
+
 @router.websocket("/ws/positions")
 async def ws_positions(websocket: WebSocket):
     await manager.connect(websocket)
@@ -74,31 +101,11 @@ async def broadcast_loop(app):
             return_exceptions=True,
         )
 
-        payload_items = []
-        for did, res in zip(ids, results):
-            if isinstance(res, Exception) or res is None:
-                continue
-            lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.z, origin)
-            alt = None
-            if res.primary.fused.y is not None:
-                base = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
-                alt = round(base + res.primary.fused.y, 3)
-            payload_items.append({
-                "device_id": did,
-                "latitude": lat,
-                "longitude": lon,
-                "accuracy_m": round(res.primary.fused.accuracy_m, 4),
-                "altitude_m": alt,
-                # `timestamp` is the fix time (CAMARA lastLocationTime): it
-                # freezes when a stationary asset keeps reporting the same fix.
-                # `observed_at` is when this source last answered - the fix
-                # arrived on THIS tick. Liveness is observed_at; position age is
-                # timestamp. A stationary but reachable asset is live, not stale.
-                "timestamp": ts_to_iso(res.primary.fused.timestamp),
-                "observed_at": now_iso(),
-                "sources": res.primary.fused.sources,
-                "strategy": res.primary.name,
-            })
+        payload_items = [
+            build_payload_item(did, res, origin)
+            for did, res in zip(ids, results)
+            if not isinstance(res, Exception) and res is not None
+        ]
         payload = json.dumps(payload_items)
 
         dead: set[WebSocket] = set()

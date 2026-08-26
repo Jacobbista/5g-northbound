@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Protocol
 
 from ..adapters.base import Measurement
@@ -15,6 +15,9 @@ class FusedPosition:
     accuracy_m: float
     sources: list[str]
     timestamp: Optional[float] = None
+    # Vendor fidelity carried from a single routed source (stream tier);
+    # attached after fusion, not computed by strategies.
+    diagnostics: dict = field(default_factory=dict)
 
 
 class FusionStrategy(Protocol):

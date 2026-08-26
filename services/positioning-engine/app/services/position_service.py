@@ -91,6 +91,7 @@ class PositionService:
             frame="local",
             x=x, y=m.y, z=z,
             timestamp=m.timestamp,
+            diagnostics=m.diagnostics,
         )
 
     async def get_position(self, device_id: str, source: Optional[str] = None) -> Optional[PositionResult]:
@@ -118,6 +119,10 @@ class PositionService:
         primary = self._primary.fuse(device_id, measurements, self._floor_plan)
         if primary is None:
             return None
+        # Attach vendor fidelity from a single routed source (the broadcast
+        # path routes one adapter). Fusion strategies do not compute it.
+        if len(measurements) == 1:
+            primary.diagnostics = measurements[0].diagnostics
         compare: list[StrategyResult] = []
         for strat in self._compare:
             out = strat.fuse(device_id, measurements, self._floor_plan)
