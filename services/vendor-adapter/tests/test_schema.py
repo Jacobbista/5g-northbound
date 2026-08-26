@@ -82,3 +82,26 @@ def test_schema_accepts_header_auth():
     })
     assert s.auth.scheme == "header"
     assert s.auth.header == "X-API-Key"
+
+
+def test_diagnostics_block_parses(wittra_schema_dict):
+    d = dict(wittra_schema_dict)
+    d["diagnostics"] = {
+        "stream": {"motion": {"path": "latest.data.location.value.motion"}},
+        "on_demand": [
+            {
+                "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
+                "mapping": {
+                    "accuracy_value": {"path": "latest.data.location.value.accuracy"},
+                    "accuracy_kind": {"const": "vendor-radius"},
+                },
+            }
+        ],
+    }
+    sc = Schema.model_validate(d)
+    assert "motion" in sc.diagnostics.stream
+    assert sc.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"
+
+
+def test_diagnostics_absent_is_none(wittra_schema):
+    assert wittra_schema.diagnostics is None

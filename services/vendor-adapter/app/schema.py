@@ -242,6 +242,26 @@ class DiscoverBlock(BaseModel):
     classify: Optional[Classify] = None
 
 
+class DiagnosticsFetch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str
+    list_path: str = ""
+    path_vars: dict[str, EnvRef] = Field(default_factory=dict)
+    mapping: dict[str, FieldSpec] = Field(default_factory=dict)
+
+
+class DiagnosticsBlock(BaseModel):
+    """Optional vendor fidelity telemetry, delivered in two tiers.
+
+    `stream` fields resolve against the SAME record `/measurement` maps (the
+    current-fix payload), so motion rides the broadcast at no extra fetch.
+    `on_demand` entries are extra vendor fetches, issued only by the
+    GET /diagnostics/{id} endpoint."""
+    model_config = ConfigDict(extra="forbid")
+    stream: dict[str, FieldSpec] = Field(default_factory=dict)
+    on_demand: list[DiagnosticsFetch] = Field(default_factory=list)
+
+
 class Schema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     vendor: str
@@ -259,3 +279,4 @@ class Schema(BaseModel):
     request_timeout_s: float = 5.0
     mapping: Mapping
     discover: Optional[DiscoverBlock] = None
+    diagnostics: Optional[DiagnosticsBlock] = None
