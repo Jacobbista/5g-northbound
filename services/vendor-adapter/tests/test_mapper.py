@@ -108,3 +108,31 @@ def test_to_measurement_iso8601_parses_to_epoch():
     )
     out = to_measurement(mapping, {"ts": "1970-01-01T00:00:10+00:00"}, vendor_name="x")
     assert out["timestamp"] == 10.0
+
+
+def test_map_stream_diagnostics_reads_current_record():
+    from app.schema import DiagnosticsBlock
+    from app.mapper import map_stream_diagnostics
+    block = DiagnosticsBlock.model_validate(
+        {"stream": {"motion": {"path": "latest.data.location.value.motion"}}}
+    )
+    payload = {"latest": {"data": {"location": {"value": {"motion": "STATIONARY"}}}}}
+    assert map_stream_diagnostics(block, payload) == {"motion": "STATIONARY"}
+
+
+def test_map_stream_diagnostics_skips_absent():
+    from app.schema import DiagnosticsBlock
+    from app.mapper import map_stream_diagnostics
+    block = DiagnosticsBlock.model_validate({"stream": {"motion": {"path": "a.b"}}})
+    assert map_stream_diagnostics(block, {}) == {}
+
+
+def test_map_fetch_diagnostics_maps_mapping():
+    from app.schema import DiagnosticsFetch
+    from app.mapper import map_fetch_diagnostics
+    fetch = DiagnosticsFetch.model_validate({
+        "path": "/x",
+        "mapping": {"rssi": {"path": "uwb.rssi"}, "kind": {"const": "vendor-radius"}},
+    })
+    payload = {"uwb": {"rssi": [-93, -87]}}
+    assert map_fetch_diagnostics(fetch, payload) == {"rssi": [-93, -87], "kind": "vendor-radius"}

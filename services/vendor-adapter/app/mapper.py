@@ -205,3 +205,24 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
     if source_class:
         out["source_class"] = source_class
     return out
+
+
+def map_stream_diagnostics(block, payload: Any) -> dict[str, Any]:
+    """Map the schema's stream-tier diagnostics against a current-fix payload.
+    Omits any field that does not resolve, so a sparse record stays clean."""
+    out: dict[str, Any] = {}
+    for name, spec in block.stream.items():
+        value = resolve_field(spec, payload)
+        if value is not None:
+            out[name] = value
+    return out
+
+
+def map_fetch_diagnostics(fetch, payload: Any) -> dict[str, Any]:
+    """Map one on-demand fetch's mapping against its fetched payload."""
+    out: dict[str, Any] = {}
+    for name, spec in fetch.mapping.items():
+        value = resolve_field(spec, payload)
+        if value is not None:
+            out[name] = value
+    return out
