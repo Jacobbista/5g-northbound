@@ -56,3 +56,6 @@ site/
 # Local-only reference documents (papers, thesis drafts, working notes).
 reference/
 *.pdf
+
+# Agent working docs (specs/plans), not repo deliverables
+docs/superpowers/
