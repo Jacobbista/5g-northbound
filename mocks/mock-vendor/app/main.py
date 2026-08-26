@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 
-from .mockgen import build_discover, build_telemetry, match_template
+from .mockgen import build_diagnostics, build_discover, build_telemetry, match_template
 
 SCHEMA_FILE = os.environ.get("SCHEMA_FILE", "/app/config/schema.json")
 with open(SCHEMA_FILE) as f:
@@ -122,5 +122,12 @@ async def serve(full_path: str, request: Request):
             _check_path_vars(discover.get("path_vars", {}), disc)
             lat, lon = _walk("_discover")
             return build_discover(discover, lat, lon, _HEIGHT_M)
+
+    for entry in SCHEMA.get("diagnostics", {}).get("on_demand", []):
+        diag = match_template(entry["path"], req_path, query)
+        if diag is not None:
+            _check_auth(request)
+            _check_path_vars(entry.get("path_vars", {}), diag)
+            return build_diagnostics(entry.get("mapping", {}))
 
     raise HTTPException(404, detail="No schema route matches this path")

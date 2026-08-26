@@ -103,5 +103,12 @@ def test_diagnostics_block_parses(wittra_schema_dict):
     assert sc.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"
 
 
-def test_diagnostics_absent_is_none(wittra_schema):
-    assert wittra_schema.diagnostics is None
+def test_diagnostics_absent_is_none(wittra_schema_dict):
+    d = dict(wittra_schema_dict)
+    d.pop("diagnostics", None)
+    assert Schema.model_validate(d).diagnostics is None
+
+
+def test_example_schema_declares_diagnostics(wittra_schema):
+    assert "motion" in wittra_schema.diagnostics.stream
+    assert wittra_schema.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"

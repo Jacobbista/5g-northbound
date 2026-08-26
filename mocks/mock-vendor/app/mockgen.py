@@ -139,3 +139,17 @@ def build_discover(discover: dict, lat: float, lon: float, height: float) -> Any
     if list_path:
         return set_path(_root_for(list_path), list_path, entries)
     return entries
+
+
+def build_diagnostics(mapping: dict) -> Any:
+    """Build a body satisfying a diagnostics on_demand mapping: set a plausible
+    value at each PathSpec's dotted path. ConstSpecs need no synthetic source."""
+    specs = [(name, spec) for name, spec in mapping.items()
+             if isinstance(spec, dict) and "path" in spec]
+    if not specs:
+        return {}
+    root = _root_for(specs[0][1]["path"])
+    for _name, spec in specs:
+        value = [-93, -87] if "rssi" in spec["path"] else 1
+        set_path(root, spec["path"], value)
+    return root

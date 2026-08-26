@@ -102,3 +102,11 @@ async def test_discover_wraps_in_list_path_and_classifies(client):
 async def test_unknown_path_404(client):
     r = await client.get("/api/t-1/nonsense", headers=_BEARER)
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_on_demand_diagnostics(client):
+    r = await client.get("/api/t-1/device/dev-1/uwb", headers=_BEARER)
+    assert r.status_code == 200
+    body = r.json()
+    assert _get_path(body, "uwb.rssi") is not None

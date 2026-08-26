@@ -36,5 +36,18 @@
     "classify": {
       "asset_when": { "path": "kind", "equals": "mobile" }
     }
+  },
+  "diagnostics": {
+    "stream": { "motion": { "path": "data.motion" } },
+    "on_demand": [
+      {
+        "path": "/api/{tenant}/device/{device_id}/uwb",
+        "path_vars": { "tenant": { "env": "ACME_TENANT" } },
+        "mapping": {
+          "rssi": { "path": "uwb.rssi" },
+          "accuracy_kind": { "const": "vendor-radius" }
+        }
+      }
+    ]
   }
 }

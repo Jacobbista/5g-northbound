@@ -94,5 +94,24 @@
         "equals": "tag"
       }
     }
+  },
+  "diagnostics": {
+    "stream": {
+      "motion": { "path": "latest.data.location.value.motion" }
+    },
+    "on_demand": [
+      {
+        "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
+        "path_vars": {
+          "org_id": { "env": "WITTRA_ORG_ID" },
+          "project_id": { "env": "WITTRA_PROJECT_ID" }
+        },
+        "mapping": {
+          "motion": { "path": "latest.data.location.value.motion" },
+          "accuracy_value": { "path": "latest.data.location.value.accuracy" },
+          "accuracy_kind": { "const": "vendor-radius" }
+        }
+      }
+    ]
   }
 }

@@ -179,6 +179,7 @@ The two contracts an operator must get right (see step 5):
 - **`mapping.accuracy_m`** pulls from `latest.data.location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
 - **`format: "iso8601"`** parses the timestamp string to a Unix epoch float so the engine can reason about staleness.
 - **`cache_ttl_s`** keeps us off the vendor's rate limit: the engine polls at ~1 Hz, the adapter caches each response for the TTL.
+- **`diagnostics`** (optional) surfaces vendor fidelity as a profile extension, never mixed into the CAMARA payload. `stream` fields (e.g. `motion`) ride the current-fix record onto the position stream; `on_demand` entries are extra fetches served by `GET /diagnostics/{id}` (link quality, accuracy provenance). See [profile-extensions.md](profile-extensions.md).
 
 ### Optional `discover` block (vendor sync in the placement editor)
 
