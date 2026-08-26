@@ -151,9 +151,12 @@ export function VendorSyncPanel({
         x: +sample.local.x.toFixed(2),
         y: +sample.local.y.toFixed(2),
         height_m: sample.height_m ?? 0,
+        // Device class and vendor name from the active schema.
+        device_type: sample.device_type,
+        vendor,
       });
     },
-    [onImport]
+    [onImport, vendor]
   );
 
   const handleImportAll = useCallback(() => {
@@ -170,9 +173,11 @@ export function VendorSyncPanel({
         x: +sample.local.x.toFixed(2),
         y: +sample.local.y.toFixed(2),
         height_m: sample.height_m ?? 0,
+        device_type: sample.device_type,
+        vendor,
       });
     }
-  }, [cloudSamples, onImport]);
+  }, [cloudSamples, onImport, vendor]);
 
   if (!active) return null;
 

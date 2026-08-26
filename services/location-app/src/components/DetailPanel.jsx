@@ -26,7 +26,14 @@ const KIND_ICON = {
   ue: "📱",
 };
 
-const SOURCE_COLOR = {
+// Palette tokens:
+//   INK    - text scale (emphasis by lightness)
+//   STATUS - state: ok / attention / failure
+//   TECH   - positioning technology identity; one hue per technology, shared by
+//            source chips, anchor accents and scene markers.
+const INK = { primary: "#e6edf7", secondary: "#9aa9c4", muted: "#7a8aab", faint: "#5a6987" };
+const STATUS = { ok: "#5dffb0", warn: "#ffb347", error: "#ff6b78" };
+const TECH_COLOR = {
   wifi: "#ffb347",
   wittra: "#5dffb0",
   fiveg: "#c084fc",
@@ -97,11 +104,11 @@ const statRow = {
   alignItems: "baseline",
   padding: "5px 16px",
 };
-const sLabel = { color: "#7a8aab", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" };
-const sVal = { fontFamily: "ui-monospace, monospace", fontSize: 12, color: "#e6edf7", wordBreak: "break-word" };
+const sLabel = { color: INK.muted, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" };
+const sVal = { fontFamily: "ui-monospace, monospace", fontSize: 12, color: INK.primary, wordBreak: "break-word" };
 
 function StatusPill({ live }) {
-  const c = live ? "#5dffb0" : "#7a8aab";
+  const c = live ? STATUS.ok : INK.muted;
   return (
     <span style={{ ...chip(c), gap: 5 }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: c, boxShadow: live ? `0 0 6px ${c}` : "none" }} />
@@ -147,16 +154,16 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
           <StatusPill live={Boolean(t)} />
-          {kind && <span style={chip("#9ec3ff")}>{kind}</span>}
-          {source && <span style={chip(SOURCE_COLOR[source] || "#9ec3ff")}>{source}</span>}
-          {org && <span style={chip("#7a8aab")}>{org}</span>}
+          {kind && <span style={chip(INK.secondary)}>{kind}</span>}
+          {source && <span style={chip(TECH_COLOR[source] || INK.secondary)}>{source}</span>}
+          {org && <span style={chip(INK.muted)}>{org}</span>}
         </div>
       </div>
 
-      {loading && <div style={{ color: "#7a8aab", padding: "16px" }}>loading…</div>}
-      {error && <div style={{ color: "#ff6b78", padding: "16px" }}>error: {error}</div>}
+      {loading && <div style={{ color: INK.muted, padding: "16px" }}>loading…</div>}
+      {error && <div style={{ color: STATUS.error, padding: "16px" }}>error: {error}</div>}
       {!loading && !t && !error && (
-        <div style={{ color: "#7a8aab", padding: "20px 16px", fontSize: 11 }}>
+        <div style={{ color: INK.muted, padding: "20px 16px", fontSize: 11 }}>
           No current fix. The asset is registered but no positioning source is reporting it.
         </div>
       )}
@@ -195,16 +202,16 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
             <span style={sLabel}>sources</span>
             <span style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
               {t.sources.length === 0
-                ? <span style={{ color: "#7a8aab" }}>—</span>
+                ? <span style={{ color: INK.muted }}>—</span>
                 : t.sources.map((s) => (
-                    <span key={s} style={chip(SOURCE_COLOR[s] || "#3a82ff")}>{s}</span>
+                    <span key={s} style={chip(TECH_COLOR[s] || INK.secondary)}>{s}</span>
                   ))}
             </span>
           </div>
 
           <div style={{ ...statRow, paddingBottom: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: 6 }}>
             <span style={sLabel}>last fix</span>
-            <span style={{ ...sVal, color: "#9aa9c4" }}>{fmtTime(t.lastLocationTime)}</span>
+            <span style={{ ...sVal, color: INK.secondary }}>{fmtTime(t.lastLocationTime)}</span>
           </div>
         </>
       )}
@@ -215,21 +222,41 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
 function ApPanel({ ap, onClose, coordMode, token }) {
   const calib = useAnchorCalibration(token);
   const rf = calib[ap.id];
-  // Only operator-set identity shows; no invented vendor/model placeholder.
+  const tech = ap.technology || "anchor";
+  // Accent follows the anchor's technology.
+  const accent = TECH_COLOR[ap.technology] || INK.secondary;
+  // Vendor identity when present.
   const subtitle = ap.vendor
     ? `${ap.vendor}${ap.model ? ` · ${ap.model}` : ""}`
-    : `Access point · ${ap.technology || "anchor"}`;
+    : `Anchor · ${tech}`;
   return (
     <aside style={panel}>
-      <div style={head("#ffb347")}>
+      <div style={head(accent)}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#ffb347" }}>{ap.id}</h3>
-            <div style={{ fontSize: 11, color: "#7a8aab", marginTop: 3 }}>{subtitle}</div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: accent }}>{ap.id}</h3>
+            <div style={{ fontSize: 11, color: INK.muted, marginTop: 3 }}>{subtitle}</div>
           </div>
           <button style={closeBtn} onClick={onClose} aria-label="close">✕</button>
         </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
+          <span style={chip(accent)}>{tech}</span>
+          {rf && <span style={chip(rf.calibrated ? STATUS.ok : INK.muted)}>{rf.calibrated ? "calibrated" : "default rf"}</span>}
+        </div>
       </div>
+
+      {/* Cloud identity, present when the anchor was synced from the vendor. */}
+      {(ap.vendor_device_id || ap.model) && (
+        <>
+          <div style={sectionTitle}>identity</div>
+          {ap.vendor_device_id && (
+            <div style={statRow}><span style={sLabel}>hardware id</span><span style={sVal}>{ap.vendor_device_id}</span></div>
+          )}
+          {ap.model && (
+            <div style={statRow}><span style={sLabel}>class</span><span style={sVal}>{ap.model}</span></div>
+          )}
+        </>
+      )}
 
       <div style={sectionTitle}>anchor</div>
       <div style={statRow}>
@@ -258,7 +285,7 @@ function ApPanel({ ap, onClose, coordMode, token }) {
         </>
       ) : (
         ap.technology === "wifi" && (
-          <div style={{ color: "#7a8aab", padding: "10px 16px 14px", fontSize: 11 }}>
+          <div style={{ color: INK.muted, padding: "10px 16px 14px", fontSize: 11 }}>
             No calibration yet - run the WiFi calibration to fit this anchor's RF model.
           </div>
         )

@@ -4,6 +4,7 @@ import { CalibrationPanel } from "./CalibrationPanel.jsx";
 import { FloorPlanImageInput, GeorefMap, localToGps } from "./GeorefMap.jsx";
 import { PlanCanvas } from "./PlanCanvas.jsx";
 import { VendorSyncPanel } from "./VendorSyncPanel.jsx";
+import { upsertVendorAnchor } from "./lib/anchorSync.js";
 import { ToastHost } from "./ToastHost.jsx";
 import {
   bboxOfPolygon,
@@ -4401,46 +4402,23 @@ export function App() {
                   setVendorSyncPreview([]);
                 }}
                 onImport={(spec) => {
-                  // Upsert anchor with technology="wittra" (or any UWB
-                  // vendor) joined by vendor_device_id. Existing anchors
-                  // with the same vendor id are moved to the new cloud
-                  // position; new ones get a fresh editor id (UWB01...).
+                  // Upsert anchor joined by vendor_device_id, carrying the
+                  // device's real cloud identity (vendor + device class).
+                  // Existing anchors keep their editor id and move to the new
+                  // cloud position; new ones get a fresh id (AP..).
                   mutateRoom((r) => {
                     const anchors = r.anchors || [];
-                    const idx = anchors.findIndex(
+                    const known = anchors.some(
                       (a) => a.vendor_device_id === spec.vendor_device_id
                     );
-                    if (idx >= 0) {
-                      const updated = [...anchors];
-                      updated[idx] = {
-                        ...updated[idx],
-                        x: spec.x,
-                        y: spec.y,
-                        height_m: spec.height_m,
-                        label: spec.label || updated[idx].label,
-                      };
-                      return { ...r, anchors: updated };
-                    }
-                    const newId = nextApId(anchors.filter(
-                      (a) => (a.technology || "wifi") === "wittra"
-                    ).map((a) => ({ id: a.id }))) || nextApId(anchors);
-                    return {
-                      ...r,
-                      anchors: [
-                        ...anchors,
-                        {
-                          id: newId,
-                          technology: "wittra",
-                          x: spec.x,
-                          y: spec.y,
-                          height_m: spec.height_m,
-                          label: spec.label,
-                          vendor_device_id: spec.vendor_device_id,
-                          vendor: "Wittra",
-                          model: "Positioning Beacon",
-                        },
-                      ],
-                    };
+                    const newId = known
+                      ? null
+                      : nextApId(
+                          anchors
+                            .filter((a) => (a.technology || "wifi") === "wittra")
+                            .map((a) => ({ id: a.id }))
+                        ) || nextApId(anchors);
+                    return { ...r, anchors: upsertVendorAnchor(anchors, spec, newId) };
                   });
                 }}
               />
