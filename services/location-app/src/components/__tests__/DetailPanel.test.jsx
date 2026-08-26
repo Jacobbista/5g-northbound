@@ -7,7 +7,38 @@ vi.mock("../../hooks/useAnchorCalibration", () => ({
   useAnchorCalibration: () => ({}),
 }));
 
+vi.mock("../../hooks/useDeviceDetails", () => ({
+  useDeviceDetails: () => ({
+    details: { telemetry: {
+      latitude: 59.4, longitude: 17.9, accuracy_m: 0.9, altitude: null,
+      strategy: "weighted_avg", sources: ["wittra"], lastLocationTime: "2026-08-26T10:00:00Z",
+    }, kind: "uwb-tag", source: "wittra" },
+    error: null, loading: false,
+  }),
+}));
+
+vi.mock("../../hooks/useDeviceDiagnostics", () => ({
+  useDeviceDiagnostics: () => ({
+    diagnostics: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
+    loading: false, error: null,
+  }),
+}));
+
 const apSelection = (ap) => ({ kind: "ap", ap });
+
+describe("DetailPanel · device signal quality (P2)", () => {
+  it("renders the on-demand signal-quality section", () => {
+    render(
+      <DetailPanel
+        selection={{ kind: "device", device: { assetId: "pkg-1", label: "pkg-1", color: "#5dffb0", source: "wittra" } }}
+        token="t" coordMode="absolute" onClose={() => {}} frame={null}
+      />
+    );
+    expect(screen.getByText("signal quality")).toBeInTheDocument();
+    expect(screen.getByText(/vendor-radius/)).toBeInTheDocument();
+    expect(screen.getByText("MOVING")).toBeInTheDocument();
+  });
+});
 
 describe("DetailPanel · anchor identity (P1)", () => {
   it("shows the real vendor hardware id and device class", () => {

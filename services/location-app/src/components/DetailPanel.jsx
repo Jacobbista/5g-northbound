@@ -1,5 +1,7 @@
 import { useDeviceDetails } from "../hooks/useDeviceDetails";
 import { useAnchorCalibration } from "../hooks/useAnchorCalibration";
+import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
+import { shortLabel } from "../lib/label";
 
 const M_PER_DEG = 111320;
 
@@ -129,6 +131,7 @@ function fmtTime(iso) {
 
 function DevicePanel({ token, device, onClose, coordMode, frame }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
+  const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId);
   const t = details?.telemetry;
   const accent = device.color;
   const kind = details?.kind || device.kind;
@@ -208,6 +211,30 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
                   ))}
             </span>
           </div>
+
+          {diag && Object.keys(diag).length > 0 && (
+            <>
+              <div style={sectionTitle}>signal quality</div>
+              {diag.motion != null && (
+                <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.motion}</span></div>
+              )}
+              {diag.accuracy_value != null && (
+                <div style={statRow}>
+                  <span style={sLabel}>accuracy</span>
+                  <span style={sVal}>±{Number(diag.accuracy_value).toFixed(2)} m{diag.accuracy_kind ? ` · ${diag.accuracy_kind}` : ""}</span>
+                </div>
+              )}
+              {Array.isArray(diag.rssi) && diag.rssi.length > 0 && (
+                <div style={statRow}><span style={sLabel}>rssi</span><span style={sVal}>{diag.rssi.join(", ")} dBm</span></div>
+              )}
+              {Array.isArray(diag.ping_pongs) && diag.ping_pongs.length > 0 && (
+                <div style={statRow}><span style={sLabel}>ping-pongs</span><span style={sVal}>{diag.ping_pongs.join(", ")}</span></div>
+              )}
+              {Array.isArray(diag.neighbors) && diag.neighbors.length > 0 && (
+                <div style={statRow}><span style={sLabel}>neighbors</span><span style={sVal}>{diag.neighbors.map((n) => shortLabel(n)).join(", ")}</span></div>
+              )}
+            </>
+          )}
 
           <div style={{ ...statRow, paddingBottom: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: 6 }}>
             <span style={sLabel}>last fix</span>
