@@ -1,0 +1,47 @@
+openapi: 3.0.3
+info:
+  title: Device diagnostics - private-asset profile extension
+  version: 0.1.0
+  description: |
+    A private-profile extension surface, NOT CAMARA Device Location. It exposes
+    vendor positioning fidelity (link quality, accuracy provenance, motion) that
+    the CAMARA Device Location payloads intentionally do not carry. The CAMARA
+    retrieve/verify APIs are unchanged; this is a separate, namespaced resource.
+servers:
+  - url: https://{gateway}
+    variables:
+      gateway:
+        default: localhost:8087
+        description: CAMARA gateway host.
+security:
+  - bearerAuth: []
+paths:
+  /device-diagnostics/v0/{assetId}:
+    get:
+      summary: On-demand vendor fidelity for one asset.
+      operationId: getDeviceDiagnostics
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: CAMARA asset identifier (private-asset profile).
+      responses:
+        "200":
+          description: Diagnostics for the asset's current source.
+          content:
+            application/json:
+              schema:
+                $ref: "https://jacobbista.github.io/5g-northbound/schema/device-diagnostics.schema.json"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: No asset behind the id, or the source exposes no diagnostics.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: A Keycloak-issued JWT (realm role `camara-location-read`).

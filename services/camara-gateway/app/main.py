@@ -18,6 +18,7 @@ from .routers import (
     blueprint,
     capabilities,
     contract,
+    diagnostics,
     health,
     positions_stream,
     retrieval,
@@ -59,4 +60,5 @@ app.include_router(capabilities.router)
 app.include_router(anchors.router)
 app.include_router(adapters.router)
 app.include_router(blueprint.router)
+app.include_router(diagnostics.router)
 app.include_router(positions_stream.router)

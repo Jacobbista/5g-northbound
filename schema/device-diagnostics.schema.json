@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jacobbista.github.io/5g-northbound/schema/device-diagnostics.schema.json",
+  "title": "Device diagnostics (private-profile extension)",
+  "description": "Response of GET /device-diagnostics/v0/{assetId}. A private-profile extension, not CAMARA Device Location.",
+  "type": "object",
+  "required": ["assetId", "source", "diagnostics"],
+  "properties": {
+    "assetId": { "type": "string" },
+    "source": { "type": "string" },
+    "diagnostics": {
+      "type": "object",
+      "properties": {
+        "motion": { "type": "string" },
+        "accuracy_value": { "type": "number" },
+        "accuracy_kind": { "type": "string" },
+        "rssi": { "type": "array", "items": { "type": "number" } },
+        "ping_pongs": { "type": "array", "items": { "type": "number" } },
+        "neighbors": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  }
+}

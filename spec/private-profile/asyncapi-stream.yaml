@@ -118,3 +118,14 @@ components:
         strategy:
           type: string
           example: weighted_avg
+        diagnostics:
+          type: object
+          description: >-
+            Private-profile extension (not CAMARA). Stream-tier vendor fidelity
+            carried from the routed source; grouped under this named container,
+            never mixed into the CAMARA fields above. Present only when the
+            source reports it.
+          properties:
+            motion:
+              type: string
+              example: STATIONARY
