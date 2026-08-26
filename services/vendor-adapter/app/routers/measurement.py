@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import client as vendor_client
-from ..mapper import to_measurement
+from ..mapper import map_stream_diagnostics, to_measurement
 
 log = logging.getLogger(__name__)
 
@@ -41,5 +41,11 @@ async def get_measurement(device_id: str, request: Request):
         # drops it this cycle (no cooldown) and the gateway maps it to
         # LOCATION_RETRIEVAL.UNABLE_TO_LOCATE.
         raise HTTPException(404, detail="no position in vendor payload")
+    # Stream-tier diagnostics (motion) ride the same current-fix record, no
+    # extra fetch. Namespaced under `diagnostics`; the engine carries it through.
+    if schema.diagnostics is not None:
+        diag = map_stream_diagnostics(schema.diagnostics, payload)
+        if diag:
+            measurement["diagnostics"] = diag
     state.cache_put(device_id, measurement, schema.cache_ttl_s)
     return measurement

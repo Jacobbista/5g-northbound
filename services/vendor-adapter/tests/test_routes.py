@@ -150,3 +150,33 @@ async def test_measurement_404_when_vendor_has_no_fix(
     ).mock(return_value=httpx.Response(404))
     r = await client.get("/measurement/D001")
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_measurement_carries_stream_diagnostics(
+    client, fresh_state, wittra_schema_dict, monkeypatch
+):
+    monkeypatch.setenv("WITTRA_ORG_ID", "orgA")
+    monkeypatch.setenv("WITTRA_API_KEY", "k")
+    monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
+    monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-vendor")
+    from app.schema import Schema
+    d = dict(wittra_schema_dict)
+    d["diagnostics"] = {"stream": {"motion": {"path": "latest.data.location.value.motion"}}}
+    fresh_state.schema = Schema.model_validate(d)
+
+    respx.get(
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
+    ).mock(return_value=httpx.Response(200, json={
+        "deviceId": "D001", "deviceType": "tag",
+        "latest": {"data": {"location": {
+            "timestamp": "2026-06-03 14:36:17+00:00",
+            "value": {"latitude": 45.0, "longitude": 7.0, "accuracy": 0.85,
+                      "height": 1.2, "motion": "STATIONARY"},
+        }}},
+    }))
+
+    r = await client.get("/measurement/D001")
+    assert r.status_code == 200
+    assert r.json()["diagnostics"] == {"motion": "STATIONARY"}
