@@ -810,7 +810,7 @@ export function App() {
             overflowY: "auto",
             overflowX: "hidden",
             boxSizing: "border-box",
-            zIndex: 5,
+            zIndex: 70,
             opacity: selection ? 1 : 0,
             transform: selection ? "translateX(0)" : "translateX(20px)",
             transition: "transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease",

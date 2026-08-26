@@ -11,6 +11,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { CAMARA_API_BASE, FLOOR_D, FLOOR_W, GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
 import { ema2d } from "../lib/smoothing";
+import { shortLabel } from "../lib/label";
+
+// Scene labels sit below the UI chrome (detail panel, header). Cap the drei
+// Html z-index so a floating label never covers an open panel.
+const LABEL_Z = [30, 0];
 
 const M_PER_DEG = 111320;
 
@@ -177,7 +182,7 @@ function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
         <meshBasicMaterial color={renderColor} transparent opacity={stale ? 0 : 0.18} />
       </mesh>
 
-      <Html position={[0, 1.9, 0]} center distanceFactor={18}>
+      <Html position={[0, 1.9, 0]} center distanceFactor={18} zIndexRange={LABEL_Z}>
         <div
           style={{
             ...labelStyle,
@@ -187,7 +192,7 @@ function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
             boxShadow: stale ? "none" : `0 0 12px ${renderColor}80`,
           }}
         >
-          {label}
+          {shortLabel(label)}
           {stale ? " · stale" : ""}
         </div>
       </Html>
@@ -282,7 +287,7 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, color
         </>
       )}
 
-      <Html position={[0, labelY, 0]} center distanceFactor={20}>
+      <Html position={[0, labelY, 0]} center distanceFactor={20} zIndexRange={LABEL_Z}>
         <div
           onClick={(e) => {
             if (!onClick) return;
@@ -299,7 +304,7 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, color
             boxShadow: `0 0 8px ${colors.primary}55`,
           }}
         >
-          {id}
+          {shortLabel(id)}
         </div>
       </Html>
     </group>
