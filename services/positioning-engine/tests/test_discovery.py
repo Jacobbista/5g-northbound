@@ -60,6 +60,25 @@ async def test_same_origin_overlap_breaks_ties_by_name(registry):
     assert targets == {"dup": "mock"}  # "mock" < "wifi"
 
 
+async def test_infrastructure_devices_are_not_broadcast_targets(registry):
+    # A vendor inventory mixes trackable assets with infrastructure (anchors,
+    # gateways, beacons). Only assets have a queryable fix; polling an anchor's
+    # GET /measurement makes the vendor answer 422. Infrastructure must be
+    # excluded from broadcast targets. Devices with no role stay in (wifi).
+    registry.adapters["wifi"].get_devices = AsyncMock(
+        return_value={"origin": "observed", "devices": [{"id": "w1"}]}
+    )
+    registry.adapters["mock"].get_devices = AsyncMock(
+        return_value={"origin": "inventory", "devices": [
+            {"id": "tag1", "role": "asset"},
+            {"id": "gw1", "role": "infrastructure"},
+            {"id": "beacon1", "role": "infrastructure"},
+        ]}
+    )
+    targets = await resolve_broadcast_targets(registry)
+    assert targets == {"w1": "wifi", "tag1": "mock"}
+
+
 async def test_empty_when_no_capable_adapter(tmp_path):
     reg = AdapterRegistry(
         ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"),

@@ -46,6 +46,13 @@ async def resolve_broadcast_targets(registry) -> dict[str, str]:
             did = d.get("id")
             if not did:
                 continue
+            # Infrastructure (anchors, gateways, beacons) is not a locatable
+            # asset: it has no queryable fix, so polling its GET /measurement
+            # makes the vendor answer 422. Only assets are broadcast targets.
+            # A device with no role (e.g. wifi) is kept - unclassified sources
+            # stay positionable.
+            if d.get("role") == "infrastructure":
+                continue
             cur = chosen.get(did)
             if cur is None or rank > cur[0] or (rank == cur[0] and name < cur[1]):
                 chosen[did] = (rank, name)
