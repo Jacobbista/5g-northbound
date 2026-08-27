@@ -61,6 +61,46 @@ const STRATEGY_LABEL = {
 const TECH_COLOR = { wifi: "#ffb347", wittra: "#5dffb0", fiveg: "#c084fc", gnss: "#fbbf24" };
 const TECH_VIS_KEY = "5g-location-app.visible-techs.v1";
 
+// LAYERS control: a legend + per-technology anchor toggle, tucked into the
+// scene's bottom-left corner. Doubles as the colour legend, and overrides the
+// focus-driven relevance (a hidden technology's anchors never render).
+const layersPanel = {
+  position: "absolute",
+  left: 14,
+  bottom: 14,
+  zIndex: 30,
+  display: "flex",
+  flexDirection: "column",
+  gap: 3,
+  padding: "8px 10px",
+  borderRadius: 10,
+  background: "rgba(8,14,32,0.82)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backdropFilter: "blur(8px)",
+};
+const layersTitle = {
+  fontSize: 9,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "#5a6987",
+  marginBottom: 2,
+};
+const layersRow = (active, c) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "3px 4px",
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  color: active ? c : "#5a6987",
+  fontSize: 10,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  fontFamily: "ui-monospace, monospace",
+  opacity: active ? 1 : 0.6,
+});
+
 const COORD_KEY = "5g-location-app.coord-mode.v1";
 
 // Adapter: WS payload from the engine broadcast -> the CAMARA-Location-ish
@@ -732,34 +772,6 @@ export function App() {
           </span>
         )}
         <AdapterHealthBadge adapters={adapters} />
-        <div style={{ display: "inline-flex", gap: 4, marginLeft: 8 }}>
-          {TECH_KEYS.filter((t) => techsWithAnchors.has(t)).map((tech) => {
-            const active = visibleTechs.has(tech);
-            const c = TECH_COLOR[tech];
-            return (
-              <button
-                key={tech}
-                onClick={() => toggleTech(tech)}
-                title={`${active ? "Hide" : "Show"} ${TECH_LABEL[tech]} anchors in the scene`}
-                style={{
-                  padding: "3px 8px",
-                  borderRadius: 4,
-                  border: `1px solid ${active ? c : "#7a8aab44"}`,
-                  background: active ? `${c}1a` : "transparent",
-                  color: active ? c : "#7a8aab",
-                  fontSize: 10,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  fontFamily: "ui-monospace, monospace",
-                  cursor: "pointer",
-                  opacity: active ? 1 : 0.55,
-                }}
-              >
-                {TECH_LABEL[tech]}
-              </button>
-            );
-          })}
-        </div>
         <div style={{ ...coordToggle, marginLeft: "auto" }}>
           <button
             style={coordBtn(coordMode === "absolute")}
@@ -816,6 +828,26 @@ export function App() {
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
           onLayoutLoaded={setLayout}
         />
+        {techsWithAnchors.size > 0 && (
+          <div style={layersPanel}>
+            <span style={layersTitle}>layers</span>
+            {TECH_KEYS.filter((t) => techsWithAnchors.has(t)).map((tech) => {
+              const active = visibleTechs.has(tech);
+              const c = TECH_COLOR[tech];
+              return (
+                <button
+                  key={tech}
+                  onClick={() => toggleTech(tech)}
+                  title={`${active ? "Hide" : "Show"} ${TECH_LABEL[tech]} anchors`}
+                  style={layersRow(active, c)}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: active ? c : "transparent", border: `1px solid ${c}`, flexShrink: 0 }} />
+                  {TECH_LABEL[tech]}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {/* Floating overlay on the scene - never resizes the canvas. */}
         <div
           style={{
