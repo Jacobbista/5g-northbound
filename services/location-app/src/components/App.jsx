@@ -6,6 +6,8 @@ import { useDevices } from "../hooks/useDevices";
 import { useIdlePrompt } from "../hooks/useIdlePrompt";
 import { usePositionsStream } from "../hooks/usePositionsStream";
 import { useSelection } from "../hooks/useSelection";
+import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
+import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
 import { FloorPlanScene, TECH_KEYS } from "./FloorPlanScene";
 import { DetailPanel } from "./DetailPanel";
 
@@ -615,6 +617,20 @@ export function App() {
     return () => clearTimeout(id);
   }, [selection]);
 
+  // Asset-driven anchor relevance: the focused device's diagnostics (UWB
+  // neighbours) or its technology decide which anchors stay bright; the rest
+  // recede. Null when nothing is focused (neutral overview).
+  const focusedDevice = selection?.kind === "device" ? selection.device : null;
+  const { diagnostics: focusDiag } = useDeviceDiagnostics(token, focusedDevice?.assetId || null);
+  const relevance = useMemo(() => {
+    if (!focusedDevice) return null;
+    const anchors = (layout?.rooms?.[0]?.anchors ?? layout?.aps) ?? [];
+    return computeRelevant(
+      { technology: focusedDevice.source, neighbors: focusDiag?.neighbors },
+      anchors
+    );
+  }, [focusedDevice, focusDiag, layout]);
+
   if (authError)
     return <div style={{ ...shell, padding: 24, color: "#ff6b78" }}>{authError}</div>;
   if (!token)
@@ -795,6 +811,7 @@ export function App() {
           token={token}
           positions={scenePositions}
           visibleTechs={visibleTechs}
+          relevantAnchorIds={relevance}
           onSelectDevice={(d) => setSelection(d ? { kind: "device", device: d } : null)}
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
           onLayoutLoaded={setLayout}

@@ -31,6 +31,9 @@ const TECH_PALETTE = {
   gnss:   { primary: "#fbbf24", glow: "#b45309", text: "#fde68a", label: "GNSS" },
 };
 export const TECH_KEYS = ["wifi", "wittra", "fiveg", "gnss"];
+// Muted palette for anchors that are not relevant to the focused asset: they
+// recede so the contributing anchors read as the active set.
+const DIM_PALETTE = { primary: "#3f4a5e", glow: "#2a3346", text: "#5a6987", label: "" };
 const techOfAnchor = (a) => (a && a.technology) || "wifi";
 const techPalette = (a) => TECH_PALETTE[techOfAnchor(a)] || TECH_PALETTE.wifi;
 const TRAIL_MAX = 60;
@@ -725,7 +728,7 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
   });
 }
 
-function Scene({ positions, layout, visibleTechs, onSelectDevice, onSelectAp }) {
+function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp }) {
   // Prefer v2 layout fields (rooms[0]) when present; legacy v1 (room_w / room_h /
   // aps / walls) still works as a fallback.
   const room = layout?.rooms?.[0] || null;
@@ -810,18 +813,23 @@ function Scene({ positions, layout, visibleTechs, onSelectDevice, onSelectAp }) 
       <InnerWalls walls={walls} defaultHeight={ceiling} />
       <OriginAxes />
 
-      {aps.map((ap) => (
-        <ApMarker
-          key={ap.id}
-          id={ap.id}
-          x={ap.x}
-          z={ap.y}
-          height={Number(ap.height_m) || 1.2}
-          ceiling={ceiling}
-          colors={techPalette(ap)}
-          onClick={onSelectAp ? () => onSelectAp(ap) : undefined}
-        />
-      ))}
+      {aps.map((ap) => {
+        // With a focus, anchors outside the relevant set recede (dim palette);
+        // no focus -> every anchor keeps its technology colour.
+        const dimmed = relevantAnchorIds != null && !relevantAnchorIds.has(ap.id);
+        return (
+          <ApMarker
+            key={ap.id}
+            id={ap.id}
+            x={ap.x}
+            z={ap.y}
+            height={Number(ap.height_m) || 1.2}
+            ceiling={ceiling}
+            colors={dimmed ? DIM_PALETTE : techPalette(ap)}
+            onClick={onSelectAp ? () => onSelectAp(ap) : undefined}
+          />
+        );
+      })}
 
       <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} frame={frame} />
     </>
@@ -866,7 +874,7 @@ function CameraRig({ homePos, target, signal, controlsRef }) {
   return null;
 }
 
-export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDevice, onSelectAp, onLayoutLoaded }) {
+export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp, onLayoutLoaded }) {
   const [layout, setLayout] = useState(null);
   const controlsRef = useRef();
   const [recenterAt, setRecenterAt] = useState(0);
@@ -916,6 +924,7 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, onSelectDe
           positions={positions}
           layout={layout}
           visibleTechs={visibleTechs}
+          relevantAnchorIds={relevantAnchorIds}
           onSelectDevice={onSelectDevice}
           onSelectAp={onSelectAp}
         />
