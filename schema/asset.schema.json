@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Jacobbista/5g-northbound/schema/asset.schema.json",
   "title": "Asset Identity Map",
-  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked thing (UWB tag, tool, pallet, forklift), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. The gateway resolves a CAMARA `device.assetId` to one of these entries and routes to the positioning source by `positioning_id`. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod. Full resolution chain (assetId -> positioning_id -> adapter -> vendor): see docs/integrating-a-vendor-rest-api.md.",
+  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked physical thing (tool, pallet, forklift, robot), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. An asset holds an enterprise-chosen identity and one or more positioning capabilities; each capability names a source and the id that source knows the thing by. The gateway resolves a CAMARA `device.assetId` to one entry, the engine polls every capability and fuses the results into one fix, and the gateway serves it through the public retrieval and verification endpoints. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod. Full resolution chain (assetId -> capability -> adapter -> vendor): see docs/asset-registry.md and docs/integrating-a-vendor-rest-api.md.",
   "type": "object",
   "required": ["version", "assets"],
   "additionalProperties": false,
   "properties": {
     "version": {
       "type": "integer",
-      "const": 2,
+      "const": 3,
       "description": "Asset Identity Map schema version. Pinned in schema/VERSION."
     },
     "assets": {
@@ -20,7 +20,7 @@
   "$defs": {
     "asset": {
       "type": "object",
-      "required": ["asset_id", "positioning_id", "kind", "source", "org"],
+      "required": ["asset_id", "kind", "org", "capabilities"],
       "additionalProperties": false,
       "properties": {
         "asset_id": {
@@ -28,25 +28,21 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$",
           "description": "First-class CAMARA identifier (device.assetId). A business id chosen by the enterprise (e.g. pkg-4471, forklift-7). NOT a phone number."
         },
-        "positioning_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
-          "description": "Internal id the positioning engine routes on (engine /position/{positioning_id}). Joins to an adapter via the engine's adapter registry / DEVICE_MAP."
-        },
         "kind": {
           "type": "string",
           "enum": ["uwb-tag", "tool", "pallet", "forklift", "asset", "ue"],
           "description": "Asset class. Surfaced as profile `kind` so consumers can reason about the entity type."
         },
-        "source": {
-          "type": "string",
-          "enum": ["wittra", "wifi", "fiveg", "gnss", "synthetic"],
-          "description": "Positioning modality / adapter. Surfaced as profile `source` (a UWB fix is trusted differently from a WiFi fix at the same radius)."
-        },
         "org": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,64}$",
           "description": "Tenant. The gateway joins this against the token `org` claim (2-legged enterprise auth) so a consumer sees only its tenant's assets."
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The positioning capabilities the asset carries. One entry is a single-technology asset; several entries are a multi-technology asset whose fixes the engine fuses into one. The asset identity is independent of any single technology.",
+          "items": { "$ref": "#/$defs/capability" }
         },
         "label": {
           "type": "string",
@@ -55,12 +51,30 @@
         "simulated": {
           "type": "boolean",
           "default": false,
-          "description": "True when wired to a synthetic/demo source (synthetic-adapter, mock-vendor). UIs show a synthetic badge."
+          "description": "True when the asset is wired to a synthetic/demo source (synthetic-adapter, mock-vendor). UIs show a synthetic badge."
         },
         "metadata": {
           "type": "object",
           "description": "Free-form per-asset metadata (e.g. floor, bay).",
           "additionalProperties": true
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "required": ["source", "positioning_id"],
+      "additionalProperties": false,
+      "description": "One way the asset is positioned: a source and the id that source knows the asset by.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["wittra", "wifi", "fiveg", "gnss", "synthetic"],
+          "description": "Positioning modality / adapter. Surfaced as profile `source` (a UWB fix is trusted differently from a WiFi fix at the same radius)."
+        },
+        "positioning_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+          "description": "The id this source routes on (engine polls the adapter for `source` with this id). Distinct per source: the same asset is a different id to WiFi than to UWB."
         }
       }
     }

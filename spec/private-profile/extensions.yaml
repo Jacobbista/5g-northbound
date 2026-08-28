@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: Private-asset profile - management and extension endpoints
+  version: 0.1.0
+  description: >-
+    The management and extension surface of the private-asset profile, served by
+    the CAMARA gateway alongside the standard Device Location retrieve/verify
+    APIs. These are private-profile extensions, not CAMARA Device Location: the
+    Asset Identity Map that binds an asset to its positioning capabilities, the
+    onboarding candidate list, the fused side-panel telemetry, and the anchor RF
+    calibration. On-demand vendor diagnostics are a separate document,
+    device-diagnostics.yaml. The CAMARA core specs are unchanged.
+servers:
+  - url: https://{gateway}
+    variables:
+      gateway:
+        default: localhost:8087
+        description: CAMARA gateway host.
+security:
+  - bearerAuth: []
+paths:
+  /assets:
+    get:
+      summary: The Asset Identity Map for the caller's tenant.
+      operationId: getAssets
+      responses:
+        "200":
+          description: The current asset map, filtered to the token's org.
+          content:
+            application/json:
+              schema:
+                $ref: "https://jacobbista.github.io/5g-northbound/schema/asset.schema.json"
+        "401":
+          description: Missing or invalid bearer token.
+    put:
+      summary: Replace the Asset Identity Map.
+      description: Replaces the whole map. Read, merge, write back; never blind-write.
+      operationId: putAssets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "https://jacobbista.github.io/5g-northbound/schema/asset.schema.json"
+      responses:
+        "200":
+          description: The stored map.
+          content:
+            application/json:
+              schema:
+                $ref: "https://jacobbista.github.io/5g-northbound/schema/asset.schema.json"
+        "401":
+          description: Missing or invalid bearer token.
+  /assets/discoverable:
+    get:
+      summary: Devices the sources report that are not yet onboarded as assets.
+      operationId: getDiscoverable
+      responses:
+        "200":
+          description: Onboarding candidates, with any positioning id already mapped to a capability subtracted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverableResponse"
+        "401":
+          description: Missing or invalid bearer token.
+  /assets/{assetId}/details:
+    get:
+      summary: Fused side-panel telemetry for one asset.
+      description: >-
+        Engine-side fields the CAMARA Location intentionally hides (strategy,
+        the contributing sources, accuracy), fused across the asset's
+        capabilities. `404` (not `403`) for a cross-tenant id so existence never
+        leaks.
+      operationId: getAssetDetails
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset details; `telemetry` is null when no capability has a fix.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetails"
+        "404":
+          description: No such asset for this tenant.
+  /anchors/calibration:
+    get:
+      summary: Measured per-anchor RF model (WiFi).
+      description: Per-anchor fitted RF params keyed by anchor id. Empty when uncalibrated. BSSIDs are never exposed.
+      operationId: getAnchorCalibration
+      responses:
+        "200":
+          description: The calibration map.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorCalibration"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: A Keycloak-issued JWT (realm role `camara-location-read`).
+  schemas:
+    DiscoverableResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiscoverableDevice"
+    DiscoverableDevice:
+      type: object
+      required: [id, source]
+      properties:
+        id:
+          type: string
+          description: The source's device id; becomes a capability's positioning_id on onboarding.
+        source:
+          type: string
+        origin:
+          type: string
+          description: "`inventory` (vendor registry) or `observed` (activity-seen)."
+          nullable: true
+        role:
+          type: string
+          description: "`asset` vs `infrastructure`; infrastructure is not onboardable."
+          nullable: true
+        source_class:
+          type: string
+          nullable: true
+        device_type:
+          type: string
+          nullable: true
+        label:
+          type: string
+          nullable: true
+        last_seen:
+          type: number
+          nullable: true
+    AssetDetails:
+      type: object
+      required: [asset_id, positioning_id, kind, source, org, label]
+      properties:
+        asset_id: { type: string }
+        positioning_id:
+          type: string
+          description: The primary capability's positioning id.
+        kind: { type: string }
+        source:
+          type: string
+          description: The primary capability's source.
+        org: { type: string }
+        label: { type: string }
+        simulated: { type: boolean }
+        telemetry:
+          $ref: "#/components/schemas/AssetTelemetry"
+          nullable: true
+    AssetTelemetry:
+      type: object
+      required: [latitude, longitude, accuracy_m, lastLocationTime, strategy, sources]
+      properties:
+        latitude: { type: number, format: double }
+        longitude: { type: number, format: double }
+        accuracy_m: { type: number, format: double }
+        altitude:
+          type: number
+          format: double
+          nullable: true
+        lastLocationTime: { type: string, format: date-time }
+        strategy: { type: string }
+        sources:
+          type: array
+          items: { type: string }
+          description: Every source that contributed to the fused fix.
+    AnchorCalibration:
+      type: object
+      required: [params]
+      properties:
+        params:
+          type: object
+          description: Anchor id -> fitted RF model.
+          additionalProperties:
+            type: object
+            properties:
+              tx_power_ref_dbm: { type: number }
+              path_loss_n: { type: number }
+              calibrated: { type: boolean }

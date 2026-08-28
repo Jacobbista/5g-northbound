@@ -35,11 +35,12 @@ Take each `<path>` and prefix it with a base above.
 | **Profiled spec - retrieval** | `spec/private-profile/generated/location-retrieval.profiled.yaml` | Base + overlay applied; **the pinnable self-contained contract** |
 | **Profiled spec - verification** | `spec/private-profile/generated/location-verification.profiled.yaml` | Base + overlay applied |
 | Streaming (AsyncAPI) | `spec/private-profile/asyncapi-stream.yaml` | `/positions/stream` channel + message |
-| Asset map schema | `schema/asset.schema.json` | Asset Identity Map entries (`PUT /assets`) |
+| Asset map schema | `schema/asset.schema.json` | Asset Identity Map entries (`GET/PUT /assets`); an asset binds ≥1 positioning capability, fused |
 | Blueprint schema | `schema/layout.schema.json` | Venue geometry (`layout.json`) |
 | Hop-log schema | `schema/hop-log.schema.json` | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
 | Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | Diagnostics payload (motion, link quality, accuracy provenance) |
+| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
 contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The

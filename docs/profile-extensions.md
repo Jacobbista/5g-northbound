@@ -25,8 +25,10 @@ consumer that ignores the extension containers sees a conformant CAMARA payload.
 |---------|------|----------|---------|
 | `GET /device-diagnostics/v0/{assetId}` | resource | `spec/private-profile/device-diagnostics.yaml`, `schema/device-diagnostics.schema.json` | On-demand vendor fidelity: link quality, accuracy provenance, motion |
 | Position stream `diagnostics` sub-object | stream field | `spec/private-profile/asyncapi-stream.yaml` | Stream-tier motion, carried from the routed source |
-| `GET /assets/{assetId}/details` | resource | served live at the gateway | Engine fusion metadata (strategy, sources, accuracy) |
-| `GET /anchors/calibration` | resource | served live at the gateway | Per-anchor RF calibration (wifi) |
+| `GET/PUT /assets` | resource | `spec/private-profile/extensions.yaml`, `schema/asset.schema.json` | Asset Identity Map: an asset binds ≥1 positioning capability, fused into one fix |
+| `GET /assets/discoverable` | resource | `spec/private-profile/extensions.yaml` | Onboarding candidates not yet mapped to a capability |
+| `GET /assets/{assetId}/details` | resource | `spec/private-profile/extensions.yaml` | Engine fusion metadata (strategy, sources, accuracy), fused across capabilities |
+| `GET /anchors/calibration` | resource | `spec/private-profile/extensions.yaml` | Per-anchor RF calibration (wifi) |
 
 See [Machine-readable contracts](contracts.md) for the fetch URLs (Pages CDN +
 pinned tag).

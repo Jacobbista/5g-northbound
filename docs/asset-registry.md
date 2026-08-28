@@ -12,39 +12,67 @@ and it persists to a PVC-backed store. **At runtime it is never a mounted
 file** - mounting one has shadowed live state before. The committed
 `dev/assets.json` is a dev seed only.
 
+## What an asset is
+
+An asset is a physical thing with an enterprise-chosen identity and **one or
+more positioning capabilities**. The identity is first-class and independent of
+any technology; a capability is one way the thing is located - a `source` and
+the id that source knows it by. A single-capability asset is positioned by one
+technology; a multi-capability asset carries several (a robot with a WiFi radio
+and a UWB tag), and the engine fuses their fixes into one. The same physical
+thing is a different id to each source, so each capability names its own
+`positioning_id`.
+
 ## Structure
 
 The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json)
-(version `2`, pinned in `schema/VERSION`). One entry per asset:
+(version `3`, pinned in `schema/VERSION`). One entry per asset:
+
+| Field          | Req | Type / values                                        | Meaning |
+|----------------|-----|------------------------------------------------------|---------|
+| `asset_id`     | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
+| `kind`         | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
+| `org`          | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
+| `capabilities` | ✅  | array, ≥1 `capability`                                | The ways the asset is positioned. Several entries fuse into one fix |
+| `label`        |     | string                                               | Human-readable name for UIs |
+| `simulated`    |     | boolean (default `false`)                            | Wired to a synthetic source. UIs show a `synthetic` badge |
+| `metadata`     |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
+
+A `capability`:
 
 | Field            | Req | Type / values                                        | Meaning |
 |------------------|-----|------------------------------------------------------|---------|
-| `asset_id`       | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
-| `positioning_id` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | Internal id the engine routes on (`/position/{positioning_id}`) |
-| `kind`           | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
 | `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `synthetic`    | Positioning modality / adapter, surfaced as profile `source` |
-| `org`            | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
-| `label`          |     | string                                               | Human-readable name for UIs |
-| `simulated`      |     | boolean (default `false`)                            | Wired to a synthetic source. UIs show a `synthetic` badge |
-| `metadata`       |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
+| `positioning_id` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | The id this source routes on (the engine polls the `source` adapter with it) |
 
-The whole document is `{ "version": 2, "assets": [ … ] }`. Copy
+The whole document is `{ "version": 3, "assets": [ … ] }`. Copy
 [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json)
 as your starting point:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "assets": [
     {
       "asset_id": "pkg-4471",
-      "positioning_id": "wittra-tag-01",
       "kind": "pallet",
-      "source": "wittra",
       "org": "acme",
+      "capabilities": [
+        { "source": "wittra", "positioning_id": "wittra-tag-01" }
+      ],
       "label": "Wittra tag 01",
       "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }
+    },
+    {
+      "asset_id": "robot-2",
+      "kind": "forklift",
+      "org": "acme",
+      "capabilities": [
+        { "source": "wifi", "positioning_id": "puppypi-01" },
+        { "source": "wittra", "positioning_id": "wittra-tag-07" }
+      ],
+      "label": "Mobile robot 2"
     }
   ]
 }
@@ -53,19 +81,26 @@ as your starting point:
 ## How an asset resolves to a position
 
 `asset_id` is what a CAMARA consumer asks for; everything after it is internal.
+The gateway resolves the asset to its capabilities and asks the engine for one
+fused fix across them.
 
 ```mermaid
 flowchart LR
-    A["CAMARA request<br/>device.assetId = pkg-4471"] --> G["camara-gateway<br/>look up asset in the map"]
-    G -->|positioning_id = wittra-tag-01| E["positioning-engine<br/>/position/{positioning_id}"]
-    E -->|route by source / registry / DEVICE_MAP| AD["adapter (wittra)"]
-    AD --> V["vendor cloud / sensor"]
+    A["CAMARA request<br/>device.assetId = robot-2"] --> G["camara-gateway<br/>look up asset → capabilities"]
+    G -->|"[(wifi, puppypi-01), (wittra, wittra-tag-07)]"| E["positioning-engine<br/>poll each capability, fuse"]
+    E -->|wifi: puppypi-01| AW["wifi-adapter"]
+    E -->|wittra: wittra-tag-07| AV["vendor-adapter"]
+    AW --> F["one fused CAMARA fix"]
+    AV --> F
 ```
 
-`positioning_id` joins to an adapter through the engine's
-[adapter registry / routing](adapter-registry.md); `source` names which
-modality answers (and how much to trust the fix). Full chain down to a vendor
-REST API: [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+Each capability's `positioning_id` joins to an adapter through the engine's
+[adapter registry / routing](adapter-registry.md); `source` names which modality
+answers. The engine polls every capability, weights each measurement by its
+accuracy, and reconciles them into one fix: a sharper source dominates, a source
+with no current fix drops out, so an asset stays located as its coverage
+changes. A single-capability asset is the same path with one target. Full chain
+down to a vendor REST API: [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Adding a device
 
@@ -79,7 +114,7 @@ new entry, write back.
 # 1. read the current map
 curl -s -H "Authorization: Bearer $JWT" $GW/assets > assets.json
 
-# 2. add your asset to assets.json (keep version: 2)
+# 2. add your asset to assets.json (keep version: 3)
 
 # 3. write it back
 curl -s -X PUT -H "Authorization: Bearer $JWT" \
@@ -115,9 +150,10 @@ flowchart LR
     G --> K["KELT Assets tab<br/>one-click onboard → PUT /assets"]
 ```
 
-The candidate `id` becomes the new asset's `positioning_id`; the operator adds
-`org`, `kind`, and a `label` at onboarding. Two flavours of discovery, from the
-`origin` field:
+The candidate `id` becomes a capability's `positioning_id` (a new asset with one
+capability, or an added capability on an asset that already exists); the operator
+adds `org`, `kind`, and a `label` at onboarding. Two flavours of discovery, from
+the `origin` field:
 
 | `origin`     | Source        | Meaning                                                                 | Onboarding |
 |--------------|---------------|-------------------------------------------------------------------------|------------|

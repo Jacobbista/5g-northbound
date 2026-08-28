@@ -1,35 +1,50 @@
 {
-  "version": 2,
+  "version": 3,
   "assets": [
     {
       "asset_id": "tool-880",
-      "positioning_id": "wifi-asset-01",
       "kind": "tool",
-      "source": "wifi",
       "org": "acme",
+      "capabilities": [
+        { "source": "wifi", "positioning_id": "wifi-asset-01" }
+      ],
       "label": "WiFi asset 01",
       "simulated": false,
       "metadata": { "floor": 0 }
     },
     {
       "asset_id": "forklift-7",
-      "positioning_id": "synthetic-demo-01",
       "kind": "forklift",
-      "source": "synthetic",
       "org": "acme",
+      "capabilities": [
+        { "source": "synthetic", "positioning_id": "synthetic-demo-01" }
+      ],
       "label": "Synthetic demo 01",
       "simulated": true,
       "metadata": { "floor": 0 }
     },
     {
       "asset_id": "pkg-4471",
-      "positioning_id": "wittra-tag-01",
       "kind": "pallet",
-      "source": "wittra",
       "org": "acme",
+      "capabilities": [
+        { "source": "wittra", "positioning_id": "wittra-tag-01" }
+      ],
       "label": "Wittra tag 01",
       "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }
+    },
+    {
+      "asset_id": "robot-2",
+      "kind": "forklift",
+      "org": "acme",
+      "capabilities": [
+        { "source": "wifi", "positioning_id": "wifi-asset-02" },
+        { "source": "wittra", "positioning_id": "wittra-tag-02" }
+      ],
+      "label": "Mobile robot 2",
+      "simulated": true,
+      "metadata": { "floor": 0, "note": "WiFi + UWB, fused" }
     }
   ]
 }
