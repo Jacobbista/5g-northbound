@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from ..auth import require_location_role
 from ..errors import CamaraError
 from ..models import Circle, Location, Point, RetrievalLocationRequest
-from ..position import authorize_asset, get_position, resolve_asset
+from ..position import authorize_asset, get_fused_position, resolve_asset
 
 router = APIRouter(prefix="/location-retrieval/v0.5", tags=["Location retrieval"])
 
@@ -26,8 +26,8 @@ async def retrieve(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(
-        asset.positioning_id, asset.source, body.maxAge, "LOCATION_RETRIEVAL"
+    pos = await get_fused_position(
+        asset.capabilities, body.maxAge, "LOCATION_RETRIEVAL"
     )
     # CAMARA Circle requires radius >= 1 m; the same radius drives the maxSurface
     # check, so the area tested is the one actually reported.

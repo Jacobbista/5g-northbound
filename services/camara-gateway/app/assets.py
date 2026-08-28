@@ -23,19 +23,41 @@ from .config import get_settings
 
 log = logging.getLogger(__name__)
 
-ASSET_SCHEMA_VERSION = 2
+ASSET_SCHEMA_VERSION = 3
+
+
+class Capability(BaseModel):
+    """One way an asset is positioned: a source and the id that source knows the
+    asset by. The same physical thing is a different id to each source."""
+    model_config = ConfigDict(extra="ignore")
+    source: str
+    positioning_id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 class Asset(BaseModel):
     model_config = ConfigDict(extra="ignore")
     asset_id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
-    positioning_id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     kind: str
-    source: str
     org: str = Field(pattern=r"^[a-z0-9-]{1,64}$")
+    capabilities: list[Capability] = Field(min_length=1)
     label: str = ""
     simulated: bool = False
     metadata: dict = Field(default_factory=dict)
+
+    @property
+    def primary(self) -> Capability:
+        """The capability single-target paths (stream, diagnostics, details)
+        route on. Multi-capability fusion combines all of them; a single-target
+        consumer sees the first."""
+        return self.capabilities[0]
+
+    @property
+    def source(self) -> str:
+        return self.capabilities[0].source
+
+    @property
+    def positioning_id(self) -> str:
+        return self.capabilities[0].positioning_id
 
 
 class AssetMap(BaseModel):

@@ -67,14 +67,16 @@ def make_token(private_pem):
 # Asset Identity Map used by the gateway tests. asset_id -> positioning_id,
 # matching the engine /position/{positioning_id} mocks in the suite.
 _TEST_ASSETS = {
-    "version": 2,
+    "version": 3,
     "assets": [
-        {"asset_id": "tool-880", "positioning_id": "wifi-asset-01", "kind": "tool",
-         "source": "wifi", "org": "acme", "label": "WiFi asset 01"},
-        {"asset_id": "forklift-7", "positioning_id": "synthetic-demo-01", "kind": "forklift",
-         "source": "synthetic", "org": "acme", "label": "Synthetic demo 01", "simulated": True},
-        {"asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "kind": "pallet",
-         "source": "wittra", "org": "acme", "label": "Wittra tag 01", "simulated": True},
+        {"asset_id": "tool-880", "kind": "tool", "org": "acme", "label": "WiFi asset 01",
+         "capabilities": [{"source": "wifi", "positioning_id": "wifi-asset-01"}]},
+        {"asset_id": "forklift-7", "kind": "forklift", "org": "acme", "label": "Synthetic demo 01",
+         "simulated": True,
+         "capabilities": [{"source": "synthetic", "positioning_id": "synthetic-demo-01"}]},
+        {"asset_id": "pkg-4471", "kind": "pallet", "org": "acme", "label": "Wittra tag 01",
+         "simulated": True,
+         "capabilities": [{"source": "wittra", "positioning_id": "wittra-tag-01"}]},
     ],
 }
 

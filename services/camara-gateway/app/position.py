@@ -233,6 +233,55 @@ async def get_position(
     return pos
 
 
+async def get_fused_position(capabilities, max_age, error_ns) -> Position:
+    """Poll every capability of an asset and reconcile the fixes into one.
+
+    Each capability is a `(source, positioning_id)`; a capability with no fit
+    fix is skipped, so an asset stays located as long as one source answers. The
+    fixes combine by inverse-variance weighting (see app/fusion.py). Raises the
+    per-source error only when no capability produced a usable fix."""
+    from .fusion import fuse_fixes
+
+    positions: list[Position] = []
+    last_error: CamaraError | None = None
+    for cap in capabilities:
+        try:
+            positions.append(
+                await get_position(cap.positioning_id, cap.source, max_age, error_ns)
+            )
+        except CamaraError as exc:
+            last_error = exc  # no-fix / max-age / unreachable: try the next
+    if not positions:
+        if last_error is not None:
+            raise last_error
+        raise CamaraError(
+            422, f"{error_ns}.UNABLE_TO_LOCATE",
+            "No positioning source has a fix for this asset.",
+        )
+    if len(positions) == 1:
+        return positions[0]
+    fused = fuse_fixes([
+        {
+            "latitude": p.latitude, "longitude": p.longitude, "accuracy_m": p.radius_m,
+            "altitude": p.altitude_m, "timestamp": p.last_location_time,
+        }
+        for p in positions
+    ])
+    if fused is None:
+        return positions[0]
+    return Position(
+        latitude=fused["latitude"],
+        longitude=fused["longitude"],
+        radius_m=fused["accuracy_m"],
+        last_location_time=fused["timestamp"],
+        altitude_m=fused.get("altitude"),
+        vertical_accuracy_m=next(
+            (p.vertical_accuracy_m for p in positions if p.vertical_accuracy_m is not None),
+            None,
+        ),
+    )
+
+
 async def get_position_details(device_id: str, source: str | None = None) -> PositionDetails | None:
     """Vendor extension: full engine payload for the side-panel UI.
 
@@ -255,6 +304,42 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),
         altitude_m=d.get("altitude_m"),
+    )
+
+
+async def get_fused_details(capabilities) -> PositionDetails | None:
+    """Vendor extension: the side-panel telemetry for an asset, fused across its
+    capabilities the same way the pull path fuses positions. Returns None when no
+    capability has a fix."""
+    from .fusion import fuse_fixes
+
+    collected: list[tuple] = []
+    for cap in capabilities:
+        d = await get_position_details(cap.positioning_id, cap.source)
+        if d is not None:
+            collected.append((cap, d))
+    if not collected:
+        return None
+    if len(collected) == 1:
+        return collected[0][1]
+    fused = fuse_fixes([
+        {
+            "latitude": d.latitude, "longitude": d.longitude, "accuracy_m": d.radius_m,
+            "altitude": d.altitude_m, "timestamp": d.last_location_time,
+            "sources": d.sources or [cap.source],
+        }
+        for cap, d in collected
+    ])
+    if fused is None:
+        return collected[0][1]
+    return PositionDetails(
+        latitude=fused["latitude"],
+        longitude=fused["longitude"],
+        radius_m=fused["accuracy_m"],
+        last_location_time=fused.get("timestamp") or collected[0][1].last_location_time,
+        strategy="weighted_avg",
+        sources=fused["sources"],
+        altitude_m=fused.get("altitude"),
     )
 
 

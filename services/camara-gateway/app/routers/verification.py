@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from ..auth import require_location_role
 from ..errors import CamaraError
 from ..models import VerifyLocationRequest, VerifyLocationResponse
-from ..position import authorize_asset, get_position, resolve_asset
+from ..position import authorize_asset, get_fused_position, resolve_asset
 
 router = APIRouter(prefix="/location-verification/v3", tags=["Location verification"])
 
@@ -70,8 +70,8 @@ async def verify(
 
     asset = resolve_asset(body.device)
     authorize_asset(asset, claims)  # tenant gate (org claim vs asset.org)
-    pos = await get_position(
-        asset.positioning_id, asset.source, body.maxAge, "LOCATION_VERIFICATION"
+    pos = await get_fused_position(
+        asset.capabilities, body.maxAge, "LOCATION_VERIFICATION"
     )
 
     result, match_rate = _classify(pos, body.area)

@@ -32,35 +32,64 @@ _CONNECT_TIMEOUT_S = 5.0
 
 def _enrich(raw: str, org: str | None = None) -> str:
     """Turn the engine's positioning_id-keyed broadcast into the profile's
-    asset-shaped stream: map each item to its asset (assetId + source/kind/org),
-    and DROP items with no registered asset - the private-asset surface never
-    exposes a raw positioning id with no asset behind it. When `org` is set
-    (tenant-scoped token), also drop assets outside that org. `device_id` is
-    kept so existing stream consumers that key on it still work. Non-JSON /
-    unexpected shapes pass through unchanged."""
+    asset-shaped stream. Each broadcast item is keyed by a positioning id; an
+    asset may own several (one per capability), so items are grouped by asset
+    and a multi-capability asset's fixes are fused into one entry (same
+    inverse-variance model as the pull path). Items with no registered asset are
+    dropped - the private-asset surface never exposes a raw positioning id with
+    no asset behind it. When `org` is set (tenant-scoped token), assets outside
+    that org are dropped. `device_id` is kept so existing consumers that key on
+    it still work. Non-JSON / unexpected shapes pass through unchanged."""
+    from ..fusion import fuse_fixes
+
     try:
         items = json.loads(raw)
     except ValueError:
         return raw
     if not isinstance(items, list):
         return raw
-    by_pid = {a.positioning_id: a for a in list_assets()}
-    out = []
+    by_pid = {cap.positioning_id: a for a in list_assets() for cap in a.capabilities}
+    groups: dict[str, dict] = {}
     for it in items:
         if not isinstance(it, dict):
             continue
         asset = by_pid.get(it.get("device_id"))
-        if asset is None:
+        if asset is None or (org and asset.org != org):
             continue
-        if org and asset.org != org:
-            continue
-        out.append({
-            **it,
+        groups.setdefault(asset.asset_id, {"asset": asset, "items": []})["items"].append(it)
+
+    out = []
+    for group in groups.values():
+        asset = group["asset"]
+        entries = group["items"]
+        if len(entries) == 1:
+            base = dict(entries[0])
+        else:
+            fused = fuse_fixes([{**it, "altitude": it.get("altitude_m")} for it in entries])
+            if fused is None:
+                continue
+            base = dict(min(entries, key=lambda it: it.get("accuracy_m") or float("inf")))
+            base["latitude"] = fused["latitude"]
+            base["longitude"] = fused["longitude"]
+            base["accuracy_m"] = fused["accuracy_m"]
+            base["sources"] = fused["sources"]
+            if fused.get("altitude") is not None:
+                base["altitude_m"] = fused["altitude"]
+            if fused.get("timestamp") is not None:
+                base["timestamp"] = fused["timestamp"]
+            if fused.get("observed_at") is not None:
+                base["observed_at"] = fused["observed_at"]
+        base.update({
+            # One stable key per asset: its primary capability's positioning id,
+            # the same id a consumer joins the asset by. A fused entry keeps it
+            # even though several capabilities contributed.
+            "device_id": asset.primary.positioning_id,
             "assetId": asset.asset_id,
             "source": asset.source,
             "kind": asset.kind,
             "org": asset.org,
         })
+        out.append(base)
     return json.dumps(out)
 
 

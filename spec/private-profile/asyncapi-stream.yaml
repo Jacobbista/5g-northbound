@@ -113,6 +113,10 @@ components:
             liveness / staleness, so a still asset is not shown as lost.
         sources:
           type: array
+          description: >-
+            The technologies behind the fix. A multi-capability asset is fused
+            from several sources, so this lists all that contributed this tick;
+            a single-capability asset lists one.
           items:
             type: string
         strategy:

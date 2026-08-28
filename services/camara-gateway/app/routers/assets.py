@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from ..assets import AssetMap, asset_by_id, list_assets, load_asset_map, save_asset_map
 from ..auth import consumer_org, require_location_role
 from ..errors import CamaraError
-from ..position import authorize_asset, get_engine_devices, get_position_details
+from ..position import authorize_asset, get_engine_devices, get_fused_details
 
 router = APIRouter(prefix="/assets", tags=["Asset Identity Map"])
 
@@ -75,7 +75,7 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
     instead of hand-typing every asset. Already-mapped positioning_ids are
     subtracted. Candidates are unclaimed (no org) until onboarded."""
     devices = await get_engine_devices() or []
-    mapped = {a.positioning_id for a in list_assets()}
+    mapped = {cap.positioning_id for a in list_assets() for cap in a.capabilities}
     seen: set[str] = set()
     candidates: list[DiscoverableDevice] = []
     for d in devices:
@@ -133,7 +133,7 @@ async def asset_details(
         raise CamaraError(404, "IDENTIFIER_NOT_FOUND", "Asset not found.")
     authorize_asset(asset, claims)  # cross-tenant -> 404 (no existence leak)
 
-    details = await get_position_details(asset.positioning_id, asset.source)
+    details = await get_fused_details(asset.capabilities)
     telemetry = None
     if details is not None:
         telemetry = AssetTelemetry(

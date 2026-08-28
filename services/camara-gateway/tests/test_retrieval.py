@@ -15,6 +15,36 @@ def auth_headers(make_token):
     return {"Authorization": f"Bearer {make_token(roles=[ROLE])}"}
 
 
+async def test_retrieve_fuses_multi_capability(client, respx_mock, auth_headers, monkeypatch):
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    amap = {"version": 3, "assets": [
+        {"asset_id": "robot-9", "kind": "forklift", "org": "acme",
+         "capabilities": [{"source": "wifi", "positioning_id": "wifi-9"},
+                          {"source": "wittra", "positioning_id": "uwb-9"}]}]}
+    put = await client.put("/assets", json=amap, headers=auth_headers)
+    assert put.status_code == 200
+
+    respx_mock.get("http://engine.test/position/wifi-9?source=wifi").mock(
+        return_value=httpx.Response(200, json={
+            "device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0,
+            "accuracy_m": 3.0, "timestamp": "2026-01-01T00:00:00+00:00"}))
+    respx_mock.get("http://engine.test/position/uwb-9?source=wittra").mock(
+        return_value=httpx.Response(200, json={
+            "device_id": "uwb-9", "latitude": 1.0, "longitude": 1.0,
+            "accuracy_m": 0.5, "timestamp": "2026-01-01T00:00:05+00:00"}))
+
+    r = await client.post(RETRIEVE, json={"device": {"assetId": "robot-9"}}, headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    # inverse-variance fusion pulls the fix toward the sharp UWB estimate...
+    assert body["area"]["center"]["latitude"] > 0.9
+    # ...and the fused radius is tighter than the best single input (0.5 m).
+    assert body["area"]["radius"] < 0.5 or body["area"]["radius"] == 1.0  # CAMARA floors radius at 1 m
+
+
 async def test_retrieve_returns_spec_shaped_circle(client, auth_headers, location_validator):
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 200
