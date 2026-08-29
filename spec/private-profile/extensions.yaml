@@ -159,7 +159,6 @@ components:
           description: The primary capability's source.
         org: { type: string }
         label: { type: string }
-        simulated: { type: boolean }
         telemetry:
           $ref: "#/components/schemas/AssetTelemetry"
           nullable: true

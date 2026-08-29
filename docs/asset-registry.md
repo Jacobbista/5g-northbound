@@ -35,7 +35,6 @@ The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-no
 | `org`          | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
 | `capabilities` | ✅  | array, ≥1 `capability`                                | The ways the asset is positioned. Several entries fuse into one fix |
 | `label`        |     | string                                               | Human-readable name for UIs |
-| `simulated`    |     | boolean (default `false`)                            | Wired to a synthetic source. UIs show a `synthetic` badge |
 | `metadata`     |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
 
 A `capability`:
@@ -61,7 +60,6 @@ as your starting point:
         { "source": "wittra", "positioning_id": "wittra-tag-01" }
       ],
       "label": "Wittra tag 01",
-      "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }
     },
     {

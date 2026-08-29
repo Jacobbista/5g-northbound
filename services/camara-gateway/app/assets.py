@@ -41,7 +41,6 @@ class Asset(BaseModel):
     org: str = Field(pattern=r"^[a-z0-9-]{1,64}$")
     capabilities: list[Capability] = Field(min_length=1)
     label: str = ""
-    simulated: bool = False
     metadata: dict = Field(default_factory=dict)
 
     @property

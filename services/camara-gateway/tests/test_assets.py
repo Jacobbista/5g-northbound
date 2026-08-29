@@ -25,7 +25,7 @@ async def test_get_assets_lists_seeded_map(client, auth_headers):
     by_id = {a["asset_id"]: a for a in body["assets"]}
     assert by_id["pkg-4471"]["capabilities"][0]["positioning_id"] == "wittra-tag-01"
     assert by_id["pkg-4471"]["org"] == "acme"
-    assert by_id["forklift-7"]["simulated"] is True
+    assert "simulated" not in by_id["forklift-7"]
 
 
 async def test_put_assets_replaces_map(client, auth_headers):

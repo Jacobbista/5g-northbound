@@ -9,7 +9,6 @@
         { "source": "wifi", "positioning_id": "wifi-asset-01" }
       ],
       "label": "WiFi asset 01",
-      "simulated": false,
       "metadata": { "floor": 0 }
     },
     {
@@ -20,7 +19,6 @@
         { "source": "synthetic", "positioning_id": "synthetic-demo-01" }
       ],
       "label": "Synthetic demo 01",
-      "simulated": true,
       "metadata": { "floor": 0 }
     },
     {
@@ -31,7 +29,6 @@
         { "source": "wittra", "positioning_id": "wittra-tag-01" }
       ],
       "label": "Wittra tag 01",
-      "simulated": true,
       "metadata": { "floor": 0, "note": "Timber bundle" }
     },
     {
@@ -43,7 +40,6 @@
         { "source": "wittra", "positioning_id": "wittra-tag-02" }
       ],
       "label": "Mobile robot 2",
-      "simulated": true,
       "metadata": { "floor": 0, "note": "WiFi + UWB, fused" }
     }
   ]

@@ -65,17 +65,17 @@ describe("useDevices", () => {
     expect(result.current.devices).toEqual([]);
   });
 
-  it("propagates simulated flag from the gateway response", async () => {
+  it("propagates source from the gateway response (drives the synthetic badge)", async () => {
     fetch.mockResolvedValue(
       assetMap([
         { asset_id: "real", positioning_id: "r", kind: "tool", source: "wifi", org: "x", label: "Real" },
-        { asset_id: "mocky", positioning_id: "m", kind: "forklift", source: "mock", org: "x", label: "Mock", simulated: true },
+        { asset_id: "walker", positioning_id: "m", kind: "forklift", source: "synthetic", org: "x", label: "Walker" },
       ])
     );
     const { result } = renderHook(() => useDevices("tok"));
     await waitFor(() => expect(result.current.loading).toBe(false));
     const byId = Object.fromEntries(result.current.devices.map((d) => [d.assetId, d]));
-    expect(byId.real.simulated).toBe(false);
-    expect(byId.mocky.simulated).toBe(true);
+    expect(byId.real.source).toBe("wifi");
+    expect(byId.walker.source).toBe("synthetic");
   });
 });

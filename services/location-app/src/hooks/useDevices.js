@@ -30,7 +30,6 @@ export function useDevices(token) {
             source: a.source,
             org: a.org,
             label: a.label || a.asset_id,
-            simulated: Boolean(a.simulated),
             color: PALETTE[i % PALETTE.length],
           }))
         );

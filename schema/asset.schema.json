@@ -48,11 +48,6 @@
           "type": "string",
           "description": "Human-readable name for UIs."
         },
-        "simulated": {
-          "type": "boolean",
-          "default": false,
-          "description": "True when the asset is wired to a synthetic/demo source (synthetic-adapter, mock-vendor). UIs show a synthetic badge."
-        },
         "metadata": {
           "type": "object",
           "description": "Free-form per-asset metadata (e.g. floor, bay).",

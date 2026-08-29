@@ -115,7 +115,6 @@ class AssetDetailsResponse(BaseModel):
     source: str
     org: str
     label: str
-    simulated: bool = False
     telemetry: Optional[AssetTelemetry] = None
 
 
@@ -152,6 +151,5 @@ async def asset_details(
         source=asset.source,
         org=asset.org,
         label=asset.label or asset.asset_id,
-        simulated=asset.simulated,
         telemetry=telemetry,
     )

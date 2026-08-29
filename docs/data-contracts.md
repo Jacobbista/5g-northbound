@@ -128,15 +128,15 @@ These endpoints live on the same gateway service but are **not part of CAMARA De
 ```json
 {
   "assets": [
-    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "acme", "label": "Cordless drill 880", "simulated": false },
-    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "acme", "label": "Timber bundle 01",  "simulated": false }
+    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "acme", "label": "Cordless drill 880" },
+    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "acme", "label": "Timber bundle 01" }
   ]
 }
 ```
 
 The list is read from the [Asset Identity Map](#asset-identity-map) and filtered to the caller's `org`. Order matches the store. Empty list (`{"assets": []}`) when the tenant owns nothing, not a 404.
 
-`simulated` is `true` when the asset is wired to a synthetic source (`synthetic-adapter`, `mock-vendor`, or any demo fixture). The UI renders a `MOCK` badge. Real assets omit the field (defaults to `false`).
+The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic-adapter); no per-asset flag carries it.
 
 `PUT /assets` replaces the map (operator action; the editor proxies it). Body is `{"assets":[…]}` conforming to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json).
 
@@ -347,8 +347,7 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
   "source":         "wittra",
   "kind":           "pallet",
   "org":            "acme",
-  "label":          "Timber bundle 01",
-  "simulated":      false
+  "label":          "Timber bundle 01"
 }
 ```
 
@@ -358,7 +357,6 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
 - `kind`: asset class (`tool` / `pallet` / `forklift` / `uwb-tag` / …), descriptive.
 - `org`: tenant; the gateway gates consumers by it.
 - `label`: human-readable name surfaced by the demo. Optional; defaults to `asset_id`.
-- `simulated`: optional boolean (default `false`). `true` for assets wired to a fixture, so the UI can render a `synthetic` badge.
 
 ## Floor plan
 

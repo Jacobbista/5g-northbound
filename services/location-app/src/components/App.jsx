@@ -521,8 +521,8 @@ function DeviceItem({ device, state, position, selected, coordMode, onToggle, fr
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <strong style={{ color: device.color, letterSpacing: "0.04em" }}>{device.label}</strong>
           <span style={statusPill(state)}>{state}</span>
-          {device.simulated && (
-            <span style={mockPill} title="Synthetic source - demo only">
+          {device.source === "synthetic" && (
+            <span style={mockPill} title="Synthetic source - waypoint walker, not real hardware">
               synthetic
             </span>
           )}
@@ -682,7 +682,7 @@ export function App() {
       device: d,
       position: byAsset[d.assetId]?.position,
     }));
-  const anyMock = devices.some((d) => d.simulated);
+  const anyMock = devices.some((d) => d.source === "synthetic");
 
   // Venue metadata, taken from the blueprint (never hardcoded): floor-plan
   // label = the place, room label + extent, georef lat/lon = the location.
@@ -761,7 +761,7 @@ export function App() {
         {anyMock && (
           <span
             style={mockPill}
-            title="At least one registered device is wired to a synthetic data source (synthetic-adapter / mock-vendor). Real deployments do not ship with these."
+            title="At least one registered asset is positioned by the synthetic-adapter (waypoint walker). Real deployments do not ship with it."
           >
             demo build
           </span>
