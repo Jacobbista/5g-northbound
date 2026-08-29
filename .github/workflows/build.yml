@@ -82,8 +82,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
-            type=sha
-          # On a v0.1.0 tag this yields :0.1.0, :latest and :sha-<short>
+          # On a v0.1.0 tag this yields :0.1.0 and :latest. KELT pins by semver;
+          # provenance rides the immutable sha256 digest every image already has.
           flavor: latest=false
 
       - uses: docker/build-push-action@v7
