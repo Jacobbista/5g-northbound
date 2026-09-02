@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+  <body>
+    <script>
+      // Keycloak silent SSO check: loaded in a hidden iframe by keycloak-js so
+      // the session can be validated without a visible page redirect. It only
+      // relays the callback URL back to the app, same-origin. Official snippet.
+      parent.postMessage(location.href, location.origin);
+    </script>
+  </body>
+</html>

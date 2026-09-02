@@ -19,6 +19,22 @@ function gpsToRoomLocal(lat, lon, frame) {
   return { x: xFp - roomX, z: (fpH - yFp) - roomY };
 }
 
+// Forward transform: room-local canvas-y (x right, y down) -> lat/lon, the exact
+// inverse of gpsToRoomLocal. Anchors are stored in the room frame with no native
+// lat/lon; georef them so the panel can show both. (x, y) here is (ap.x, ap.y).
+function roomLocalToGps(x, y, frame) {
+  if (!frame?.georef) return null;
+  const { lat0, lon0, az, roomX, roomY, fpH } = frame;
+  const xFp = x + roomX;
+  const yFp = fpH - (y + roomY);
+  const east = xFp * Math.cos(az) + yFp * Math.sin(az);
+  const north = -xFp * Math.sin(az) + yFp * Math.cos(az);
+  return {
+    lat: lat0 + north / M_PER_DEG,
+    lon: lon0 + east / (M_PER_DEG * Math.cos((lat0 * Math.PI) / 180)),
+  };
+}
+
 const KIND_ICON = {
   forklift: "🚜",
   pallet: "📦",
@@ -48,14 +64,22 @@ const panel = {
   boxSizing: "border-box",
   maxWidth: "100%",
   borderRadius: 12,
-  background: "rgba(8,14,32,0.92)",
+  // Near-opaque solid ground (not a see-through frosted panel) so the content
+  // reads cleanly and never looks offset behind the blur.
+  background: "rgba(9,15,30,0.97)",
   border: "1px solid rgba(58,130,255,0.28)",
   boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(58,130,255,0.08) inset",
   color: "#e6edf7",
   fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
   fontSize: 12,
   backdropFilter: "blur(10px)",
-  overflow: "hidden",
+  // Scroll lives on the panel itself (not the crossfade wrapper). No reserved
+  // gutter: it left a constant empty strip on the right that looked misaligned;
+  // a short panel now uses the full width.
+  overflowX: "hidden",
+  overflowY: "auto",
+  maxHeight: "calc(100vh - 150px)",
+  paddingBottom: 8,
 };
 
 const head = (accent) => ({
@@ -129,7 +153,7 @@ function fmtTime(iso) {
   return d.toLocaleTimeString();
 }
 
-function DevicePanel({ token, device, onClose, coordMode, frame }) {
+function DevicePanel({ token, device, onClose, frame }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
   const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId);
   const t = details?.telemetry;
@@ -175,16 +199,18 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
         <>
           <div style={sectionTitle}>position</div>
           <div style={statRow}>
-            <span style={sLabel}>{coordMode === "relative" ? "room x/z" : "lat / lon"}</span>
-            <span style={sVal}>
-              {coordMode === "relative"
-                ? (() => {
-                    const p = gpsToRoomLocal(t.latitude, t.longitude, frame);
-                    return p ? `${p.x.toFixed(1)}, ${p.z.toFixed(1)} m` : "—";
-                  })()
-                : `${t.latitude.toFixed(6)}, ${t.longitude.toFixed(6)}`}
-            </span>
+            <span style={sLabel}>lat / lon</span>
+            <span style={sVal}>{t.latitude.toFixed(6)}, {t.longitude.toFixed(6)}</span>
           </div>
+          {(() => {
+            const p = gpsToRoomLocal(t.latitude, t.longitude, frame);
+            return p ? (
+              <div style={statRow}>
+                <span style={sLabel}>room x / z</span>
+                <span style={sVal}>{p.x.toFixed(1)}, {p.z.toFixed(1)} m</span>
+              </div>
+            ) : null;
+          })()}
           {t.altitude != null && (
             <div style={statRow}>
               <span style={sLabel}>altitude</span>
@@ -246,7 +272,7 @@ function DevicePanel({ token, device, onClose, coordMode, frame }) {
   );
 }
 
-function ApPanel({ ap, onClose, coordMode, token }) {
+function ApPanel({ ap, onClose, token, frame }) {
   const calib = useAnchorCalibration(token);
   const rf = calib[ap.id];
   const tech = ap.technology || "anchor";
@@ -287,11 +313,18 @@ function ApPanel({ ap, onClose, coordMode, token }) {
 
       <div style={sectionTitle}>anchor</div>
       <div style={statRow}>
-        <span style={sLabel}>position</span>
-        <span style={sVal}>
-          {coordMode === "relative" ? `${ap.x.toFixed(1)}, ${ap.y.toFixed(1)} m` : "(local frame)"}
-        </span>
+        <span style={sLabel}>room x / y</span>
+        <span style={sVal}>{ap.x.toFixed(1)}, {ap.y.toFixed(1)} m</span>
       </div>
+      {(() => {
+        const g = roomLocalToGps(ap.x, ap.y, frame);
+        return g ? (
+          <div style={statRow}>
+            <span style={sLabel}>lat / lon</span>
+            <span style={sVal}>{g.lat.toFixed(6)}, {g.lon.toFixed(6)}</span>
+          </div>
+        ) : null;
+      })()}
       {ap.height_m != null && (
         <div style={statRow}><span style={sLabel}>height</span><span style={sVal}>{Number(ap.height_m).toFixed(2)} m</span></div>
       )}
@@ -321,10 +354,10 @@ function ApPanel({ ap, onClose, coordMode, token }) {
   );
 }
 
-export function DetailPanel({ selection, token, onClose, coordMode, frame }) {
+export function DetailPanel({ selection, token, onClose, frame }) {
   if (!selection) return null;
   if (selection.kind === "device")
-    return <DevicePanel token={token} device={selection.device} onClose={onClose} coordMode={coordMode} frame={frame} />;
-  if (selection.kind === "ap") return <ApPanel ap={selection.ap} onClose={onClose} coordMode={coordMode} token={token} />;
+    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} />;
+  if (selection.kind === "ap") return <ApPanel ap={selection.ap} onClose={onClose} token={token} frame={frame} />;
   return null;
 }

@@ -31,14 +31,20 @@ describe("DetailPanel · device signal quality (P2)", () => {
     render(
       <DetailPanel
         selection={{ kind: "device", device: { assetId: "pkg-1", label: "pkg-1", color: "#5dffb0", source: "wittra" } }}
-        token="t" coordMode="absolute" onClose={() => {}} frame={null}
+        token="t" onClose={() => {}} frame={null}
       />
     );
     expect(screen.getByText("signal quality")).toBeInTheDocument();
     expect(screen.getByText(/vendor-radius/)).toBeInTheDocument();
     expect(screen.getByText("MOVING")).toBeInTheDocument();
+    // lat/lon always shown; no coordinate toggle
+    expect(screen.getByText("lat / lon")).toBeInTheDocument();
   });
 });
+
+// A georef frame (inverse of gpsToRoomLocal): identity-ish so the anchor's
+// room-local (x, y) maps to a finite lat/lon and both rows render.
+const FRAME = { georef: true, lat0: 59.4, lon0: 17.9, az: 0, roomX: 0, roomY: 0, fpH: 13.5 };
 
 describe("DetailPanel · anchor identity (P1)", () => {
   it("shows the real vendor hardware id and device class", () => {
@@ -55,8 +61,8 @@ describe("DetailPanel · anchor identity (P1)", () => {
           vendor_device_id: "DEVTAG00000000001",
         })}
         token="t"
-        coordMode="relative"
         onClose={() => {}}
+        frame={FRAME}
       />
     );
     expect(screen.getByText("hardware id")).toBeInTheDocument();
@@ -65,6 +71,9 @@ describe("DetailPanel · anchor identity (P1)", () => {
     expect(screen.getByText("beacon")).toBeInTheDocument();
     // subtitle carries vendor + class
     expect(screen.getByText("wittra · beacon")).toBeInTheDocument();
+    // both coordinate rows, no toggle: room-local metres and the georef'd lat/lon
+    expect(screen.getByText("room x / y")).toBeInTheDocument();
+    expect(screen.getByText("lat / lon")).toBeInTheDocument();
   });
 
   it("omits the identity section for an anchor with no vendor identity", () => {
@@ -72,12 +81,15 @@ describe("DetailPanel · anchor identity (P1)", () => {
       <DetailPanel
         selection={apSelection({ id: "AP02", technology: "wifi", x: 1, y: 1 })}
         token="t"
-        coordMode="relative"
         onClose={() => {}}
+        frame={null}
       />
     );
     expect(screen.queryByText("hardware id")).not.toBeInTheDocument();
     // generic subtitle
     expect(screen.getByText("Anchor · wifi")).toBeInTheDocument();
+    // no frame -> room-local metres shown, lat/lon row omitted
+    expect(screen.getByText("room x / y")).toBeInTheDocument();
+    expect(screen.queryByText("lat / lon")).not.toBeInTheDocument();
   });
 });

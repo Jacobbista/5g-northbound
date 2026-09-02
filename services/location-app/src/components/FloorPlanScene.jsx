@@ -95,13 +95,35 @@ const labelStyle = {
   backdropFilter: "blur(4px)",
 };
 
-function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
+function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, onClick }) {
+  const groupRef = useRef();
   const ring = useRef();
   const glow = useRef();
   const bodyRef = useRef();
   const renderColor = stale ? "#5a6470" : color;
 
-  useFrame(({ clock }) => {
+  // Seed position + visibility scale once so a marker that starts hidden begins
+  // at scale 0 and one that starts shown does not lerp in from the origin.
+  useEffect(() => {
+    if (groupRef.current) {
+      groupRef.current.position.set(x, 0, z);
+      groupRef.current.scale.setScalar(hidden ? 0 : 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useFrame(({ clock }, delta) => {
+    const dt = Math.min(delta || 0.05, 0.1);
+    const g = groupRef.current;
+    if (g) {
+      // Glide toward the latest fix (updates land every ~1-2s) so motion reads
+      // as continuous, not a teleport per update.
+      g.position.x += (x - g.position.x) * Math.min(1, dt * 1.8);
+      g.position.z += (z - g.position.z) * Math.min(1, dt * 1.8);
+      // Show / hide: eased scale in and out on the visibility toggle.
+      const s = g.scale.x + ((hidden ? 0 : 1) - g.scale.x) * Math.min(1, dt * 8);
+      g.scale.setScalar(s < 0.001 ? 0 : s);
+    }
     const t = clock.getElapsedTime();
     if (bodyRef.current) {
       bodyRef.current.position.y = 0.6 + Math.sin(t * 2) * 0.06;
@@ -122,49 +144,58 @@ function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
   });
 
   return (
-    <group
-      position={[x, 0, z]}
-      onClick={(e) => {
-        if (onClick) {
+    // No `position` prop: binding it would re-apply [x,0,z] on every re-render
+    // (~1/s) and snap the marker to the waypoint, defeating the per-frame lerp.
+    // The group is positioned once in the effect above, then only by useFrame.
+    <group ref={groupRef}>
+      {/* Generous invisible hitbox: the small body is otherwise hard to hit, and
+          a miss falls through to the canvas' onPointerMissed (which deselects),
+          so the asset detail would never open. This is the single event target. */}
+      <mesh
+        position={[0, 1.0, 0]}
+        onPointerDown={(e) => {
+          if (hidden || !onClick) return;
           e.stopPropagation();
           onClick();
-        }
-      }}
-      onPointerOver={(e) => {
-        if (onClick) {
+        }}
+        onPointerOver={(e) => {
+          if (hidden) return;
           e.stopPropagation();
-          document.body.style.cursor = "pointer";
-        }
-      }}
-      onPointerOut={() => {
-        if (onClick) document.body.style.cursor = "auto";
-      }}
-    >
+          if (onClick) document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          if (onClick) document.body.style.cursor = "auto";
+        }}
+      >
+        <cylinderGeometry args={[0.95, 0.95, 2.6, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
       {radius > 0 && !stale && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} raycast={() => null}>
           <circleGeometry args={[radius, 64]} />
           <meshBasicMaterial color={renderColor} transparent opacity={0.08} />
         </mesh>
       )}
       {radius > 0 && !stale && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} raycast={() => null}>
           <ringGeometry args={[radius - 0.08, radius, 64]} />
           <meshBasicMaterial color={renderColor} transparent opacity={0.55} />
         </mesh>
       )}
 
-      <mesh ref={glow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
+      <mesh ref={glow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={() => null}>
         <circleGeometry args={[0.85, 48]} />
         <meshBasicMaterial color={renderColor} transparent opacity={0.4} />
       </mesh>
 
-      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]}>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]} raycast={() => null}>
         <ringGeometry args={[0.55, 0.78, 48]} />
         <meshBasicMaterial color={renderColor} transparent opacity={0.7} />
       </mesh>
 
       <group ref={bodyRef}>
-        <mesh>
+        <mesh raycast={() => null}>
           <octahedronGeometry args={[0.45, 0]} />
           <meshStandardMaterial
             color={renderColor}
@@ -174,28 +205,29 @@ function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
             roughness={0.25}
           />
         </mesh>
-        <mesh scale={1.6}>
+        <mesh scale={1.6} raycast={() => null}>
           <octahedronGeometry args={[0.45, 0]} />
           <meshBasicMaterial color={renderColor} transparent opacity={stale ? 0 : 0.12} />
         </mesh>
       </group>
 
-      <mesh position={[0, 0.01, 0]}>
+      <mesh position={[0, 0.01, 0]} raycast={() => null}>
         <cylinderGeometry args={[0.08, 0.08, 1.4, 16]} />
         <meshBasicMaterial color={renderColor} transparent opacity={stale ? 0 : 0.18} />
       </mesh>
 
-      <Html position={[0, 1.9, 0]} center distanceFactor={18} zIndexRange={LABEL_Z}>
+      <Html position={[0, 1.9, 0]} center distanceFactor={18} zIndexRange={LABEL_Z} pointerEvents="none" wrapperClass="scene-label">
         <div
           style={{
             ...labelStyle,
+            pointerEvents: "none",
             background: stale ? "rgba(40,46,55,0.85)" : `${renderColor}cc`,
             color: "#fff",
             border: `1px solid ${renderColor}`,
             boxShadow: stale ? "none" : `0 0 12px ${renderColor}80`,
           }}
         >
-          {shortLabel(label)}
+          {label}
           {stale ? " · stale" : ""}
         </div>
       </Html>
@@ -203,13 +235,44 @@ function DeviceMarker({ x, z, radius, label, color, stale, onClick }) {
   );
 }
 
-function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, colors = TECH_PALETTE.wifi, onClick }) {
-  const haloRef = useRef();
-  useFrame(({ clock }) => {
-    if (haloRef.current) {
-      const t = (clock.getElapsedTime() * 0.6) % 1;
-      haloRef.current.scale.setScalar(1 + t * 4);
-      haloRef.current.material.opacity = 0.4 * (1 - t);
+function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, hidden = false, colors = TECH_PALETTE.wifi, onClick }) {
+  const groupRef = useRef();
+  const ringRef = useRef();
+  const pulseRef = useRef();
+  const pulseTRef = useRef(0);
+  const [hovered, setHovered] = useState(false);
+  // Seed the visibility scale once so a layer that starts hidden begins at 0
+  // and never flashes before the first frame.
+  useEffect(() => {
+    if (groupRef.current) groupRef.current.scale.setScalar(hidden ? 0 : 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.1); // clamp big gaps (demand frameloop)
+    // Visibility scale: eased toward 0 (hidden) or 1 (shown) so a layer toggle
+    // animates the anchor out / in instead of popping.
+    if (groupRef.current) {
+      const s = groupRef.current.scale.x;
+      const ns = s + ((hidden ? 0 : 1) - s) * Math.min(1, dt * 8);
+      groupRef.current.scale.setScalar(ns < 0.001 ? 0 : ns);
+    }
+    // Base ground ring brightens on hover.
+    if (ringRef.current) {
+      const target = hovered ? 0.55 : 0.16;
+      const m = ringRef.current.material;
+      m.opacity += (target - m.opacity) * Math.min(1, dt * 6);
+    }
+    // Ranging ping: a ring sweeps outward ONLY while hovered - reads as the
+    // beacon actively measuring range, not a constant idle animation.
+    if (pulseRef.current) {
+      const m = pulseRef.current.material;
+      if (hovered) {
+        pulseTRef.current = (pulseTRef.current + dt * 0.7) % 1;
+        pulseRef.current.scale.setScalar(1 + pulseTRef.current * 2.8);
+        m.opacity = 0.5 * (1 - pulseTRef.current);
+      } else {
+        m.opacity += (0 - m.opacity) * Math.min(1, dt * 6);
+      }
     }
   });
   // Above 85% of ceiling height = ceiling-mounted: render as a flat puck
@@ -217,28 +280,56 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, color
   // Below = pole-style fixture (lab tripod, wall-mounted anchor).
   const isCeilingMounted = height >= ceiling * 0.85;
   const labelY = isCeilingMounted ? ceiling - 0.1 : height + 0.45;
+  // The hitbox rises from the floor to just above the label and is wide, so the
+  // whole natural target - fixture, column, and the area right under the label -
+  // is clickable/hoverable with no dead gap between the 3D body and the label.
+  const hitH = labelY + 0.6;
   return (
-    <group
-      position={[x, 0, z]}
-      onClick={(e) => {
-        if (onClick) {
+    <group ref={groupRef} position={[x, 0, z]}>
+      {/* Invisible hitbox: the whole column is clickable and hoverable, not
+          just the small head. Opacity 0 still receives the raycast; it is the
+          single event target so overlapping decorative meshes never double-fire. */}
+      <mesh
+        position={[0, hitH / 2, 0]}
+        onPointerDown={(e) => {
+          if (hidden || !onClick) return;
           e.stopPropagation();
           onClick();
-        }
-      }}
-      onPointerOver={(e) => {
-        if (onClick) {
+        }}
+        onPointerOver={(e) => {
+          if (hidden) return;
           e.stopPropagation();
-          document.body.style.cursor = "pointer";
-        }
-      }}
-      onPointerOut={() => {
-        if (onClick) document.body.style.cursor = "auto";
-      }}
-    >
-      <mesh ref={haloRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[0.4, 0.55, 32]} />
-        <meshBasicMaterial color={colors.primary} transparent opacity={0.4} />
+          if (onClick) document.body.style.cursor = "pointer";
+          setHovered(true);
+        }}
+        onPointerOut={() => {
+          if (onClick) document.body.style.cursor = "auto";
+          setHovered(false);
+        }}
+      >
+        <cylinderGeometry args={[0.95, 0.95, hitH, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      {/* Beacon footprint: concentric coverage rings on the floor - a static
+          "positioning range" motif that reads as an anchor, not a spinner. */}
+      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <ringGeometry args={[0.42, 0.56, 48]} />
+        <meshBasicMaterial color={colors.primary} transparent opacity={0.16} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} raycast={() => null}>
+        <ringGeometry args={[1.0, 1.05, 56]} />
+        <meshBasicMaterial color={colors.primary} transparent opacity={0.09} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} raycast={() => null}>
+        <ringGeometry args={[1.6, 1.64, 64]} />
+        <meshBasicMaterial color={colors.primary} transparent opacity={0.05} />
+      </mesh>
+
+      {/* Ranging ping: expands out of the anchor on hover only (see useFrame). */}
+      <mesh ref={pulseRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={() => null}>
+        <ringGeometry args={[0.4, 0.5, 48]} />
+        <meshBasicMaterial color={colors.primary} transparent opacity={0} />
       </mesh>
 
       {isCeilingMounted ? (
@@ -290,40 +381,169 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, color
         </>
       )}
 
-      <Html position={[0, labelY, 0]} center distanceFactor={20} zIndexRange={LABEL_Z}>
-        <div
-          onClick={(e) => {
-            if (!onClick) return;
-            e.stopPropagation();
-            onClick();
-          }}
-          style={{
-            ...labelStyle,
-            pointerEvents: onClick ? "auto" : "none",
-            cursor: onClick ? "pointer" : "default",
-            background: `${colors.primary}2e`,
-            color: colors.text,
-            border: `1px solid ${colors.primary}`,
-            boxShadow: `0 0 8px ${colors.primary}55`,
-          }}
-        >
-          {shortLabel(id)}
+      <Html position={[0, labelY, 0]} center distanceFactor={20} zIndexRange={LABEL_Z} pointerEvents="none" wrapperClass="scene-label">
+        {/* The -50% lift lives on the WRAPPER (not the label), so the floating
+            hint anchored to it sits truly above the VISUAL label, not below.
+            Pointer-events off: the 3D hitbox owns all hover/click. */}
+        <div style={{ position: "relative", transform: "translateY(-50%)", pointerEvents: "none" }}>
+          {/* Hover cue: a tooltip that floats above the label with a caret,
+              reading as an intentional "inspect" affordance. Never resizes the
+              label (which would shift the scene). */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 8px)",
+              left: "50%",
+              transform: `translateX(-50%) translateY(${hovered ? "0" : "4px"})`,
+              padding: "3px 8px",
+              borderRadius: 6,
+              whiteSpace: "nowrap",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 9,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: colors.text,
+              background: "rgba(6,10,20,0.97)",
+              border: `1px solid ${colors.primary}`,
+              boxShadow: `0 4px 14px rgba(0,0,0,0.55)`,
+              pointerEvents: "none",
+              opacity: hovered ? 1 : 0,
+              transition: "opacity 130ms ease, transform 130ms ease",
+            }}
+          >
+            ⊙ inspect
+            {/* downward caret */}
+            <span
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: "50%",
+                width: 6,
+                height: 6,
+                marginLeft: -3,
+                marginTop: -3,
+                background: "rgba(6,10,20,0.97)",
+                borderRight: `1px solid ${colors.primary}`,
+                borderBottom: `1px solid ${colors.primary}`,
+                transform: "rotate(45deg)",
+              }}
+            />
+          </div>
+          {/* Label is purely visual: pointer-events pass through to the 3D
+              hitbox so there is no dead gap between the DOM label and the 3D
+              body. Hover state is driven entirely by the hitbox. */}
+          <div
+            style={{
+              ...labelStyle,
+              transform: "none",
+              pointerEvents: "none",
+              // Dark solid ground so the light label text stays readable over
+              // bright walls and grid alike; the technology colour is the border.
+              background: hovered ? "rgba(10,16,30,0.96)" : "rgba(6,10,20,0.88)",
+              color: colors.text,
+              border: `1px solid ${colors.primary}`,
+              boxShadow: hovered ? `0 0 16px ${colors.primary}88` : `0 1px 8px rgba(0,0,0,0.45)`,
+              transition: "background 140ms ease, box-shadow 140ms ease",
+            }}
+          >
+            {shortLabel(id)}
+          </div>
         </div>
       </Html>
     </group>
   );
 }
 
-function OriginAxes() {
-  const L = 4;
+const axisTag = (color) => ({
+  padding: "1px 6px",
+  borderRadius: 5,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: 12,
+  fontWeight: 700,
+  color,
+  background: "rgba(3,6,15,0.92)",
+  border: `1px solid ${color}`,
+  boxShadow: `0 0 10px ${color}66`,
+  transition: "opacity 160ms ease",
+  transform: "translate(-50%, -50%)",
+});
+
+// The origin gizmo. Idle it is a short colour key in the corner; on hover the
+// world dims and the X / Y / Z axes extend smoothly with labels - a quick
+// legend for the room-local frame.
+function OriginAxes({ span = 20 }) {
+  const [hovered, setHovered] = useState(false);
+  const dimRef = useRef();
+  const xRef = useRef();
+  const yRef = useRef();
+  const zRef = useRef();
+  const nodeRef = useRef();
+  const AXIS = 5.5;
+  const BASE = 2 / AXIS; // idle length fraction
+
+  useFrame(({ clock }, delta) => {
+    const dt = Math.min(delta || 0.05, 0.1);
+    const tgt = hovered ? 1 : BASE;
+    const k = Math.min(1, dt * 5);
+    if (xRef.current) xRef.current.scale.x += (tgt - xRef.current.scale.x) * k;
+    if (yRef.current) yRef.current.scale.y += (tgt - yRef.current.scale.y) * k;
+    if (zRef.current) zRef.current.scale.z += (tgt - zRef.current.scale.z) * k;
+    if (dimRef.current) {
+      const o = hovered ? 0.58 : 0;
+      dimRef.current.material.opacity += (o - dimRef.current.material.opacity) * k;
+    }
+    if (nodeRef.current) {
+      nodeRef.current.scale.setScalar(1 + (hovered ? Math.sin(clock.getElapsedTime() * 3) * 0.08 : 0));
+    }
+  });
+
   return (
     <group>
-      <mesh position={[0, 0.12, 0]}>
-        <sphereGeometry args={[0.22, 16, 16]} />
-        <meshStandardMaterial color="#e8eef7" emissive="#88b6ff" emissiveIntensity={0.5} />
+      {/* Dim dome: draws over everything (depthTest off) and fades in on hover
+          so the world recedes and the axes read. */}
+      <mesh ref={dimRef} renderOrder={1}>
+        <sphereGeometry args={[span * 2.2, 24, 24]} />
+        <meshBasicMaterial color="#03060f" transparent opacity={0} side={THREE.BackSide} depthWrite={false} depthTest={false} />
       </mesh>
-      <Line points={[[0, 0.08, 0], [L, 0.08, 0]]} color="#ff5a6e" lineWidth={3} />
-      <Line points={[[0, 0.08, 0], [0, 0.08, L]]} color="#5dffb0" lineWidth={3} />
+
+      {/* Hover target at the origin. */}
+      <mesh
+        position={[0, 0.6, 0]}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
+      >
+        <sphereGeometry args={[1.5, 16, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      <mesh ref={nodeRef} position={[0, 0.12, 0]} renderOrder={4}>
+        <sphereGeometry args={[0.22, 16, 16]} />
+        <meshStandardMaterial color="#e8eef7" emissive="#88b6ff" emissiveIntensity={0.6} depthTest={false} />
+      </mesh>
+
+      <group ref={xRef} scale={[BASE, 1, 1]}>
+        <Line points={[[0, 0.08, 0], [AXIS, 0.08, 0]]} color="#ff5a6e" lineWidth={3} renderOrder={4} />
+        <Html position={[AXIS, 0.08, 0]} center distanceFactor={14} zIndexRange={LABEL_Z} pointerEvents="none" wrapperClass="scene-label">
+          <div style={{ ...axisTag("#ff5a6e"), opacity: hovered ? 1 : 0 }}>X</div>
+        </Html>
+      </group>
+
+      <group ref={yRef} scale={[1, BASE, 1]}>
+        <Line points={[[0, 0.08, 0], [0, AXIS, 0]]} color="#5aa0ff" lineWidth={3} renderOrder={4} />
+        <Html position={[0, AXIS, 0]} center distanceFactor={14} zIndexRange={LABEL_Z} pointerEvents="none" wrapperClass="scene-label">
+          <div style={{ ...axisTag("#5aa0ff"), opacity: hovered ? 1 : 0 }}>Y</div>
+        </Html>
+      </group>
+
+      <group ref={zRef} scale={[1, 1, BASE]}>
+        <Line points={[[0, 0.08, 0], [0, 0.08, AXIS]]} color="#5dffb0" lineWidth={3} renderOrder={4} />
+        <Html position={[0, 0.08, AXIS]} center distanceFactor={14} zIndexRange={LABEL_Z} pointerEvents="none" wrapperClass="scene-label">
+          <div style={{ ...axisTag("#5dffb0"), opacity: hovered ? 1 : 0 }}>Z</div>
+        </Html>
+      </group>
     </group>
   );
 }
@@ -666,7 +886,7 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
     }
   }, [positions]);
 
-  return positions.map(({ device, position }) => {
+  return positions.map(({ device, position, selected = true }) => {
     const raw = toLocal(position?.area?.center, frame);
     const radius = position?.area?.radius ?? 0;
     const sources = position?.sources ?? [];
@@ -708,10 +928,10 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
 
     return (
       <group key={phone}>
-        {hasWifi && !stale && local && (
+        {selected && hasWifi && !stale && local && (
           <ConnectionLines from={local} aps={aps} color={device.color} />
         )}
-        <GradientTrail points={trail} color={device.color} />
+        {selected && <GradientTrail points={trail} color={device.color} />}
         {local && (
           <DeviceMarker
             x={local.x}
@@ -720,12 +940,43 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
             label={device.label}
             color={device.color}
             stale={stale}
+            hidden={!selected}
             onClick={onSelectDevice ? () => onSelectDevice(device) : undefined}
           />
         )}
       </group>
     );
   });
+}
+
+// A large gradient sky dome behind the scene: near-black overhead easing to a
+// faint blue at the horizon, so the world sits in an open space, not a void.
+// Ambient only (fog off, not raycastable) - never touches the room itself.
+function GradientDome({ cx = 0, cz = 0, radius = 220 }) {
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: {
+          topColor: { value: new THREE.Color("#05070f") },
+          horizonColor: { value: new THREE.Color("#16386f") },
+          glowColor: { value: new THREE.Color("#2f6bd0") },
+        },
+        vertexShader:
+          "varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        fragmentShader:
+          "varying vec3 vP; uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 glowColor; void main(){ float h = normalize(vP).y; float t = smoothstep(-0.03, 0.4, h); vec3 base = mix(horizonColor, topColor, t); float glow = smoothstep(0.14, 0.0, abs(h)) * 0.45; gl_FragColor = vec4(base + glowColor * glow, 1.0); }",
+      }),
+    []
+  );
+  return (
+    <mesh position={[cx, 0, cz]} scale={radius} raycast={() => null}>
+      <sphereGeometry args={[1, 40, 20]} />
+      <primitive object={mat} attach="material" />
+    </mesh>
+  );
 }
 
 function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp }) {
@@ -748,6 +999,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
   const cz = d / 2;
   const extraW = w + 2 * MARGIN;
   const extraD = d + 2 * MARGIN;
+  const span = Math.max(extraW, extraD);
 
   // Frame for projecting live device fixes (lat/lon) into this same room frame,
   // using the blueprint's floor-plan georef (shared by the engine/editor).
@@ -768,14 +1020,17 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
 
   return (
     <>
-      <color attach="background" args={["#070b18"]} />
-      <fog attach="fog" args={["#070b18", 30, 90]} />
+      <color attach="background" args={["#05070f"]} />
+      <fog attach="fog" args={["#081025", 34, 105]} />
+      <GradientDome cx={cx} cz={cz} />
 
       <ambientLight intensity={0.25} />
       <directionalLight position={[cx - 10, 18, cz - 10]} intensity={0.6} color="#9ec3ff" />
       <directionalLight position={[cx + 10, 14, cz + 10]} intensity={0.35} color="#ff9ec3" />
+      {/* Soft overhead accent: gives the fixtures a highlight and adds depth. */}
+      <pointLight position={[cx, 11, cz]} intensity={0.5} color="#7fb4ff" distance={span * 3} decay={2} />
 
-      <Stars radius={120} depth={50} count={500} factor={3} fade speed={0.4} />
+      <Stars radius={160} depth={80} count={1800} factor={4} fade speed={0.25} />
 
       {/* outer halo plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.04, cz]}>
@@ -789,6 +1044,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         <meshStandardMaterial color="#0a1228" metalness={0.5} roughness={0.6} />
       </mesh>
 
+
       <Grid
         args={[extraW, extraD]}
         position={[cx, 0.02, cz]}
@@ -798,9 +1054,9 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         sectionSize={5}
         sectionThickness={1}
         sectionColor="#3a82ff"
-        fadeDistance={70}
-        fadeStrength={2}
-        infiniteGrid={false}
+        fadeDistance={60}
+        fadeStrength={3}
+        infiniteGrid={true}
       />
 
       <PerimeterWalls
@@ -811,9 +1067,12 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         openings={perimeterOpenings}
       />
       <InnerWalls walls={walls} defaultHeight={ceiling} />
-      <OriginAxes />
+      <OriginAxes span={span} />
 
-      {aps.map((ap) => {
+      {allAps.map((ap) => {
+        // Anchors stay mounted when a layer is toggled off; `hidden` scales them
+        // out (and back in) so appearance / disappearance is animated, not a pop.
+        const hidden = visibleTechs ? !visibleTechs.has(techOfAnchor(ap)) : false;
         // With a focus, anchors outside the relevant set recede (dim palette);
         // no focus -> every anchor keeps its technology colour.
         const dimmed = relevantAnchorIds != null && !relevantAnchorIds.has(ap.id);
@@ -825,6 +1084,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
             z={ap.y}
             height={Number(ap.height_m) || 1.2}
             ceiling={ceiling}
+            hidden={hidden}
             colors={dimmed ? DIM_PALETTE : techPalette(ap)}
             onClick={onSelectAp ? () => onSelectAp(ap) : undefined}
           />
@@ -874,10 +1134,9 @@ function CameraRig({ homePos, target, signal, controlsRef }) {
   return null;
 }
 
-export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp, onLayoutLoaded }) {
+export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, recenterSignal = 0, onSelectDevice, onSelectAp, onLayoutLoaded }) {
   const [layout, setLayout] = useState(null);
   const controlsRef = useRef();
-  const [recenterAt, setRecenterAt] = useState(0);
 
   // The blueprint comes from the CAMARA gateway (which proxies the engine, the
   // blueprint authority). The demo is a MEC app: it talks only to the gateway,
@@ -909,29 +1168,49 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
   const cz = d / 2;
   const span = Math.max(w + 2 * MARGIN, d + 2 * MARGIN);
 
+  // A marker selection stamps this; the canvas' empty-click handler ignores a
+  // "miss" that lands right after a pick, so clicking a moving marker (whose
+  // pointer-up can land off it) never closes the panel it just opened.
+  const pickedAtRef = useRef(0);
+  const pickDevice = (dv) => {
+    pickedAtRef.current = Date.now();
+    onSelectDevice?.(dv);
+  };
+  const pickAp = (ap) => {
+    pickedAtRef.current = Date.now();
+    onSelectAp?.(ap);
+  };
+
   return (
     <div style={{ position: "relative", height: "100%", minHeight: 0 }}>
+      {/* Bulletproof: scene labels (drei Html) must never intercept the raycast,
+          otherwise a label sitting over a marker eats hover/click. drei only
+          sets pointer-events on the inner div; force it off on the wrapper too. */}
+      <style>{`.scene-label,.scene-label *{pointer-events:none !important}`}</style>
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={[1, 2]}
         frameloop="demand"
-        camera={{ position: [cx + span * 0.4, span * 0.7, cz + span * 0.85], fov: 50 }}
+        camera={{ position: [cx + span * 0.32, span * 0.5, cz + span * 0.62], fov: 50 }}
         gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
-        style={{ height: "100%", borderRadius: 12, background: "#070b18", touchAction: "none" }}
-        onPointerMissed={() => onSelectDevice?.(null)}
+        style={{ height: "100%", borderRadius: 0, background: "#070b18", touchAction: "none" }}
+        onPointerMissed={() => {
+          if (Date.now() - pickedAtRef.current < 250) return;
+          onSelectDevice?.(null);
+        }}
       >
-        <RenderTick fps={12} />
+        <RenderTick fps={30} />
         <Scene
           positions={positions}
           layout={layout}
           visibleTechs={visibleTechs}
           relevantAnchorIds={relevantAnchorIds}
-          onSelectDevice={onSelectDevice}
-          onSelectAp={onSelectAp}
+          onSelectDevice={pickDevice}
+          onSelectAp={pickAp}
         />
         <CameraRig
-          homePos={[cx + span * 0.4, span * 0.7, cz + span * 0.85]}
+          homePos={[cx + span * 0.32, span * 0.5, cz + span * 0.62]}
           target={[cx, 0, cz]}
-          signal={recenterAt}
+          signal={recenterSignal}
           controlsRef={controlsRef}
         />
         <OrbitControls
@@ -946,29 +1225,6 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
           maxDistance={span * 1.9}
         />
       </Canvas>
-      <button
-        type="button"
-        onClick={() => setRecenterAt((n) => n + 1)}
-        title="Recenter the view"
-        style={{
-          position: "absolute",
-          top: 12,
-          left: 12,
-          padding: "6px 12px",
-          fontSize: 11,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          fontFamily: "ui-monospace, monospace",
-          color: "#9ec3ff",
-          background: "rgba(10,18,40,0.7)",
-          border: "1px solid rgba(58,130,255,0.35)",
-          borderRadius: 6,
-          cursor: "pointer",
-          backdropFilter: "blur(6px)",
-        }}
-      >
-        ⌖ recenter
-      </button>
     </div>
   );
 }

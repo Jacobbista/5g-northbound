@@ -57,6 +57,7 @@ nav:
   - Overview: overview.md
   - Concepts:
       - Architecture: architecture.md
+      - Authentication: authentication.md
       - Blueprint vs bindings: blueprint-vs-bindings.md
       - Georeferencing: georeferencing.md
   - Guides:

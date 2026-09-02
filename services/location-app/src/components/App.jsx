@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import keycloak, { initOptions } from "../keycloak";
 import { GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
 import { useAdapterHealth } from "../hooks/useAdapterHealth";
@@ -61,36 +61,35 @@ const STRATEGY_LABEL = {
 const TECH_COLOR = { wifi: "#ffb347", wittra: "#5dffb0", fiveg: "#c084fc", gnss: "#fbbf24" };
 const TECH_VIS_KEY = "5g-location-app.visible-techs.v1";
 
-// LAYERS control: a legend + per-technology anchor toggle, tucked into the
-// scene's bottom-left corner. Doubles as the colour legend, and overrides the
-// focus-driven relevance (a hidden technology's anchors never render).
-const layersPanel = {
-  position: "absolute",
-  left: 14,
-  bottom: 14,
-  zIndex: 30,
-  display: "flex",
-  flexDirection: "column",
-  gap: 3,
-  padding: "8px 10px",
-  borderRadius: 10,
-  background: "rgba(8,14,32,0.82)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  backdropFilter: "blur(8px)",
-};
-const layersTitle = {
-  fontSize: 9,
-  letterSpacing: "0.12em",
+// Scene controls live in the header (top bar), not floating over the world:
+// the recenter button and the per-technology layer toggles / colour legend.
+const headerBtn = {
+  padding: "5px 11px",
+  fontSize: 10,
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
-  color: "#5a6987",
-  marginBottom: 2,
+  fontFamily: "ui-monospace, monospace",
+  color: "#9ec3ff",
+  background: "rgba(58,130,255,0.10)",
+  border: "1px solid rgba(58,130,255,0.35)",
+  borderRadius: 6,
+  cursor: "pointer",
 };
-const layersRow = (active, c) => ({
+const headerLayers = {
   display: "flex",
   alignItems: "center",
-  gap: 7,
+  gap: 4,
   padding: "3px 4px",
-  background: "transparent",
+  borderRadius: 6,
+  border: "1px solid rgba(255,255,255,0.08)",
+};
+const headerTech = (active, c) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "3px 8px",
+  borderRadius: 5,
+  background: active ? `${c}1a` : "transparent",
   border: "none",
   cursor: "pointer",
   color: active ? c : "#5a6987",
@@ -98,10 +97,9 @@ const layersRow = (active, c) => ({
   letterSpacing: "0.06em",
   textTransform: "uppercase",
   fontFamily: "ui-monospace, monospace",
-  opacity: active ? 1 : 0.6,
+  opacity: active ? 1 : 0.55,
+  transition: "background 140ms ease, opacity 140ms ease, color 140ms ease",
 });
-
-const COORD_KEY = "5g-location-app.coord-mode.v1";
 
 // Adapter: WS payload from the engine broadcast -> the CAMARA-Location-ish
 // shape the 3D scene and the sidebar status chips already consume.
@@ -169,6 +167,22 @@ const header = {
   zIndex: 60,
 };
 
+const railToggle = {
+  width: 28,
+  height: 28,
+  flexShrink: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 7,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.03)",
+  color: "#9aa9c4",
+  cursor: "pointer",
+  fontSize: 12,
+  fontFamily: "ui-monospace, monospace",
+  lineHeight: 1,
+};
+
 const title = {
   margin: 0,
   fontSize: 16,
@@ -178,6 +192,29 @@ const title = {
   color: "#e6edf7",
 };
 
+// Vertical divider that separates the header's three zones (brand · context ·
+// controls) so it reads as grouped, not one flat row of chips.
+const hDivider = {
+  width: 1,
+  alignSelf: "stretch",
+  margin: "6px 4px",
+  background: "rgba(255,255,255,0.09)",
+};
+// One unified style for the secondary context chips (fusion, venue).
+const metaChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 10.5,
+  color: "#9aa9c4",
+  fontFamily: "ui-monospace, monospace",
+  padding: "3px 9px",
+  borderRadius: 6,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.03)",
+  whiteSpace: "nowrap",
+};
+
 const subtitle = {
   fontSize: 11,
   color: "#7a8aab",
@@ -185,12 +222,57 @@ const subtitle = {
   textTransform: "uppercase",
 };
 
-const sidebar = {
-  padding: "16px 14px",
-  borderRight: "1px solid rgba(255,255,255,0.06)",
-  background: "rgba(8,14,32,0.5)",
+// Device rail as a floating overlay on the scene: slides off to the left when
+// collapsed, never touching the canvas size (no reflow / recenter).
+const sidebarPanel = (open) => ({
+  position: "absolute",
+  top: 12,
+  left: 12,
+  width: 236,
+  maxHeight: "calc(100% - 24px)",
   overflowY: "auto",
+  overflowX: "hidden",
+  padding: "12px 12px 14px",
+  borderRadius: 12,
+  background: "linear-gradient(180deg, rgba(12,20,44,0.92), rgba(8,14,32,0.9))",
+  border: "1px solid rgba(58,130,255,0.22)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+  backdropFilter: "blur(10px)",
+  zIndex: 40,
+  transform: open ? "translateX(0)" : "translateX(-118%)",
+  opacity: open ? 1 : 0,
+  pointerEvents: open ? "auto" : "none",
+  transition: "transform 260ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease",
+});
+const sidebarHead = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  marginBottom: 10,
 };
+// Reopen tab, shown only when the rail is collapsed.
+const railReopen = (open) => ({
+  position: "absolute",
+  top: 16,
+  left: 12,
+  zIndex: 39,
+  padding: "7px 12px",
+  fontSize: 11,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  fontFamily: "ui-monospace, monospace",
+  color: "#9ec3ff",
+  background: "rgba(10,18,40,0.7)",
+  border: "1px solid rgba(58,130,255,0.35)",
+  borderRadius: 8,
+  cursor: "pointer",
+  backdropFilter: "blur(6px)",
+  opacity: open ? 0 : 1,
+  transform: open ? "translateX(-8px)" : "translateX(0)",
+  pointerEvents: open ? "none" : "auto",
+  transition: "opacity 180ms ease, transform 180ms ease",
+});
 
 const sidebarTitle = {
   fontSize: 10,
@@ -200,19 +282,57 @@ const sidebarTitle = {
   margin: "0 0 10px 4px",
 };
 
+// Device card: a fixed-padding card with a left accent stripe in the device's
+// colour and, when shown, the same top-down colour wash the detail panel uses.
+// Consistent geometry - only colours change with state, never the box size.
 const deviceRow = (selected, color) => ({
-  display: "grid",
-  gridTemplateColumns: "auto 10px 1fr",
-  alignItems: "center",
-  gap: 10,
-  padding: "8px 10px",
-  marginBottom: 6,
-  borderRadius: 8,
-  background: selected ? "rgba(58,130,255,0.06)" : "transparent",
-  border: `1px solid ${selected ? `${color}40` : "rgba(255,255,255,0.04)"}`,
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  padding: "10px 12px",
+  marginBottom: 8,
+  borderRadius: 10,
+  background: selected
+    ? `linear-gradient(180deg, ${color}22, rgba(8,14,32,0.55))`
+    : "rgba(8,14,32,0.4)",
+  border: `1px solid ${selected ? `${color}55` : "rgba(255,255,255,0.06)"}`,
+  borderLeft: `3px solid ${selected ? color : "rgba(255,255,255,0.12)"}`,
   cursor: "pointer",
   fontSize: 12,
+  transition: "background 160ms ease, border-color 160ms ease",
 });
+
+// Show/hide affordance: an eye toggle that reflects and flips scene visibility,
+// replacing the checkbox. Filled + coloured when shown, outlined when hidden.
+const eyeBtn = (selected, color) => ({
+  flexShrink: 0,
+  width: 26,
+  height: 26,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 7,
+  border: `1px solid ${selected ? `${color}66` : "rgba(255,255,255,0.12)"}`,
+  background: selected ? `${color}22` : "transparent",
+  color: selected ? color : "#7a8aab",
+  cursor: "pointer",
+  padding: 0,
+  transition: "background 180ms ease, border-color 180ms ease, color 180ms ease",
+});
+
+function EyeIcon({ shown }) {
+  return shown ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
 
 const dot = (color, glow) => ({
   width: 10,
@@ -272,7 +392,9 @@ const adapterBadge = (state) => {
 const adapterDropdown = {
   position: "absolute",
   top: "calc(100% + 6px)",
-  left: 0,
+  // The badge sits at the far right of the header - open the panel leftward so
+  // it never spills off the right edge of the screen.
+  right: 0,
   minWidth: 180,
   padding: 6,
   borderRadius: 8,
@@ -338,8 +460,30 @@ function AdapterHealthBadge({ adapters }) {
   );
 }
 
+// Faint controls legend, bottom-right of the scene.
+const navHint = {
+  position: "absolute",
+  right: 14,
+  bottom: 12,
+  zIndex: 25,
+  display: "flex",
+  gap: 14,
+  padding: "6px 12px",
+  borderRadius: 8,
+  background: "rgba(8,14,32,0.62)",
+  border: "1px solid rgba(255,255,255,0.07)",
+  backdropFilter: "blur(6px)",
+  fontSize: 10,
+  color: "#8595b3",
+  fontFamily: "ui-monospace, monospace",
+  letterSpacing: "0.04em",
+  pointerEvents: "none",
+};
+
 const sceneWrap = {
-  padding: "16px 20px 20px",
+  // Full-bleed: the canvas fills the cell edge-to-edge (no framed inset), and
+  // the grid fades to the horizon so the world reads as open, not boxed.
+  padding: 0,
   position: "relative",
   // Fill the grid cell exactly (the row is 1fr); minHeight:0 lets it shrink
   // instead of overflowing the page when the header height varies.
@@ -349,26 +493,6 @@ const sceneWrap = {
   userSelect: "none",
   WebkitUserSelect: "none",
 };
-
-const coordToggle = {
-  display: "inline-flex",
-  borderRadius: 6,
-  border: "1px solid rgba(255,255,255,0.1)",
-  overflow: "hidden",
-  marginLeft: "auto",
-};
-
-const coordBtn = (active) => ({
-  padding: "4px 10px",
-  fontSize: 10,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  fontFamily: "ui-monospace, monospace",
-  background: active ? "rgba(58,130,255,0.2)" : "transparent",
-  color: active ? "#9ec3ff" : "#7a8aab",
-  border: "none",
-  cursor: "pointer",
-});
 
 function deviceState({ position }) {
   // Called only for a SELECTED device; deselected rows show "hidden" upstream.
@@ -492,63 +616,176 @@ const mockPill = {
   fontFamily: "ui-monospace, monospace",
 };
 
-function DeviceItem({ device, state, position, selected, coordMode, onToggle, frame }) {
+function DeviceItem({ device, state, position, selected, onToggle, frame }) {
   const center = position?.area?.center;
-  const coordStr = center
-    ? coordMode === "relative"
-      ? (() => {
-          const p = gpsToLocal(center.latitude, center.longitude, frame);
-          return `x=${p.x.toFixed(2)}  z=${p.z.toFixed(2)}`;
-        })()
-      : `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`
-    : null;
+  const coordStr = (() => {
+    if (!center) return null;
+    const ll = `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`;
+    const p = gpsToLocal(center.latitude, center.longitude, frame);
+    return p ? `${ll} · x=${p.x.toFixed(1)} z=${p.z.toFixed(1)}` : ll;
+  })();
   return (
     <div
       style={deviceRow(selected, device.color)}
       onClick={() => onToggle(device.assetId)}
-      role="checkbox"
-      aria-checked={selected}
+      role="button"
+      aria-pressed={selected}
       tabIndex={0}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        readOnly
-        style={{ accentColor: device.color, cursor: "pointer" }}
-      />
-      <span style={dot(device.color, selected)} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <strong style={{ color: device.color, letterSpacing: "0.04em" }}>{device.label}</strong>
-          <span style={statusPill(state)}>{state}</span>
-          {device.source === "synthetic" && (
-            <span style={mockPill} title="Synthetic source - waypoint walker, not real hardware">
-              synthetic
-            </span>
-          )}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={dot(device.color, selected)} />
+        <strong
+          style={{
+            color: device.color,
+            letterSpacing: "0.04em",
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {device.label}
+        </strong>
+        {selected && <span style={statusPill(state)}>{state}</span>}
+        <button
+          type="button"
+          style={eyeBtn(selected, device.color)}
+          title={selected ? "Hide in the scene" : "Show in the scene"}
+          aria-label={selected ? "Hide" : "Show"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(device.assetId);
+          }}
+        >
+          <EyeIcon shown={selected} />
+        </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <span
           style={{ fontSize: 9, color: "#5a6987", fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em" }}
           title="Asset identity (private-asset profile): assetId · kind · source. No MSISDN/subscriber."
         >
           {device.assetId} · {device.kind} · {device.source}
         </span>
-        {selected && coordStr && (
-          <span
-            style={{
-              fontSize: 10,
-              color: "#7a8aab",
-              fontFamily: "ui-monospace, monospace",
-              // Never let an out-of-frame fix (very large x/z) push the row wider
-              // than the sidebar; wrap instead of overflowing horizontally.
-              overflowWrap: "anywhere",
-            }}
-          >
-            {coordStr}
-            {" ±"}
-            {position.area.radius?.toFixed(1)}m
+        {device.source === "synthetic" && (
+          <span style={mockPill} title="Synthetic source - waypoint walker, not real hardware">
+            synthetic
           </span>
         )}
+      </div>
+
+      {selected && coordStr && (
+        <div
+          style={{
+            marginTop: 4,
+            paddingTop: 8,
+            borderTop: "1px solid rgba(255,255,255,0.07)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+            fontSize: 10,
+            fontFamily: "ui-monospace, monospace",
+            overflowWrap: "anywhere",
+          }}
+        >
+          <span style={{ color: "#9aa9c4" }}>{coordStr}</span>
+          <span style={{ color: "#6b7a97" }}>±{position.area.radius?.toFixed(1)} m accuracy</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Crossfade the detail panel on selection change: hold the old content, fade it
+// out, swap, fade the new one in - so switching between two anchors of the same
+// kind is clearly animated, not an instant text swap. Same selection just
+// refreshes content (live telemetry) without replaying the animation.
+function PanelSwap({ swapKey, children }) {
+  const [shown, setShown] = useState(true);
+  const [shownChildren, setShownChildren] = useState(children);
+  const keyRef = useRef(swapKey);
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
+
+  // Keep the visible content fresh for the CURRENT selection (live telemetry)
+  // without animating. Declared first so it never runs after the key flips.
+  useEffect(() => {
+    if (swapKey === keyRef.current) setShownChildren(children);
+  }, [children, swapKey]);
+
+  // Animate ONLY on a real selection change. Deps are [swapKey] only, so an
+  // unrelated re-render (a stream tick during the fade) can no longer cancel the
+  // timeout that flips the panel back to visible - the bug that left the asset
+  // detail stuck invisible when switching from an anchor detail.
+  useEffect(() => {
+    if (swapKey === keyRef.current) return;
+    keyRef.current = swapKey;
+    setShown(false); // fade the old content out
+    const t = setTimeout(() => {
+      setShownChildren(childrenRef.current); // swap while invisible
+      setShown(true); // fade the new content in
+    }, 170);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swapKey]);
+  return (
+    <div
+      style={{
+        opacity: shown ? 1 : 0,
+        transition: "opacity 170ms ease",
+      }}
+    >
+      {shownChildren}
+    </div>
+  );
+}
+
+// Centered splash for the auth handshake (and auth errors), instead of a bare
+// line of text in the corner.
+function Splash({ error }) {
+  return (
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(180deg, #050816 0%, #0a1228 100%)",
+        color: "#e6edf7",
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      }}
+    >
+      <style>{`@keyframes spl-spin{to{transform:rotate(360deg)}}@keyframes spl-pulse{0%,100%{opacity:.45}50%{opacity:1}}`}</style>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+        {!error && (
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: "50%",
+              border: "3px solid rgba(58,130,255,0.18)",
+              borderTopColor: "#3a82ff",
+              animation: "spl-spin 0.9s linear infinite",
+            }}
+          />
+        )}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600 }}>
+            Asset Location
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 12,
+              color: error ? "#ff6b78" : "#7a8aab",
+              animation: error ? "none" : "spl-pulse 1.6s ease infinite",
+            }}
+          >
+            {error || "Authenticating…"}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -559,6 +796,12 @@ export function App() {
   const [authError, setAuthError] = useState(null);
   const [selection, setSelection] = useState(null);
   const [layout, setLayout] = useState(null);
+  const [recenterSignal, setRecenterSignal] = useState(0);
+  // Collapse the device rail to give the 3D world the full width. Starts closed
+  // on a narrow viewport so the scene is usable on small screens.
+  const [railOpen, setRailOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 900
+  );
   // Which technologies actually have at least one anchor in the loaded
   // layout. The header tech toggles only render for these - no point
   // exposing a 5G toggle when there are zero 5G anchors to show / hide.
@@ -569,9 +812,6 @@ export function App() {
     for (const a of anchors) present.add(a?.technology || "wifi");
     return present;
   })();
-  const [coordMode, setCoordMode] = useState(
-    () => localStorage.getItem(COORD_KEY) || "absolute"
-  );
   const [visibleTechs, setVisibleTechs] = useState(() => {
     try {
       const raw = localStorage.getItem(TECH_VIS_KEY);
@@ -596,15 +836,13 @@ export function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem(COORD_KEY, coordMode);
-  }, [coordMode]);
-
-  useEffect(() => {
     keycloak
       .init(initOptions)
       .then((authenticated) => {
+        // check-sso: authenticated silently if a session exists, otherwise send
+        // the user to the login page (only here, not on every refresh).
         if (authenticated) setToken(keycloak.token);
-        else setAuthError("Authentication failed");
+        else keycloak.login();
       })
       .catch(() => setAuthError("Keycloak init failed"));
   }, []);
@@ -671,17 +909,19 @@ export function App() {
     );
   }, [focusedDevice, focusDiag, layout]);
 
-  if (authError)
-    return <div style={{ ...shell, padding: 24, color: "#ff6b78" }}>{authError}</div>;
-  if (!token)
-    return <div style={{ ...shell, padding: 24, color: "#7a8aab" }}>Authenticating…</div>;
+  if (authError) return <Splash error={authError} />;
+  if (!token) return <Splash />;
 
+  // Every device that has a live position renders a marker; `selected` drives
+  // its scale so hiding / showing an asset animates out / in (a deselected but
+  // still-live device stays mounted at scale 0, ready to ease back).
   const scenePositions = devices
-    .filter((d) => isSelected(d.assetId))
     .map((d) => ({
       device: d,
       position: byAsset[d.assetId]?.position,
-    }));
+      selected: isSelected(d.assetId),
+    }))
+    .filter((e) => e.position);
   const anyMock = devices.some((d) => d.source === "synthetic");
 
   // Venue metadata, taken from the blueprint (never hardcoded): floor-plan
@@ -701,162 +941,170 @@ export function App() {
     <div
       style={{
         ...shell,
-        // Two columns only: sidebar + full-width scene. The detail panel is a
-        // floating overlay on the scene (see below), so selecting never resizes
-        // the canvas - no demand-mode resize jank, scene always uses full width.
-        gridTemplateColumns: "260px minmax(0, 1fr)",
+        // One column: the scene owns the full width and never resizes. Both the
+        // device rail (left) and the detail panel (right) are floating overlays
+        // on the scene, so collapsing the rail never reflows the canvas.
+        gridTemplateColumns: "minmax(0, 1fr)",
       }}
     >
       <header style={header}>
-        <div
-          style={dot(connected ? "#5dffb0" : "#7a8aab", connected)}
-          title={connected ? "Live position feed connected" : "Position feed disconnected - reconnecting"}
-        />
-        <h2 style={title}>Asset Location</h2>
-        <span style={subtitle}>· CAMARA Device Location · {connected ? "live" : "offline"}</span>
-        {activeStrategy && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 10,
-              color: "#9ec3ff",
-              fontFamily: "ui-monospace, monospace",
-              padding: "2px 8px",
-              borderRadius: 6,
-              border: "1px solid rgba(58,130,255,0.3)",
-              background: "rgba(58,130,255,0.08)",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-            title={`Engine fusion strategy in effect (private-profile vendor extension, id: ${activeStrategy}). Every fix in the feed is produced by this strategy.`}
-          >
-            <span style={{ opacity: 0.6 }}>fusion</span>
-            {STRATEGY_LABEL[activeStrategy] || activeStrategy}
-          </span>
-        )}
-        {venueName && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 11,
-              color: "#9aa9c4",
-              fontFamily: "ui-monospace, monospace",
-              padding: "2px 8px",
-              borderRadius: 6,
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
-            }}
-            title={geoStr ? `Location: ${geoStr}` : undefined}
-          >
-            <span style={{ opacity: 0.7 }}>📍</span>
-            <span style={{ color: "#cdd7ea" }}>{venueName}</span>
-            {roomLabel && <span style={{ opacity: 0.6 }}>· {roomLabel}</span>}
-            {roomDims && <span style={{ opacity: 0.5 }}>· {roomDims}</span>}
-          </span>
-        )}
-        {anyMock && (
-          <span
-            style={mockPill}
-            title="At least one registered asset is positioned by the synthetic-adapter (waypoint walker). Real deployments do not ship with it."
-          >
-            demo build
-          </span>
-        )}
-        {idleState === "standby" && (
-          <span style={standbyPill} title="Polling paused while idle. Any input resumes the feed.">
-            standby
-          </span>
-        )}
-        <AdapterHealthBadge adapters={adapters} />
-        <div style={{ ...coordToggle, marginLeft: "auto" }}>
+        {/* Zone 1 - brand: the app identity, given primacy (title over a muted
+            subtitle), with the live-feed dot. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={dot(connected ? "#5dffb0" : "#7a8aab", connected)}
+            title={connected ? "Live position feed connected" : "Position feed disconnected - reconnecting"}
+          />
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+            <h2 style={title}>Asset Location</h2>
+            <span style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "#65748f" }}>
+              CAMARA Device Location · {connected ? "live" : "offline"}
+            </span>
+          </div>
+        </div>
+
+        {/* Zone 2 - context: what the feed is doing right now, as secondary chips. */}
+        <div style={hDivider} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {activeStrategy && (
+            <span
+              style={{ ...metaChip, color: "#9ec3ff", border: "1px solid rgba(58,130,255,0.3)", background: "rgba(58,130,255,0.08)" }}
+              title={`Engine fusion strategy in effect (private-profile vendor extension, id: ${activeStrategy}). Every fix in the feed is produced by this strategy.`}
+            >
+              <span style={{ opacity: 0.55, textTransform: "uppercase", letterSpacing: "0.06em" }}>fusion</span>
+              {STRATEGY_LABEL[activeStrategy] || activeStrategy}
+            </span>
+          )}
+          {venueName && (
+            <span style={metaChip} title={geoStr ? `Location: ${geoStr}` : undefined}>
+              <span style={{ opacity: 0.7 }}>📍</span>
+              <span style={{ color: "#cdd7ea" }}>{venueName}</span>
+              {roomLabel && <span style={{ opacity: 0.6 }}>· {roomLabel}</span>}
+              {roomDims && <span style={{ opacity: 0.5 }}>· {roomDims}</span>}
+            </span>
+          )}
+          {anyMock && (
+            <span
+              style={mockPill}
+              title="At least one registered asset is positioned by the synthetic-adapter (waypoint walker). Real deployments do not ship with it."
+            >
+              demo build
+            </span>
+          )}
+          {idleState === "standby" && (
+            <span style={standbyPill} title="Polling paused while idle. Any input resumes the feed.">
+              standby
+            </span>
+          )}
+        </div>
+
+        {/* Zone 3 - controls: scene view controls + adapter health, right-aligned. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={hDivider} />
+          {techsWithAnchors.size > 0 && (
+            <div style={headerLayers}>
+              {TECH_KEYS.filter((t) => techsWithAnchors.has(t)).map((tech) => {
+                const active = visibleTechs.has(tech);
+                const c = TECH_COLOR[tech];
+                return (
+                  <button
+                    key={tech}
+                    onClick={() => toggleTech(tech)}
+                    title={`${active ? "Hide" : "Show"} ${TECH_LABEL[tech]} anchors`}
+                    style={headerTech(active, c)}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: active ? c : "transparent", border: `1px solid ${c}`, flexShrink: 0 }} />
+                    {TECH_LABEL[tech]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <button
-            style={coordBtn(coordMode === "absolute")}
-            onClick={() => setCoordMode("absolute")}
+            type="button"
+            style={headerBtn}
+            onClick={() => setRecenterSignal((n) => n + 1)}
+            title="Recenter the view"
           >
-            lat/lon
+            ⌖ recenter
           </button>
-          <button
-            style={coordBtn(coordMode === "relative")}
-            onClick={() => setCoordMode("relative")}
-          >
-            x/z (m)
-          </button>
+          <AdapterHealthBadge adapters={adapters} />
         </div>
       </header>
 
-      <aside style={sidebar}>
-        <h3 style={sidebarTitle}>Devices</h3>
-        {devicesLoading && <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>loading…</div>}
-        {devicesError && (
-          <div style={{ color: "#ff6b78", fontSize: 12, padding: 10 }}>
-            discovery failed: {devicesError}
-          </div>
-        )}
-        {!devicesLoading && devices.length === 0 && !devicesError && (
-          <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>no devices registered</div>
-        )}
-        {devices.map((d) => {
-          const selected = isSelected(d.assetId);
-          const entry = byAsset[d.assetId];
-          return (
-            <div key={d.assetId}>
-              <DeviceItem
-                device={d}
-                state={selected ? deviceState({ position: entry?.position }) : "hidden"}
-                position={entry?.position}
-                selected={selected}
-                coordMode={coordMode}
-                onToggle={toggle}
-                frame={frameFromLayout(layout)}
-              />
-            </div>
-          );
-        })}
-      </aside>
-
       <div style={sceneWrap}>
+        {/* Device rail: a floating overlay, slides in/out WITHOUT resizing the
+            canvas (so toggling never reflows / recenters the world). Collapse
+            control sits at its own top-right; a reopen tab shows when hidden. */}
+        <aside style={sidebarPanel(railOpen)}>
+          <div style={sidebarHead}>
+            <h3 style={{ ...sidebarTitle, margin: 0 }}>Devices</h3>
+            <button
+              type="button"
+              style={railToggle}
+              onClick={() => setRailOpen(false)}
+              title="Collapse the device rail"
+              aria-label="Collapse device rail"
+            >
+              ‹‹
+            </button>
+          </div>
+          {devicesLoading && <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>loading…</div>}
+          {devicesError && (
+            <div style={{ color: "#ff6b78", fontSize: 12, padding: 10 }}>
+              discovery failed: {devicesError}
+            </div>
+          )}
+          {!devicesLoading && devices.length === 0 && !devicesError && (
+            <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>no devices registered</div>
+          )}
+          {devices.map((d) => {
+            const selected = isSelected(d.assetId);
+            const entry = byAsset[d.assetId];
+            return (
+              <div key={d.assetId}>
+                <DeviceItem
+                  device={d}
+                  state={selected ? deviceState({ position: entry?.position }) : "hidden"}
+                  position={entry?.position}
+                  selected={selected}
+                  onToggle={toggle}
+                  frame={frameFromLayout(layout)}
+                />
+              </div>
+            );
+          })}
+        </aside>
+        <button
+          type="button"
+          style={railReopen(railOpen)}
+          onClick={() => setRailOpen(true)}
+          title="Show the device rail"
+          aria-label="Show device rail"
+        >
+          ›› devices
+        </button>
+
         <FloorPlanScene
           token={token}
           positions={scenePositions}
           visibleTechs={visibleTechs}
           relevantAnchorIds={relevance}
+          recenterSignal={recenterSignal}
           onSelectDevice={(d) => setSelection(d ? { kind: "device", device: d } : null)}
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
           onLayoutLoaded={setLayout}
         />
-        {techsWithAnchors.size > 0 && (
-          <div style={layersPanel}>
-            <span style={layersTitle}>layers</span>
-            {TECH_KEYS.filter((t) => techsWithAnchors.has(t)).map((tech) => {
-              const active = visibleTechs.has(tech);
-              const c = TECH_COLOR[tech];
-              return (
-                <button
-                  key={tech}
-                  onClick={() => toggleTech(tech)}
-                  title={`${active ? "Hide" : "Show"} ${TECH_LABEL[tech]} anchors`}
-                  style={layersRow(active, c)}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: active ? c : "transparent", border: `1px solid ${c}`, flexShrink: 0 }} />
-                  {TECH_LABEL[tech]}
-                </button>
-              );
-            })}
-          </div>
-        )}
         {/* Floating overlay on the scene - never resizes the canvas. */}
         <div
           style={{
             position: "absolute",
             top: 28,
-            right: 32,
-            width: 340,
-            maxHeight: "calc(100vh - 200px)",
-            overflowY: "auto",
+            right: "clamp(12px, 2vw, 32px)",
+            width: "min(340px, calc(100vw - 48px))",
+            // The panel itself scrolls (see DetailPanel `panel`); the overlay
+            // just positions + fades it, so the crossfade never touches scroll.
+            overflow: "visible",
             overflowX: "hidden",
             boxSizing: "border-box",
             zIndex: 70,
@@ -867,14 +1115,27 @@ export function App() {
           }}
         >
           {renderedSelection && (
-            <DetailPanel
-              selection={renderedSelection}
-              token={token}
-              coordMode={coordMode}
-              frame={frameFromLayout(layout)}
-              onClose={() => setSelection(null)}
-            />
+            <PanelSwap
+              swapKey={
+                renderedSelection.kind === "ap"
+                  ? `ap:${renderedSelection.ap?.id}`
+                  : `device:${renderedSelection.device?.assetId}`
+              }
+            >
+              <DetailPanel
+                selection={renderedSelection}
+                token={token}
+                frame={frameFromLayout(layout)}
+                onClose={() => setSelection(null)}
+              />
+            </PanelSwap>
           )}
+        </div>
+        <div style={navHint}>
+          <span>⟳ drag&nbsp;rotate</span>
+          <span>⇅ scroll&nbsp;zoom</span>
+          <span>✥ right-drag&nbsp;/&nbsp;ctrl&nbsp;pan</span>
+          <span>⇧ shift&nbsp;up/down</span>
         </div>
       </div>
       {idleState === "prompting" && (

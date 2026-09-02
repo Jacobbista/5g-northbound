@@ -27,7 +27,8 @@ export function useAdapterHealth(token, { paused = false } = {}) {
         const data = await resp.json();
         if (!cancelled) setAdapters(data.adapters || []);
       } catch {
-        if (!cancelled) setAdapters([]);
+        // Keep the last-known list on a transient failure - a single failed
+        // poll must not flip the header to "n/a" until the next success.
       } finally {
         if (!cancelled) timer = setTimeout(tick, POLL_MS);
       }

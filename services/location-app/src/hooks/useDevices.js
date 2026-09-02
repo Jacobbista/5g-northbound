@@ -23,15 +23,21 @@ export function useDevices(token) {
         const data = await resp.json();
         if (cancelled) return;
         setDevices(
-          (data.assets || []).map((a, i) => ({
-            assetId: a.asset_id,
-            positioningId: a.positioning_id,
-            kind: a.kind,
-            source: a.source,
-            org: a.org,
-            label: a.label || a.asset_id,
-            color: PALETTE[i % PALETTE.length],
-          }))
+          (data.assets || []).map((a, i) => {
+            // Asset schema v3: an asset binds one or more capabilities. The live
+            // stream keys on the primary capability's positioning id (the
+            // gateway sets the fused entry's device_id to it), so join on that.
+            const primary = (a.capabilities && a.capabilities[0]) || {};
+            return {
+              assetId: a.asset_id,
+              positioningId: a.positioning_id ?? primary.positioning_id,
+              kind: a.kind,
+              source: a.source ?? primary.source,
+              org: a.org,
+              label: a.label || a.asset_id,
+              color: PALETTE[i % PALETTE.length],
+            };
+          })
         );
         setError(null);
       } catch (err) {

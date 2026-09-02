@@ -65,6 +65,26 @@ describe("useDevices", () => {
     expect(result.current.devices).toEqual([]);
   });
 
+  it("derives positioningId + source from capabilities[] (asset schema v3)", async () => {
+    fetch.mockResolvedValue(
+      assetMap([
+        {
+          asset_id: "forklift-7",
+          kind: "forklift",
+          org: "x",
+          label: "Synthetic",
+          capabilities: [{ source: "synthetic", positioning_id: "synthetic-demo-01" }],
+        },
+      ])
+    );
+    const { result } = renderHook(() => useDevices("tok"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const d = result.current.devices[0];
+    // The live-stream join key comes from the primary capability, not a flat field.
+    expect(d.positioningId).toBe("synthetic-demo-01");
+    expect(d.source).toBe("synthetic");
+  });
+
   it("propagates source from the gateway response (drives the synthetic badge)", async () => {
     fetch.mockResolvedValue(
       assetMap([

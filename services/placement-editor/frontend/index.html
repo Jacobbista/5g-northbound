@@ -4,9 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Placement Editor</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      html, body { margin: 0; background: #050816; }
+      @keyframes app-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Pre-mount splash so a refresh shows a styled loading state, never a
+         blank white flash before React comes up. Replaced on mount. -->
+    <div id="root">
+      <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#050816 0%,#0a1228 100%);color:#e6edf7;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:18px">
+          <div style="width:42px;height:42px;border-radius:50%;border:3px solid rgba(58,130,255,0.18);border-top-color:#3a82ff;animation:app-spin 0.9s linear infinite"></div>
+          <div style="text-align:center">
+            <div style="font-size:13px;letter-spacing:0.18em;text-transform:uppercase;font-weight:600">Placement Editor</div>
+            <div style="margin-top:8px;font-size:12px;color:#7a8aab">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="/env-config.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>

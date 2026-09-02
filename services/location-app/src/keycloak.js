@@ -7,8 +7,15 @@ const keycloak = new Keycloak({
   clientId: KEYCLOAK_CLIENT_ID,
 });
 
+// `check-sso` validates an existing SSO session in a hidden iframe (see
+// public/silent-check-sso.html) instead of a full-page redirect, so a refresh
+// no longer flashes the login round-trip. When there is no session the app
+// calls keycloak.login() explicitly (see App.jsx). Falls back to a redirect if
+// the browser blocks the iframe's third-party cookie.
 export const initOptions = {
-  onLoad: "login-required",
+  onLoad: "check-sso",
+  silentCheckSsoRedirectUri:
+    typeof window !== "undefined" ? `${window.location.origin}/silent-check-sso.html` : undefined,
   pkceMethod: "S256",
 };
 
