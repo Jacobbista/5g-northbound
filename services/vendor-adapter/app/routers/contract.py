@@ -17,6 +17,8 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, HTTPException
 
+from ..schema import Schema
+
 router = APIRouter(tags=["contract"])
 
 # First existing path wins. The image bakes the file at /app/env.contract.yaml;
@@ -55,9 +57,15 @@ def contract() -> dict:
         "kind": raw.get("kind"),
         "external_origin": raw.get("external_origin"),
         "description": raw.get("description"),
+        "schema": "/contract/schema",
         "env": {
             "required": _sanitize(raw.get("required")),
             "recommended": _sanitize(raw.get("recommended")),
             "optional": _sanitize(raw.get("optional")),
         },
     }
+
+
+@router.get("/contract/schema")
+def schema_contract() -> dict:
+    return Schema.model_json_schema()

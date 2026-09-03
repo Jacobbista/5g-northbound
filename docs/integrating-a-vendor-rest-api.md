@@ -84,7 +84,15 @@ The two contracts an operator must get right (see step 5):
    # -> { "deviceId": "...", "deviceType": "beacon", "fixedLocation": {...}, "name": "...", ... }
    ```
 
-   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving. The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json) is a worked **reference** for this - not a config to ship as-is.
+   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving.
+
+   The dashboard reads three contracts, from two pods:
+
+   - vendor-adapter `GET /contract/schema` — form of the vendor document (paths, auth, `mapping`, `discover`, `diagnostics`).
+   - vendor-adapter `GET /discover?raw=1` — live vendor record to point paths at.
+   - gateway `GET /contracts/device-diagnostics.schema.json` — core mapping **targets** (`battery`, `last_seen`, `accuracy`, `moving`). Any other mapping key is `x_vendor`.
+
+   It then `PUT /schema` (preview) or writes the ConfigMap (production). The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json) remains a worked **reference**, not a config to ship as-is.
 
 4. **Persist the schema as a ConfigMap + rollout - this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
 

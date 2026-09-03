@@ -13,6 +13,8 @@ This is the generic path used for any vendor RTLS cloud whose own output is alre
 | Method · path                       | Returns                          | Notes                                                                 |
 |-------------------------------------|----------------------------------|-----------------------------------------------------------------------|
 | `GET  /health`                      | `{"status":"ok",…}`              | Reports `schema_loaded` + the loaded `vendor` name                    |
+| `GET  /contract`                    | env contract JSON                | Unauthenticated. Variable names, no values. Answers with no schema loaded |
+| `GET  /contract/schema`             | JSON Schema of `Schema`          | Unauthenticated. Shape of `PUT /schema` / the ConfigMap document. Not the loaded instance |
 | `GET  /schema`                      | schema JSON                      | `404` when no schema is loaded yet                                    |
 | `PUT  /schema`                      | `{"status":"ok","vendor":"…"}`   | Replace + persist the schema. Clears the in-process cache             |
 | `GET  /measurement/{device_id}`     | `Measurement`                    | Engine contract. `404` if no schema, vendor 404, or vendor unreachable |
