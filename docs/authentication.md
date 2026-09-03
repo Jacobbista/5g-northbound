@@ -12,8 +12,9 @@ token lives.
 The app runs the OIDC Authorization Code + PKCE flow itself, in the browser.
 `keycloak-js` redirects to Keycloak, receives the token, and holds it in
 JavaScript memory. The app then attaches it as a `Bearer` header on every REST
-call to the CAMARA gateway, and as a `?token=` query parameter when it opens the
-live positions WebSocket (browsers cannot set headers on a WS handshake).
+call to the CAMARA gateway, and in the `Sec-WebSocket-Protocol` header when it
+opens the live positions WebSocket (browsers cannot set an Authorization header
+on a WS handshake, and a bearer token must not go in the URL).
 
 - The frontend **has** the access token and its claims (roles, org, expiry).
 - Keycloak client: **public**, PKCE (`S256`), no client secret.
@@ -37,7 +38,7 @@ The split follows each app's job:
 |---|---|---|
 | Role | CAMARA API **consumer** | self-contained authoring **tool** |
 | Talks to | the CAMARA gateway (REST) + a live **WebSocket** | its own backend, same origin |
-| Needs the token in JS? | **Yes** - `Bearer` on fetch + `?token=` on the WS | No |
+| Needs the token in JS? | **Yes** - `Bearer` on fetch + `Sec-WebSocket-Protocol` on the WS | No |
 | Pattern | `keycloak-js` (token in JS) | `oauth2-proxy` (BFF, token in cookie) |
 | Keycloak client | public + PKCE | confidential |
 

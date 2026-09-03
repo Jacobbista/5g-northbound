@@ -121,7 +121,8 @@ The `Location` response gains optional fields (omitted when absent):
 
 Pull `POST /location-retrieval/v0.5/retrieve` stays the contract. A streaming
 channel is offered **alongside** it for moving assets (forklifts, tools):
-`ws[s]://<gateway>/positions/stream?token=<jwt>`. The gateway enriches the
+`ws[s]://<gateway>/positions/stream` (the JWT rides the `Sec-WebSocket-Protocol`
+header, not the URL). The gateway enriches the
 engine's broadcast into **asset-shaped events** (`assetId` + `source`/`kind`/
 `org` + lat/lon/accuracy/altitude), and drops any positioning id with no
 registered asset behind it - the same no-raw-id rule as the pull path.

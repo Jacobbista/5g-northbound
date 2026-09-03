@@ -215,13 +215,13 @@ Exposes the *measured* RF (from the calibration tool, persisted in the bindings)
 
 ### Live positions WebSocket
 
-`WS /positions/stream?token=<jwt>` streams the engine's broadcast to authenticated browser clients without bypassing the gateway. The browser opens:
+`WS /positions/stream` streams the engine's broadcast to authenticated clients without bypassing the gateway. The client opens:
 
 ```
-ws://<gateway>/positions/stream?token=<jwt>
+ws://<gateway>/positions/stream        with Sec-WebSocket-Protocol: bearer.jwt, <jwt>
 ```
 
-Token is supplied as a query parameter because browsers cannot set `Authorization` headers on a WebSocket handshake. The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload after **enriching it from the asset map** (the engine broadcasts `positioning_id`; the gateway maps each to its asset and drops unregistered or cross-tenant entries). Each payload is a JSON array, one object per asset with at least a fix:
+Browsers cannot set an `Authorization` header on a WebSocket handshake, so the JWT rides the `Sec-WebSocket-Protocol` header instead of the URL (a bearer token does not belong in a URL, RFC 6750 section 5.3): the client offers `["bearer.jwt", "<jwt>"]` and the gateway echoes `bearer.jwt` to accept. A non-browser client sets these subprotocols the same way (Python `websockets` `subprotocols=[...]`, Node `ws`, PowerShell `AddSubProtocol`). The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload after **enriching it from the asset map** (the engine broadcasts `positioning_id`; the gateway maps each to its asset and drops unregistered or cross-tenant entries). Each payload is a JSON array, one object per asset with at least a fix:
 
 ```json
 [

@@ -4,9 +4,12 @@ info:
   version: 0.1.0
   description: |
     A private-profile extension surface, NOT CAMARA Device Location. It exposes
-    vendor positioning fidelity (link quality, accuracy provenance, motion) that
-    the CAMARA Device Location payloads intentionally do not carry. The CAMARA
-    retrieve/verify APIs are unchanged; this is a separate, namespaced resource.
+    device diagnostics that the CAMARA Device Location payloads intentionally do
+    not carry. Core vocabulary fields (battery, last_seen, accuracy, moving)
+    surface at the top of the payload with standard names and units; any
+    vendor-specific extra surfaces under x_vendor, raw and non-authoritative.
+    See docs/profile-extensions.md#core-vocabulary. The CAMARA retrieve/verify
+    APIs are unchanged; this is a separate, namespaced resource.
 servers:
   - url: https://{gateway}
     variables:

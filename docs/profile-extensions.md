@@ -27,11 +27,55 @@ consumer that ignores the extension containers sees a conformant CAMARA payload.
 | Position stream `diagnostics` sub-object | stream field | `spec/private-profile/asyncapi-stream.yaml` | Stream-tier motion, carried from the routed source |
 | `GET/PUT /assets` | resource | `spec/private-profile/extensions.yaml`, `schema/asset.schema.json` | Asset Identity Map: an asset binds ≥1 positioning capability, fused into one fix |
 | `GET /assets/discoverable` | resource | `spec/private-profile/extensions.yaml` | Onboarding candidates not yet mapped to a capability |
-| `GET /assets/{assetId}/details` | resource | `spec/private-profile/extensions.yaml` | Engine fusion metadata (strategy, sources, accuracy), fused across capabilities |
+| `GET /assets/{assetId}/details` | resource | `spec/private-profile/extensions.yaml` | Fusion metadata (strategy, sources, accuracy), fused across capabilities by the gateway |
 | `GET /anchors/calibration` | resource | `spec/private-profile/extensions.yaml` | Per-anchor RF calibration (wifi) |
 
 See [Machine-readable contracts](contracts.md) for the fetch URLs (Pages CDN +
 pinned tag).
+
+## Core vocabulary
+
+Diagnostics fields are split into a normative core and a vendor bag. A consumer
+codes against the core once and reads the same names for every vendor.
+
+A field is core only when an external standard already names it, so the profile
+adopts that name and unit rather than inventing one, and a consumer of ours
+renders it. Anything a schema maps that is not core is routed into an `x_vendor`
+sub-object, raw and non-authoritative. A vendor field either maps to a core name
+or lands in `x_vendor` whole; there is no case in between. This mirrors the
+free-form `properties` bag the omlox RTLS standard uses for everything outside
+its own core.
+
+| Core field | Standard | Type / unit |
+|------------|----------|-------------|
+| `battery` | OMA LwM2M `3/0/9` | number, percent 0-100 |
+| `last_seen` | omlox `timestamp_generated` | number, epoch seconds |
+| `accuracy` | omlox `accuracy` | number, metres |
+| `moving` | derived | boolean |
+
+`moving` is derived from the omlox-standard `speed`: `moving = speed >
+MOVING_SPEED_THRESHOLD_MPS`, a normative constant of `0.15` m/s fixed once here,
+not a per-vendor knob. A vendor that exposes its own moving/stationary state maps
+it to `moving` directly instead. A vendor exposing neither omits `moving`; an
+absent core field stays core and never becomes an `x_vendor` entry.
+
+A field lives in `x_vendor` until it recurs across vendors and a consumer needs
+it, at which point promoting it into the core is a deliberate revision of this
+vocabulary. The core stays small and grows by evidence, the way CAMARA absorbs
+proven extensions. Identity (`name`) is not a diagnostics field: it flows on the
+onboarding path, where the vendor `name` binds to the asset and anchor `label`.
+
+```mermaid
+flowchart LR
+  V[("vendor per-device record<br/>battery, motion, temp, rssi, ...")] --> M["vendor-adapter mapper<br/>route each mapped key"]
+  M -->|"names a core field"| C["core<br/>(coerced to the standard unit)<br/>battery · last_seen · accuracy · moving"]
+  M -->|"any other key"| X["x_vendor<br/>(raw, non-authoritative)<br/>temperature · rssi · ..."]
+  C --> ST["stream diagnostics sub-object<br/>(fast-changing: moving)"]
+  C --> OD["GET /device-diagnostics/v0/{assetId}<br/>(on demand: battery, last_seen)"]
+  X --> OD
+  ST --> APP["location-app detail panel<br/>+ KELT dashboard"]
+  OD --> APP
+```
 
 ## Why this is compliant
 

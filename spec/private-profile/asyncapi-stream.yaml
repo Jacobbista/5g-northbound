@@ -17,15 +17,17 @@ servers:
     protocol: ws
     description: CAMARA gateway. Production is `wss` behind the ingress.
     security:
-      - $ref: '#/components/securitySchemes/bearerQuery'
+      - $ref: '#/components/securitySchemes/bearerSubprotocol'
 channels:
   positions:
     address: /positions/stream
     description: |
-      Live asset positions. The bearer token is passed as the `token` query
-      parameter because browsers cannot set an Authorization header on a
-      WebSocket handshake. Close codes: 4401 (auth failed), 1011 (upstream
-      engine unavailable), 1000 (clean shutdown).
+      Live asset positions. Browsers cannot set an Authorization header on a
+      WebSocket handshake, so the bearer token rides the Sec-WebSocket-Protocol
+      header: the client offers ["bearer.jwt", "<jwt>"] and the gateway echoes
+      "bearer.jwt" to accept. This keeps the token out of the URL (RFC 6750
+      section 5.3). Close codes: 4401 (auth failed), 1011 (upstream engine
+      unavailable), 1000 (clean shutdown).
     messages:
       positionBatch:
         $ref: '#/components/messages/positionBatch'
@@ -39,11 +41,15 @@ operations:
       - $ref: '#/channels/positions/messages/positionBatch'
 components:
   securitySchemes:
-    bearerQuery:
+    bearerSubprotocol:
       type: httpApiKey
-      in: query
-      name: token
-      description: A Keycloak-issued JWT (realm role `camara-location-read`).
+      in: header
+      name: Sec-WebSocket-Protocol
+      description: >-
+        A Keycloak-issued JWT (realm role `camara-location-read`), carried as the
+        second WebSocket subprotocol after the `bearer.jwt` marker:
+        `Sec-WebSocket-Protocol: bearer.jwt, <jwt>`. Not a URL query parameter
+        (RFC 6750 section 5.3).
   messages:
     positionBatch:
       name: positionBatch
@@ -125,11 +131,18 @@ components:
         diagnostics:
           type: object
           description: >-
-            Private-profile extension (not CAMARA). Stream-tier vendor fidelity
+            Private-profile extension (not CAMARA). Stream-tier diagnostics
             carried from the routed source; grouped under this named container,
-            never mixed into the CAMARA fields above. Present only when the
-            source reports it.
+            never mixed into the CAMARA fields above. Core vocabulary fields
+            (here, moving) use standard names; vendor-specific extras sit under
+            x_vendor, raw. See docs/profile-extensions.md#core-vocabulary.
+            Present only when the source reports it.
           properties:
-            motion:
-              type: string
-              example: STATIONARY
+            moving:
+              type: boolean
+              description: Derived from the omlox-standard speed, or a vendor state.
+              example: false
+            x_vendor:
+              type: object
+              description: Vendor fields with no normalized meaning, passed raw.
+              additionalProperties: true

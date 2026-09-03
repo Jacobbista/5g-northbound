@@ -22,6 +22,21 @@ evolve). `raw.githubusercontent.com` rate-limits anonymous requests, so behind a
 shared egress IP use Pages or an authenticated request. The
 `github.com/.../blob/...` link is an HTML page, never the file.
 
+**Fetch from a running gateway - self-describing at runtime:**
+
+```
+GET https://<gateway>/contracts                 # index of the baked contracts
+GET https://<gateway>/contracts/<name>          # one contract, e.g. device-diagnostics.schema.json
+```
+
+The gateway bakes the consumer-facing contracts into its image and serves them
+with no auth, so an integrator reads them from the gateway it already talks to,
+pinned to the deployed image, with no external fetch. This is authoritative for a
+live integration (it matches the running behaviour); Pages and raw are the public
+mirror for anyone without a running gateway. Each service also serves its env
+contract this way at `GET /contract`. See
+[self-describing contracts](superpowers/specs/2026-09-03-self-describing-contracts-design.md).
+
 ## The contracts
 
 Take each `<path>` and prefix it with a base above.

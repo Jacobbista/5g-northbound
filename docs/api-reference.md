@@ -32,7 +32,7 @@ Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on ev
 | `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) proxied from wifi-adapter. No BSSIDs. Empty when `WIFI_ADAPTER_URL` unset |
 | `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: engine `/adapters` health snapshot proxied for the demo. Empty list when the engine is unreachable |
 | `GET    /blueprint`                                    | blueprint JSON               | **Vendor extension**: read-only proxy of the engine's blueprint so the demo (MEC: gateway only) can render the venue. `404` when the engine has none |
-| `WS     /positions/stream?token=<jwt>`                 | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated browser clients. Token is supplied as a query parameter because browsers cannot set `Authorization` on a WebSocket handshake. Closes with code 4401 on auth failure, 1011 on upstream failure |
+| `WS     /positions/stream`                             | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated clients. The JWT rides the `Sec-WebSocket-Protocol` header (`bearer.jwt, <jwt>`), not the URL, since browsers cannot set `Authorization` on a WS handshake and a bearer token must not go in a URL. Closes with code 4401 on auth failure, 1011 on upstream failure |
 
 Error envelope (all non-health routes): `{ "status": <int>, "code": <string>, "message": <string> }`.
 
@@ -50,7 +50,7 @@ No auth (cluster-internal). Mounts:
 | `GET    /devices`                      | `{"devices":[…]}`  | Aggregates each live adapter's `GET /devices` (those advertising the `devices` capability), tagging each with `source` (adapter name) + `origin`. Best-effort: unreachable sources are skipped. Powers the gateway's `/assets/discoverable` |
 | `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, base_url, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
 | `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
-| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, altitude_m, accuracy_m, timestamp}` | Broadcast loop driven by `DEVICE_IDS` and `WEBSOCKET_INTERVAL_MS`. `device_id` is the `positioning_id`; the gateway enriches it to asset shape downstream |
+| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, altitude_m, accuracy_m, timestamp}` | Broadcast loop over the ids the engine learns from adapters advertising the `devices` capability (`DEVICE_IDS` is only a cold-start seed), paced by `WEBSOCKET_INTERVAL_MS`. `device_id` is the `positioning_id`; the gateway enriches it to asset shape downstream |
 
 ## Adapter contract (consumed by the engine)
 

@@ -13,7 +13,7 @@ flowchart LR
 
   subgraph public["Public images, this repository"]
     DEMO["location-app<br/>React + Three.js · CAMARA consumer"]
-    EDIT["placement-editor<br/>operator UI · owns layout.json"]
+    EDIT["placement-editor<br/>operator UI · authors the blueprint"]
     GW["camara-gateway<br/>FastAPI · JWT · device map"]
     ENG["positioning-engine<br/>thin fusion · WGS84"]
     WIFI["wifi-adapter<br/>RSSI multilateration"]
@@ -44,7 +44,7 @@ flowchart LR
   ENG -- "GET /measurement/{id}<br/>self-registered" --> MOCK
   ENG -- "GET /measurement/{id}<br/>self-registered" --> REST
   ENG -- "GET /measurement/{id}<br/>self-registered" --> VENDOR
-  REST -- "GET /v1/.../devices/{id}<br/>(per schema)" --> WITTRA
+  REST -- "GET /…/devices/{id}<br/>(per schema · current-fix)" --> WITTRA
   REST -. "demo only" .-> MWIT
   EDGE -- "POST /ingest/wifi-scan<br/>(5G data network)" --> WIFI
 
@@ -52,7 +52,7 @@ flowchart LR
   GW -. "blueprint proxy" .-> DEMO
 ```
 
-`location-app` is the **end-user / CAMARA consumer**. `placement-editor` is the **operator-facing** sibling that writes the layout JSON those consumers read; the two never talk to each other directly, only through the shared file artefact.
+`location-app` is the **end-user / CAMARA consumer**. `placement-editor` is the **operator-facing** sibling that authors the blueprint. It writes over HTTP to the positioning-engine, the blueprint authority (`PUT /blueprint`); consumers read the blueprint back from the engine through the gateway proxy. The editor and the demo never talk directly, and nothing mounts a shared file: the blueprint is network-distributed (see [blueprint vs bindings](blueprint-vs-bindings.md)).
 
 The tracked entities are **assets** (tools, tags, pallets, forklifts), each with a business `assetId` the gateway resolves to a `positioning_id` and a `source` via the Asset Identity Map. Each positioning *technology* is its own pod speaking a single HTTP contract; adapters self-register with the engine (`ADAPTER_URLS` is only a cold-start seed). The engine routes a request to the adapter whose `ADAPTER_NAME` equals the asset's `source`, falling back to the optional `DEVICE_MAP` pin and then to fan-out-and-fuse across all adapters. With no adapters configured the engine produces no measurements. Deploy at least one (the [`synthetic-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) reference is the simplest path for development).
 
@@ -65,27 +65,26 @@ sequenceDiagram
   participant GW as camara-gateway
   participant KC as Keycloak
   participant ENG as positioning-engine
-  participant A1 as wifi-adapter
-  participant A2 as synthetic-adapter
+  participant AD as adapters<br/>(wifi / vendor / synthetic)
 
   App->>GW: POST /location-retrieval/v0.5/retrieve<br/>{ device.assetId }
   GW->>KC: GET JWKS (cached)
   KC-->>GW: keys
-  GW->>GW: validate JWT + role<br/>resolve assetId → positioning_id + source<br/>(asset map; gate org claim vs asset.org)
-  GW->>ENG: GET /position/{positioning_id}?source=…
+  GW->>GW: validate JWT + role<br/>resolve assetId → asset.capabilities[]<br/>(gate org claim vs asset.org)
 
-  alt source matches a registered adapter
-    ENG->>A1: GET /measurement/{positioning_id}
-    A1-->>ENG: 200 Measurement (local)<br/>or 404
-  else no source / no match → fan out + fuse
-    ENG->>A2: GET /measurement/{positioning_id}
-    A2-->>ENG: 200 Measurement (local)<br/>or 404
+  loop each capability (source, positioning_id)
+    GW->>ENG: GET /position/{positioning_id}?source=…
+    ENG->>AD: GET /measurement/{positioning_id}<br/>(route by source; else fan out + fuse)
+    AD-->>ENG: 200 Measurement (local) or 404
+    ENG->>ENG: normalise wgs84→local · run FUSION_STRATEGY · local→WGS84 via gps_origin
+    ENG-->>GW: EnginePosition or 404
   end
 
-  ENG->>ENG: normalise wgs84→local if needed<br/>run FUSION_STRATEGY<br/>local→WGS84 via gps_origin
-  ENG-->>GW: EnginePosition (lat/lon, altitude, accuracy, strategy)
+  GW->>GW: fuse the capabilities' fixes (inverse-variance)<br/>skip any capability with no current fix
   GW-->>App: CAMARA Location { area.center, radius }
 ```
+
+The engine fuses across **adapters** for one positioning id (its routing fallback); the gateway fuses across an asset's **capabilities** (a multi-technology asset, e.g. WiFi + UWB). A single-capability asset is the same path with one capability and a pass-through fuse.
 
 ### Adapter routing: how the engine picks who to call
 
@@ -103,6 +102,36 @@ flowchart TD
   FUSE --> PROJ[project local → WGS84]
   PROJ --> OUT([EnginePosition northbound])
 ```
+
+### Live stream: the push path
+
+Retrieve is request/response. Moving assets also get a push channel: the engine
+broadcasts every fix, and the gateway forwards them to authenticated clients as
+asset-shaped events over a WebSocket, applying the same asset resolution, fusion
+and tenant scoping as the pull path.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as location-app
+  participant GW as camara-gateway
+  participant ENG as positioning-engine
+  participant AD as adapters
+
+  App->>GW: WS /positions/stream<br/>Sec-WebSocket-Protocol: bearer.jwt, {jwt}
+  GW->>GW: validate JWT + role, accept the handshake
+  GW->>ENG: WS /ws/positions (one shared upstream)
+  loop ~1 Hz broadcast
+    AD-->>ENG: measurements (polled per adapter)
+    ENG-->>GW: positioning_id-keyed fixes (JSON array)
+    GW->>GW: group by asset · fuse multi-capability<br/>drop unregistered ids + cross-tenant assets
+    GW-->>App: asset-shaped events<br/>{ assetId, source, lat/lon, accuracy, diagnostics }
+  end
+```
+
+The token rides the `Sec-WebSocket-Protocol` header, not the URL (see
+[data contracts](data-contracts.md)). The stream contract is published as
+[AsyncAPI](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/asyncapi-stream.yaml).
 
 ## Services
 

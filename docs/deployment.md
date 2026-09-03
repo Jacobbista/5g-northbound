@@ -139,7 +139,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
 | `FLOOR_PLAN_PATH`       | `/app/config/floor-plan.json`        | Mounted from `positioning-floor-plan` ConfigMap |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
-| `DEVICE_IDS`            | `uwb-tag-001`                        | Comma-separated devices broadcast on the WebSocket |
+| `DEVICE_IDS`            | `uwb-tag-001`                        | Cold-start seed for the WebSocket broadcast; normally unset, since the engine learns its target ids from adapters advertising the `devices` capability |
 | `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |

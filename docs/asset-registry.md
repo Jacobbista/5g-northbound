@@ -79,26 +79,30 @@ as your starting point:
 ## How an asset resolves to a position
 
 `asset_id` is what a CAMARA consumer asks for; everything after it is internal.
-The gateway resolves the asset to its capabilities and asks the engine for one
-fused fix across them.
+The gateway resolves the asset to its capabilities, asks the engine for each one,
+and fuses the results into a single fix.
 
 ```mermaid
 flowchart LR
-    A["CAMARA request<br/>device.assetId = robot-2"] --> G["camara-gateway<br/>look up asset → capabilities"]
-    G -->|"[(wifi, puppypi-01), (wittra, wittra-tag-07)]"| E["positioning-engine<br/>poll each capability, fuse"]
-    E -->|wifi: puppypi-01| AW["wifi-adapter"]
-    E -->|wittra: wittra-tag-07| AV["vendor-adapter"]
-    AW --> F["one fused CAMARA fix"]
-    AV --> F
+    A["CAMARA request<br/>device.assetId = robot-2"] --> G["camara-gateway<br/>look up capabilities · fuse the fixes"]
+    G -->|"GET /position/puppypi-01?source=wifi"| E["positioning-engine<br/>route one id by source"]
+    G -->|"GET /position/wittra-tag-07?source=wittra"| E
+    E --> AW["wifi-adapter"]
+    E --> AV["vendor-adapter"]
+    AW --> G
+    AV --> G
+    G --> F["one fused CAMARA fix"]
 ```
 
 Each capability's `positioning_id` joins to an adapter through the engine's
 [adapter registry / routing](adapter-registry.md); `source` names which modality
-answers. The engine polls every capability, weights each measurement by its
-accuracy, and reconciles them into one fix: a sharper source dominates, a source
-with no current fix drops out, so an asset stays located as its coverage
-changes. A single-capability asset is the same path with one target. Full chain
-down to a vendor REST API: [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+answers. The gateway calls the engine once per capability, weights each fix by its
+accuracy, and reconciles them into one: a sharper source dominates, a source with
+no current fix drops out, so an asset stays located as its coverage changes. The
+engine stays capability-agnostic (it routes a single `positioning_id`); the
+cross-capability fusion is the gateway's. A single-capability asset is the same
+path with one capability. Full chain down to a vendor REST API:
+[integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Adding a device
 
