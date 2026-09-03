@@ -58,3 +58,22 @@ def test_diagnostics_payload_matches_contract(respx_mock):
     body = {"assetId": "pkg-4471", "source": "wittra",
             "diagnostics": {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}}
     jsonschema.validate(body, schema)
+
+
+def test_core_vocabulary_and_x_vendor_validate():
+    import json, pathlib, jsonschema
+    schema = json.loads(pathlib.Path(__file__).resolve().parents[3]
+                        .joinpath("schema/device-diagnostics.schema.json").read_text())
+    body = {"assetId": "a", "source": "wittra",
+            "diagnostics": {"battery": 84, "last_seen": 1700000000, "moving": True,
+                            "x_vendor": {"temperature": 22.5}}}
+    jsonschema.validate(body, schema)
+
+
+def test_battery_out_of_range_rejected():
+    import json, pathlib, jsonschema, pytest
+    schema = json.loads(pathlib.Path(__file__).resolve().parents[3]
+                        .joinpath("schema/device-diagnostics.schema.json").read_text())
+    body = {"assetId": "a", "source": "wittra", "diagnostics": {"battery": 140}}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(body, schema)

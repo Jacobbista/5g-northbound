@@ -10,7 +10,17 @@
     "source": { "type": "string" },
     "diagnostics": {
       "type": "object",
+      "description": "Core vocabulary fields at the top; vendor-specific extras under x_vendor. See docs/profile-extensions.md.",
       "properties": {
+        "battery": { "type": "number", "minimum": 0, "maximum": 100, "description": "LwM2M 3/0/9, percent" },
+        "last_seen": { "type": "number", "description": "omlox timestamp_generated, epoch seconds" },
+        "accuracy": { "type": "number", "description": "omlox accuracy, metres" },
+        "moving": { "type": "boolean", "description": "derived from omlox speed" },
+        "x_vendor": {
+          "type": "object",
+          "description": "Vendor fields with no normalized meaning, passed through raw. Non-authoritative.",
+          "additionalProperties": true
+        },
         "motion": { "type": "string" },
         "accuracy_value": { "type": "number" },
         "accuracy_kind": { "type": "string" },
