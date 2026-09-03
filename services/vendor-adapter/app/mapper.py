@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from .schema import (
+    BoolTransform,
     Classify,
     ClassifyPredicate,
     ConstSpec,
@@ -13,6 +14,7 @@ from .schema import (
     Mapping,
     PathSpec,
 )
+from .vocabulary import MOVING_SPEED_THRESHOLD_MPS, is_core
 
 
 def get_path(obj: Any, dotted: str) -> Any:
@@ -51,6 +53,8 @@ def _apply_transform(value: Any, transform) -> Any:
             return transform.scale * float(value) + transform.offset
         except (TypeError, ValueError):
             return None
+    if isinstance(transform, BoolTransform):
+        return value in transform.truthy
     return value
 
 
@@ -207,22 +211,36 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
     return out
 
 
-def map_stream_diagnostics(block, payload: Any) -> dict[str, Any]:
-    """Map the schema's stream-tier diagnostics against a current-fix payload.
+def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
+    """Resolve each mapped field, then split by the core vocabulary: core names
+    at the top, everything else under `x_vendor`, raw. `moving` is derived from
+    the omlox-standard `speed` when the schema did not map `moving` directly.
     Omits any field that does not resolve, so a sparse record stays clean."""
-    out: dict[str, Any] = {}
-    for name, spec in block.stream.items():
+    core: dict[str, Any] = {}
+    extra: dict[str, Any] = {}
+    for name, spec in mapping.items():
         value = resolve_field(spec, payload)
-        if value is not None:
-            out[name] = value
+        if value is None:
+            continue
+        (core if is_core(name) else extra)[name] = value
+
+    # `speed` is not a core output field in v1; it only feeds `moving`.
+    speed = extra.pop("speed", None)
+    if "moving" not in core and speed is not None:
+        try:
+            core["moving"] = float(speed) > MOVING_SPEED_THRESHOLD_MPS
+        except (TypeError, ValueError):
+            pass
+
+    out = dict(core)
+    if extra:
+        out["x_vendor"] = extra
     return out
+
+
+def map_stream_diagnostics(block, payload: Any) -> dict[str, Any]:
+    return _route_diagnostics(block.stream, payload)
 
 
 def map_fetch_diagnostics(fetch, payload: Any) -> dict[str, Any]:
-    """Map one on-demand fetch's mapping against its fetched payload."""
-    out: dict[str, Any] = {}
-    for name, spec in fetch.mapping.items():
-        value = resolve_field(spec, payload)
-        if value is not None:
-            out[name] = value
-    return out
+    return _route_diagnostics(fetch.mapping, payload)

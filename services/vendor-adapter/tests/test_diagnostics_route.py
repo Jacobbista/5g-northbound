@@ -43,7 +43,9 @@ async def test_diagnostics_route_maps_on_demand(wittra_schema_dict, monkeypatch)
     assert r.status_code == 200
     body = r.json()
     assert body["device_id"] == "D001"
-    assert body["diagnostics"] == {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}
+    assert body["diagnostics"] == {
+        "x_vendor": {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}
+    }
 
 
 @pytest.mark.asyncio

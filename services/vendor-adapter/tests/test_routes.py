@@ -53,6 +53,27 @@ async def test_put_schema_validates_and_persists(
 
 
 @pytest.mark.asyncio
+async def test_put_schema_reports_x_vendor_keys(
+    client, wittra_schema_dict, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        "app.routers.schema.get_settings",
+        lambda: type("S", (), {"schema_file": str(tmp_path / "schema.json")})(),
+    )
+    d = dict(wittra_schema_dict)
+    d["diagnostics"] = {
+        "stream": {
+            "battery": {"path": "latest.data.battery.percentage"},
+            "temperature": {"path": "latest.data.temperature"},
+        }
+    }
+    r = await client.put("/schema", json=d)
+    assert r.status_code == 200
+    assert "temperature" in r.json()["x_vendor_keys"]
+    assert "battery" not in r.json()["x_vendor_keys"]
+
+
+@pytest.mark.asyncio
 async def test_put_schema_applies_live_even_when_readonly_mount(
     client, wittra_schema_dict, monkeypatch, tmp_path
 ):
@@ -179,4 +200,4 @@ async def test_measurement_carries_stream_diagnostics(
 
     r = await client.get("/measurement/D001")
     assert r.status_code == 200
-    assert r.json()["diagnostics"] == {"motion": "STATIONARY"}
+    assert r.json()["diagnostics"] == {"x_vendor": {"motion": "STATIONARY"}}

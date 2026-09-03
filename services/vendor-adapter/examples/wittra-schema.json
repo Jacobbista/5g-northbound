@@ -107,6 +107,8 @@
           "project_id": { "env": "WITTRA_PROJECT_ID" }
         },
         "mapping": {
+          "battery": { "path": "latest.data.battery.percentage" },
+          "last_seen": { "path": "latest.data.location.timestamp", "format": "iso8601" },
           "motion": { "path": "latest.data.location.value.motion" },
           "accuracy_value": { "path": "latest.data.location.value.accuracy" },
           "accuracy_kind": { "const": "vendor-radius" }

@@ -117,7 +117,7 @@ def test_map_stream_diagnostics_reads_current_record():
         {"stream": {"motion": {"path": "latest.data.location.value.motion"}}}
     )
     payload = {"latest": {"data": {"location": {"value": {"motion": "STATIONARY"}}}}}
-    assert map_stream_diagnostics(block, payload) == {"motion": "STATIONARY"}
+    assert map_stream_diagnostics(block, payload) == {"x_vendor": {"motion": "STATIONARY"}}
 
 
 def test_map_stream_diagnostics_skips_absent():
@@ -135,4 +135,6 @@ def test_map_fetch_diagnostics_maps_mapping():
         "mapping": {"rssi": {"path": "uwb.rssi"}, "kind": {"const": "vendor-radius"}},
     })
     payload = {"uwb": {"rssi": [-93, -87]}}
-    assert map_fetch_diagnostics(fetch, payload) == {"rssi": [-93, -87], "kind": "vendor-radius"}
+    assert map_fetch_diagnostics(fetch, payload) == {
+        "x_vendor": {"rssi": [-93, -87], "kind": "vendor-radius"}
+    }

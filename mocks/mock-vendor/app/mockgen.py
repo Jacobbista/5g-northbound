@@ -150,6 +150,14 @@ def build_diagnostics(mapping: dict) -> Any:
         return {}
     root = _root_for(specs[0][1]["path"])
     for _name, spec in specs:
-        value = [-93, -87] if "rssi" in spec["path"] else 1
-        set_path(root, spec["path"], value)
+        path = spec["path"]
+        if "rssi" in path:
+            value: Any = [-93, -87]
+        elif "battery" in path:
+            value = 84
+        elif "timestamp" in path:
+            value = "2026-09-03T12:00:00Z"
+        else:
+            value = 1
+        set_path(root, path, value)
     return root

@@ -64,7 +64,18 @@ class LinearTransform(BaseModel):
     offset: float = 0.0
 
 
-Transform = Annotated[Union[LinearTransform], Field(discriminator="type")]
+class BoolTransform(BaseModel):
+    """Coerce a vendor value to a boolean: True when it equals one of `truthy`.
+    Lets a vendor's moving/stationary state map onto the core `moving` field."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["bool"]
+    truthy: list[Any] = Field(default_factory=list)
+
+
+Transform = Annotated[
+    Union[LinearTransform, BoolTransform], Field(discriminator="type")
+]
 
 
 class ConstSpec(BaseModel):

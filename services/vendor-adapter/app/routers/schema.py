@@ -13,10 +13,23 @@ from pydantic import ValidationError
 from ..config import get_settings
 from ..schema import Schema
 from ..store import save_schema
+from ..vocabulary import is_core
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/schema", tags=["schema"])
+
+
+def _x_vendor_keys(schema: Schema) -> list[str]:
+    """Diagnostics mapping keys that route to `x_vendor` (not a core field, and
+    not the derivation-only `speed`). A typo of a core name shows up here."""
+    diag = schema.diagnostics
+    if diag is None:
+        return []
+    keys: set[str] = {k for k in diag.stream if not is_core(k) and k != "speed"}
+    for fetch in diag.on_demand:
+        keys |= {k for k in fetch.mapping if not is_core(k) and k != "speed"}
+    return sorted(keys)
 
 
 @router.get("")
@@ -40,7 +53,12 @@ async def put_schema(payload: dict, request: Request):
     request.app.state.store.cache_clear()
     persisted = save_schema(get_settings().schema_file, schema)
     log.info("schema replaced; vendor=%s persisted=%s", schema.vendor, persisted)
-    resp = {"status": "ok", "vendor": schema.vendor, "persisted": persisted}
+    resp = {
+        "status": "ok",
+        "vendor": schema.vendor,
+        "persisted": persisted,
+        "x_vendor_keys": _x_vendor_keys(schema),
+    }
     if not persisted:
         resp["warning"] = (
             "schema applied live but NOT persisted: its volume is read-only "
