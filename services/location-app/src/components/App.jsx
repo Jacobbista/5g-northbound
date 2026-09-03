@@ -159,12 +159,12 @@ const header = {
   borderBottom: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(10,18,40,0.6)",
   backdropFilter: "blur(8px)",
-  // The header is a grid sibling of the 3D scene (and the fixed z40/z50
-  // panels). Without a z-index the later-painted scene covers the lower rows
-  // of the adapter dropdown that hangs below the header. Lift the whole header
-  // stacking context above scene + panels so the dropdown always renders on top.
+  // The header is a grid sibling of the 3D scene and the detail-panel overlay.
+  // Its stacking context must sit above that overlay (z70) so the adapter-health
+  // dropdown, which hangs down into the same top-right region, renders over the
+  // panel instead of behind it.
   position: "relative",
-  zIndex: 60,
+  zIndex: 80,
 };
 
 const railToggle = {
@@ -371,6 +371,7 @@ const statusPill = (state) => {
 const adapterBadge = (state) => {
   const colors = {
     ok:       { bg: "rgba(93,255,176,0.10)", fg: "#5dffb0", border: "#5dffb0" },
+    warn:     { bg: "rgba(255,179,71,0.12)", fg: "#ffb347", border: "#ffb347" },
     degraded: { bg: "rgba(255,107,120,0.12)", fg: "#ff6b78", border: "#ff6b78" },
     unknown:  { bg: "rgba(122,138,171,0.10)", fg: "#7a8aab", border: "#7a8aab" },
   };
@@ -418,24 +419,47 @@ const adapterRow = {
 // naming each adapter + its state, so "1/3 degraded" says which and why.
 function AdapterHealthBadge({ adapters }) {
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  // A glance-and-dismiss popover: an outside click or Escape closes it, not only
+  // a second click of the badge.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   if (!adapters || adapters.length === 0) {
     return <span style={adapterBadge("unknown")}>adapters n/a</span>;
   }
-  const notLive = adapters.filter((a) => (a.state ? a.state !== "live" : a.in_cooldown));
-  const ok = notLive.length === 0;
+  // Worst severity drives the badge: any sustained outage is red, a fresh miss
+  // is amber, otherwise green. Amber keeps a transient blip from looking grave.
+  const errors = adapters.filter((a) => a.severity === "error");
+  const warns = adapters.filter((a) => a.severity === "warn");
+  const notLive = errors.length + warns.length;
+  const variant = errors.length ? "degraded" : warns.length ? "warn" : "ok";
+  const ok = notLive === 0;
   return (
     // zIndex when open lifts the badge's whole subtree above the z40/z50
     // panels; otherwise the absolutely-positioned dropdown renders behind them.
-    <span style={{ position: "relative", display: "inline-flex", zIndex: open ? 80 : undefined }}>
+    <span ref={wrapRef} style={{ position: "relative", display: "inline-flex", zIndex: open ? 80 : undefined }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{ ...adapterBadge(ok ? "ok" : "degraded"), cursor: "pointer" }}
+        style={{ ...adapterBadge(variant), cursor: "pointer" }}
         title="Per-adapter detail"
       >
         {ok
           ? `${adapters.length} adapter${adapters.length === 1 ? "" : "s"} ok`
-          : `${notLive.length}/${adapters.length} degraded`}
+          : `${notLive}/${adapters.length} degraded`}
         <span style={{ marginLeft: 5, opacity: 0.65 }}>{open ? "▴" : "▾"}</span>
       </button>
       {open && (
@@ -443,7 +467,8 @@ function AdapterHealthBadge({ adapters }) {
           {adapters.map((a) => {
             const live = a.state ? a.state === "live" : !a.in_cooldown;
             const state = a.state || (a.in_cooldown ? "unreachable" : "live");
-            const c = live ? "#5dffb0" : "#ff6b78";
+            const sev = a.severity || (live ? "ok" : "error");
+            const c = sev === "ok" ? "#5dffb0" : sev === "warn" ? "#ffb347" : "#ff6b78";
             return (
               <div key={a.name} style={adapterRow}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />
@@ -616,8 +641,12 @@ const mockPill = {
   fontFamily: "ui-monospace, monospace",
 };
 
-function DeviceItem({ device, state, position, selected, onToggle, frame }) {
+function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggleShown, frame }) {
   const center = position?.area?.center;
+  // Liveness is intrinsic to the asset, not to whether it is shown: the pill
+  // reads live/offline from the stream regardless of the eye toggle.
+  const canShow = Boolean(position);
+  const state = deviceState({ position });
   const coordStr = (() => {
     if (!center) return null;
     const ll = `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`;
@@ -626,14 +655,18 @@ function DeviceItem({ device, state, position, selected, onToggle, frame }) {
   })();
   return (
     <div
-      style={deviceRow(selected, device.color)}
-      onClick={() => onToggle(device.assetId)}
+      // The card opens the detail; the eye toggles scene visibility. A live
+      // asset the user has hidden dims; an offline asset stays full (its eye is
+      // the disabled part, since there is no marker to show).
+      style={{ ...deviceRow(detailOpen, device.color), opacity: canShow && !shown ? 0.55 : 1 }}
+      onClick={() => onOpenDetail(device)}
       role="button"
-      aria-pressed={selected}
+      aria-pressed={detailOpen}
       tabIndex={0}
+      title="Open details"
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={dot(device.color, selected)} />
+        <span style={dot(device.color, shown && canShow)} />
         <strong
           style={{
             color: device.color,
@@ -647,18 +680,23 @@ function DeviceItem({ device, state, position, selected, onToggle, frame }) {
         >
           {device.label}
         </strong>
-        {selected && <span style={statusPill(state)}>{state}</span>}
+        <span style={statusPill(state)}>{state}</span>
         <button
           type="button"
-          style={eyeBtn(selected, device.color)}
-          title={selected ? "Hide in the scene" : "Show in the scene"}
-          aria-label={selected ? "Hide" : "Show"}
+          style={{
+            ...eyeBtn(shown && canShow, device.color),
+            opacity: canShow ? 1 : 0.3,
+            cursor: canShow ? "pointer" : "not-allowed",
+          }}
+          title={!canShow ? "No live fix to show" : shown ? "Hide in the scene" : "Show in the scene"}
+          aria-label={shown ? "Hide" : "Show"}
+          disabled={!canShow}
           onClick={(e) => {
             e.stopPropagation();
-            onToggle(device.assetId);
+            if (canShow) onToggleShown(device.assetId);
           }}
         >
-          <EyeIcon shown={selected} />
+          <EyeIcon shown={shown && canShow} />
         </button>
       </div>
 
@@ -676,7 +714,7 @@ function DeviceItem({ device, state, position, selected, onToggle, frame }) {
         )}
       </div>
 
-      {selected && coordStr && (
+      {coordStr && (
         <div
           style={{
             marginTop: 4,
@@ -836,15 +874,31 @@ export function App() {
   };
 
   useEffect(() => {
+    let interval;
+    // Renew the access token before it expires. The token captured at init goes
+    // stale after its lifetime (~5 min), which 401s every API call and the WS
+    // stream. updateToken refreshes only when near expiry. setToken re-runs the
+    // token-dependent fetches and reconnects the stream with the fresh token.
+    const renew = () =>
+      keycloak
+        .updateToken(60)
+        .then((refreshed) => {
+          if (refreshed) setToken(keycloak.token);
+        })
+        .catch(() => keycloak.login());
     keycloak
       .init(initOptions)
       .then((authenticated) => {
         // check-sso: authenticated silently if a session exists, otherwise send
         // the user to the login page (only here, not on every refresh).
-        if (authenticated) setToken(keycloak.token);
-        else keycloak.login();
+        if (authenticated) {
+          setToken(keycloak.token);
+          keycloak.onTokenExpired = renew;
+          interval = setInterval(renew, 30000);
+        } else keycloak.login();
       })
       .catch(() => setAuthError("Keycloak init failed"));
+    return () => clearInterval(interval);
   }, []);
 
   const { state: idleState, promptRemainingMs, acknowledge } = useIdlePrompt();
@@ -870,6 +924,17 @@ export function App() {
     }
     return out;
   }, [devices, byDeviceId]);
+
+  // Remember the last position each asset reported, so an asset that goes
+  // offline can still show its last known fix in the detail panel (the stream
+  // stops carrying it, but a client-side memory does not). Keeps the most
+  // recent non-null position per asset for the session.
+  const lastFixRef = useRef({});
+  useEffect(() => {
+    for (const [assetId, entry] of Object.entries(byAsset)) {
+      if (entry.position) lastFixRef.current[assetId] = entry.position;
+    }
+  }, [byAsset]);
 
   // The engine's active fusion strategy, surfaced from the live feed itself
   // (every fix carries it as a private-profile vendor extension). Read from the
@@ -1059,16 +1124,18 @@ export function App() {
             <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>no devices registered</div>
           )}
           {devices.map((d) => {
-            const selected = isSelected(d.assetId);
             const entry = byAsset[d.assetId];
+            const detailOpen =
+              selection?.kind === "device" && selection.device?.assetId === d.assetId;
             return (
               <div key={d.assetId}>
                 <DeviceItem
                   device={d}
-                  state={selected ? deviceState({ position: entry?.position }) : "hidden"}
                   position={entry?.position}
-                  selected={selected}
-                  onToggle={toggle}
+                  shown={isSelected(d.assetId)}
+                  detailOpen={detailOpen}
+                  onOpenDetail={(dev) => setSelection({ kind: "device", device: dev })}
+                  onToggleShown={toggle}
                   frame={frameFromLayout(layout)}
                 />
               </div>
@@ -1126,6 +1193,11 @@ export function App() {
                 selection={renderedSelection}
                 token={token}
                 frame={frameFromLayout(layout)}
+                lastFix={
+                  renderedSelection.kind === "device"
+                    ? lastFixRef.current[renderedSelection.device?.assetId]
+                    : null
+                }
                 onClose={() => setSelection(null)}
               />
             </PanelSwap>

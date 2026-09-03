@@ -16,6 +16,15 @@ export function useDeviceDetails(token, assetId, { paused = false } = {}) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Drop the previous asset's details the instant the selection changes, so
+  // switching panels shows a loading state, never the old asset's numbers for a
+  // frame while the new fetch is in flight.
+  useEffect(() => {
+    setDetails(null);
+    setError(null);
+    if (assetId) setLoading(true);
+  }, [assetId]);
+
   useEffect(() => {
     if (!token || !assetId) {
       setDetails(null);

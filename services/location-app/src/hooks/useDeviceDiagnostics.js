@@ -9,6 +9,13 @@ export function useDeviceDiagnostics(token, assetId) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Clear the previous asset's diagnostics on selection change so a panel switch
+  // never shows the old asset's battery / x_vendor for a frame.
+  useEffect(() => {
+    setDiagnostics(null);
+    setError(null);
+  }, [assetId]);
+
   useEffect(() => {
     if (!token || !assetId) {
       setDiagnostics(null);

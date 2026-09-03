@@ -19,23 +19,30 @@ vi.mock("../../hooks/useDeviceDetails", () => ({
 
 vi.mock("../../hooks/useDeviceDiagnostics", () => ({
   useDeviceDiagnostics: () => ({
-    diagnostics: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
+    diagnostics: {
+      battery: 84,
+      last_seen: 1700000000,
+      x_vendor: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
+    },
     loading: false, error: null,
   }),
 }));
 
 const apSelection = (ap) => ({ kind: "ap", ap });
 
-describe("DetailPanel · device signal quality (P2)", () => {
-  it("renders the on-demand signal-quality section", () => {
+describe("DetailPanel · device diagnostics vocabulary", () => {
+  it("renders core fields and collapses x_vendor", () => {
     render(
       <DetailPanel
         selection={{ kind: "device", device: { assetId: "pkg-1", label: "pkg-1", color: "#5dffb0", source: "wittra" } }}
         token="t" onClose={() => {}} frame={null}
       />
     );
-    expect(screen.getByText("signal quality")).toBeInTheDocument();
-    expect(screen.getByText(/vendor-radius/)).toBeInTheDocument();
+    expect(screen.getByText("diagnostics")).toBeInTheDocument();
+    // Core field, standard name + unit.
+    expect(screen.getByText("84%")).toBeInTheDocument();
+    // Vendor-specific extras sit under a collapsed container, raw.
+    expect(screen.getByText("vendor-specific")).toBeInTheDocument();
     expect(screen.getByText("MOVING")).toBeInTheDocument();
     // lat/lon always shown; no coordinate toggle
     expect(screen.getByText("lat / lon")).toBeInTheDocument();

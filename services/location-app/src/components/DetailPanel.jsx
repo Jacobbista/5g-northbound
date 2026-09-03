@@ -1,7 +1,6 @@
 import { useDeviceDetails } from "../hooks/useDeviceDetails";
 import { useAnchorCalibration } from "../hooks/useAnchorCalibration";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
-import { shortLabel } from "../lib/label";
 
 const M_PER_DEG = 111320;
 
@@ -153,8 +152,11 @@ function fmtTime(iso) {
   return d.toLocaleTimeString();
 }
 
-function DevicePanel({ token, device, onClose, frame }) {
+function DevicePanel({ token, device, onClose, frame, lastFix }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
+  // Diagnostics come from a per-device vendor GET, independent of a current
+  // position fix: an offline asset still reports battery / last_seen. Fetch
+  // regardless of liveness.
   const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId);
   const t = details?.telemetry;
   const accent = device.color;
@@ -181,18 +183,59 @@ function DevicePanel({ token, device, onClose, frame }) {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
           <StatusPill live={Boolean(t)} />
-          {kind && <span style={chip(INK.secondary)}>{kind}</span>}
-          {source && <span style={chip(TECH_COLOR[source] || INK.secondary)}>{source}</span>}
-          {org && <span style={chip(INK.muted)}>{org}</span>}
         </div>
       </div>
+
+      {/* Identity as aligned label:value rows, the same grid as position/fusion,
+          so class (what it is), source (who locates it) and tenant (who owns it)
+          read as distinct facts. Shown whether or not there is a current fix. */}
+      <div style={sectionTitle}>identity</div>
+      {kind && (
+        <div style={statRow}><span style={sLabel}>class</span><span style={sVal}>{kind}</span></div>
+      )}
+      {source && (
+        <div style={statRow}>
+          <span style={sLabel}>source</span>
+          <span><span style={chip(TECH_COLOR[source] || INK.secondary)}>{source}</span></span>
+        </div>
+      )}
+      {org && (
+        <div style={statRow}><span style={sLabel}>tenant</span><span style={sVal}>{org}</span></div>
+      )}
 
       {loading && <div style={{ color: INK.muted, padding: "16px" }}>loading…</div>}
       {error && <div style={{ color: STATUS.error, padding: "16px" }}>error: {error}</div>}
       {!loading && !t && !error && (
-        <div style={{ color: INK.muted, padding: "20px 16px", fontSize: 11 }}>
-          No current fix. The asset is registered but no positioning source is reporting it.
-        </div>
+        <>
+          <div style={{ color: INK.muted, padding: "20px 16px 8px", fontSize: 11 }}>
+            No current fix. The asset is registered but no positioning source is reporting it.
+          </div>
+          {lastFix?.area?.center && (
+            <>
+              <div style={sectionTitle}>last known fix</div>
+              <div style={statRow}>
+                <span style={sLabel}>seen</span>
+                <span style={sVal}>{fmtTime(lastFix.observedAt || lastFix.lastLocationTime)}</span>
+              </div>
+              <div style={statRow}>
+                <span style={sLabel}>lat / lon</span>
+                <span style={sVal}>
+                  {lastFix.area.center.latitude.toFixed(6)}, {lastFix.area.center.longitude.toFixed(6)}
+                </span>
+              </div>
+              {(() => {
+                const c = lastFix.area.center;
+                const p = gpsToRoomLocal(c.latitude, c.longitude, frame);
+                return p ? (
+                  <div style={statRow}>
+                    <span style={sLabel}>room x / z</span>
+                    <span style={sVal}>{p.x.toFixed(1)}, {p.z.toFixed(1)} m</span>
+                  </div>
+                ) : null;
+              })()}
+            </>
+          )}
+        </>
       )}
 
       {t && (
@@ -240,7 +283,21 @@ function DevicePanel({ token, device, onClose, frame }) {
 
           {diag && Object.keys(diag).length > 0 && (
             <>
-              <div style={sectionTitle}>signal quality</div>
+              <div style={sectionTitle}>diagnostics</div>
+              {/* Core vocabulary: standard names, same for every vendor. */}
+              {diag.battery != null && (
+                <div style={statRow}><span style={sLabel}>battery</span><span style={sVal}>{Math.round(diag.battery)}%</span></div>
+              )}
+              {diag.moving != null && (
+                <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.moving ? "moving" : "stationary"}</span></div>
+              )}
+              {diag.last_seen != null && (
+                <div style={statRow}><span style={sLabel}>last seen</span><span style={sVal}>{new Date(diag.last_seen * 1000).toLocaleTimeString()}</span></div>
+              )}
+              {diag.accuracy != null && (
+                <div style={statRow}><span style={sLabel}>accuracy</span><span style={sVal}>±{Number(diag.accuracy).toFixed(2)} m</span></div>
+              )}
+              {/* Legacy flat fields, in case a source has not migrated yet. */}
               {diag.motion != null && (
                 <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.motion}</span></div>
               )}
@@ -250,14 +307,17 @@ function DevicePanel({ token, device, onClose, frame }) {
                   <span style={sVal}>±{Number(diag.accuracy_value).toFixed(2)} m{diag.accuracy_kind ? ` · ${diag.accuracy_kind}` : ""}</span>
                 </div>
               )}
-              {Array.isArray(diag.rssi) && diag.rssi.length > 0 && (
-                <div style={statRow}><span style={sLabel}>rssi</span><span style={sVal}>{diag.rssi.join(", ")} dBm</span></div>
-              )}
-              {Array.isArray(diag.ping_pongs) && diag.ping_pongs.length > 0 && (
-                <div style={statRow}><span style={sLabel}>ping-pongs</span><span style={sVal}>{diag.ping_pongs.join(", ")}</span></div>
-              )}
-              {Array.isArray(diag.neighbors) && diag.neighbors.length > 0 && (
-                <div style={statRow}><span style={sLabel}>neighbors</span><span style={sVal}>{diag.neighbors.map((n) => shortLabel(n)).join(", ")}</span></div>
+              {/* Everything the profile does not standardize: raw, collapsed. */}
+              {diag.x_vendor && Object.keys(diag.x_vendor).length > 0 && (
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ ...sLabel, cursor: "pointer" }}>vendor-specific</summary>
+                  {Object.entries(diag.x_vendor).map(([k, v]) => (
+                    <div key={k} style={statRow}>
+                      <span style={sLabel}>{k}</span>
+                      <span style={sVal}>{Array.isArray(v) ? v.join(", ") : String(v)}</span>
+                    </div>
+                  ))}
+                </details>
               )}
             </>
           )}
@@ -292,23 +352,28 @@ function ApPanel({ ap, onClose, token, frame }) {
           </div>
           <button style={closeBtn} onClick={onClose} aria-label="close">✕</button>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
-          <span style={chip(accent)}>{tech}</span>
-          {rf && <span style={chip(rf.calibrated ? STATUS.ok : INK.muted)}>{rf.calibrated ? "calibrated" : "default rf"}</span>}
-        </div>
       </div>
 
-      {/* Cloud identity, present when the anchor was synced from the vendor. */}
-      {(ap.vendor_device_id || ap.model) && (
-        <>
-          <div style={sectionTitle}>identity</div>
-          {ap.vendor_device_id && (
-            <div style={statRow}><span style={sLabel}>hardware id</span><span style={sVal}>{ap.vendor_device_id}</span></div>
-          )}
-          {ap.model && (
-            <div style={statRow}><span style={sLabel}>class</span><span style={sVal}>{ap.model}</span></div>
-          )}
-        </>
+      {/* Identity as aligned rows, matching the asset panel. An anchor is venue
+          infrastructure, not a tenant asset, so role is fixed. Hardware id and
+          model appear when the anchor was synced from the vendor cloud. */}
+      <div style={sectionTitle}>identity</div>
+      <div style={statRow}>
+        <span style={sLabel}>tech</span>
+        <span><span style={chip(accent)}>{tech}</span></span>
+      </div>
+      <div style={statRow}><span style={sLabel}>role</span><span style={sVal}>infrastructure</span></div>
+      {rf && (
+        <div style={statRow}>
+          <span style={sLabel}>rf</span>
+          <span><span style={chip(rf.calibrated ? STATUS.ok : INK.muted)}>{rf.calibrated ? "calibrated" : "default"}</span></span>
+        </div>
+      )}
+      {ap.vendor_device_id && (
+        <div style={statRow}><span style={sLabel}>hardware id</span><span style={sVal}>{ap.vendor_device_id}</span></div>
+      )}
+      {ap.model && (
+        <div style={statRow}><span style={sLabel}>class</span><span style={sVal}>{ap.model}</span></div>
       )}
 
       <div style={sectionTitle}>anchor</div>
@@ -354,10 +419,10 @@ function ApPanel({ ap, onClose, token, frame }) {
   );
 }
 
-export function DetailPanel({ selection, token, onClose, frame }) {
+export function DetailPanel({ selection, token, onClose, frame, lastFix }) {
   if (!selection) return null;
   if (selection.kind === "device")
-    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} />;
+    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} lastFix={lastFix} />;
   if (selection.kind === "ap") return <ApPanel ap={selection.ap} onClose={onClose} token={token} frame={frame} />;
   return null;
 }
