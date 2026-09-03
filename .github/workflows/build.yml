@@ -98,6 +98,30 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  # Record what the tag published as a GitHub Release, so the Releases page is the
+  # one place that says which image is at which version (images drift apart, since
+  # a tag rebuilds only the services that changed).
+  release:
+    needs: [changes, build]
+    if: needs.changes.outputs.any == 'true' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Compose and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MATRIX: ${{ needs.changes.outputs.matrix }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "Images published at \`${GITHUB_REF_NAME}\`. Only services whose code changed since the previous tag are rebuilt; every other image keeps its earlier tag."
+            echo
+            jq -r --arg p "${IMAGE_PREFIX}" --arg v "$VERSION" '.include[] | "- `\($p)/\(.image):\($v)`"' <<<"$MATRIX"
+          } > notes.md
+          gh release create "${GITHUB_REF_NAME}" --repo "${{ github.repository }}" --title "${GITHUB_REF_NAME}" --notes-file notes.md \
+            || gh release edit "${GITHUB_REF_NAME}" --repo "${{ github.repository }}" --notes-file notes.md
+
 # mock-vendor is NOT published: it is a local schema-driven vendor cloud double for
 # `make demo` only. In the testbed you point vendor-adapter at the real vendor.
 #

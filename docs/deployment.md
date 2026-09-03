@@ -4,7 +4,9 @@ This repository produces container images and exposes a deployment contract (env
 
 ## Images
 
-Seven images are built and published by CI on every `v*` tag:
+Seven images are published to GHCR. On a `v*` tag, CI rebuilds only the services
+whose code changed since the previous tag (see [CI](#ci)), so a release publishes
+exactly what it touched and image versions can differ between services:
 
 | Image                                                              | Source path                                    | Default port |
 |--------------------------------------------------------------------|------------------------------------------------|--------------|
@@ -18,7 +20,12 @@ Seven images are built and published by CI on every `v*` tag:
 
 `synthetic-adapter` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-vendor` is **not** published: it is a local schema-driven vendor cloud double used only by `make demo` (compose builds it from source); in the testbed `vendor-adapter` points at the real vendor cloud.
 
-Each tag publishes three references: the semver tag (`0.1.0`), `latest`, and a short-SHA tag (`sha-abcdef0`).
+Each rebuilt image publishes two references: the semver tag (`0.11.0`) and `latest`.
+
+### Which version is which
+
+Because a tag rebuilds only the changed services, the images drift apart in version.
+To see what a given release published, read its **[GitHub Release](https://github.com/Jacobbista/5g-northbound/releases)**: CI creates one per tag whose notes list the images built at that tag. For the current tag of any single image, the **[container registry](https://github.com/Jacobbista?tab=packages&repo_name=5g-northbound)** is authoritative. The versions actually **running** on the cluster are the pins in the KELT deployment repo (`all.yml`), not this repository.
 
 The Python services share a common Dockerfile pattern: multi-stage `python:3.11-slim`, non-root user, no shell entry point, `uvicorn` as PID 1. The demo image is `node:20-alpine` → `nginx:alpine` and serves a Vite-built bundle with a runtime configuration file (`env-config.js`) mounted from a ConfigMap and served `Cache-Control: no-cache`.
 
@@ -26,7 +33,7 @@ GitHub Packages defaults each new package to private. They must be flipped to **
 
 ## CI
 
-[`.github/workflows/test.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/build.yml) builds and pushes the seven published images on `v*` tags. Both use a matrix over services; a failure in one service does not block the others.
+[`.github/workflows/test.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/build.yml) builds and pushes the images whose service changed on `v*` tags, then creates a GitHub Release listing them. Both use a matrix over services; a failure in one service does not block the others.
 
 To cut a release:
 
