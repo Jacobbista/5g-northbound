@@ -29,7 +29,18 @@ help:
 
 # --- The three you actually use ---
 
-.PHONY: demo stop test env-config
+.PHONY: demo stop test env-config stage-contracts
+# The gateway self-serves the profile contracts (GET /contracts). They live at
+# the repo root, outside its build context, so stage them into the context
+# before any image build (dev compose and CI both build from the service dir).
+# Idempotent: the staged copy is generated and gitignored, repo root stays the
+# single source of truth.
+stage-contracts:
+	@rm -rf services/camara-gateway/contracts
+	@mkdir -p services/camara-gateway/contracts/spec
+	@cp -r schema services/camara-gateway/contracts/schema
+	@cp -r spec/private-profile services/camara-gateway/contracts/spec/private-profile
+	@echo "  -> staged contracts into services/camara-gateway/contracts/"
 # Bootstrap committed templates into the gitignored runtime files the first
 # time `make demo` runs. Idempotent: only copies when the working file is
 # absent, so existing local edits (real Mapbox tokens, the real venue
@@ -48,7 +59,7 @@ env-config:
 # `make demo` auto-detects dev/wifi-config.local.json (gitignored, real
 # BSSIDs) and mounts it into wifi-adapter. Falls back to the committed
 # placeholder dev/wifi-config.json when the local file is absent.
-demo: env-config
+demo: env-config stage-contracts
 	@export HOST_UID=$$(id -u); export HOST_GID=$$(id -g); \
 	if [ -f dev/wifi-config.local.json ]; then \
 		echo "  -> using dev/wifi-config.local.json (real bindings)"; \

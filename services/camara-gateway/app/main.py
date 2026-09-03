@@ -18,6 +18,7 @@ from .routers import (
     blueprint,
     capabilities,
     contract,
+    contracts,
     diagnostics,
     health,
     positions_stream,
@@ -53,6 +54,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(health.router)
 app.include_router(contract.router)
+app.include_router(contracts.router)
 app.include_router(retrieval.router)
 app.include_router(verification.router)
 app.include_router(assets.router)

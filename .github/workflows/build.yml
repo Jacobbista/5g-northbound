@@ -86,6 +86,11 @@ jobs:
           # provenance rides the immutable sha256 digest every image already has.
           flavor: latest=false
 
+      # The gateway self-serves the profile contracts (GET /contracts). They live
+      # at the repo root, outside its build context, so stage them in first.
+      - if: matrix.image == 'camara-gateway'
+        run: make stage-contracts
+
       - uses: docker/build-push-action@v7
         with:
           context: ./${{ matrix.path }}
