@@ -1,7 +1,25 @@
 import json
 
 from app.assets import Asset
-from app.routers.positions_stream import _enrich
+from app.routers.positions_stream import _enrich, _ws_token
+
+
+def test_ws_token_read_from_subprotocol_carrier():
+    token, proto = _ws_token("bearer.jwt, ey.abc.def")
+    assert token == "ey.abc.def"
+    assert proto == "bearer.jwt"
+
+
+def test_ws_token_absent_carrier_fails():
+    token, proto = _ws_token("")
+    assert token == ""
+    assert proto is None
+
+
+def test_ws_token_ignores_unrelated_subprotocol():
+    token, proto = _ws_token("chat, superchat")
+    assert token == ""
+    assert proto is None
 
 
 def _robot():

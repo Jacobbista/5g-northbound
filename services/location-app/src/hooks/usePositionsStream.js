@@ -4,10 +4,12 @@ import { CAMARA_API_BASE } from "../config";
 // Live position feed from the gateway's WebSocket.
 //
 // `CAMARA_API_BASE` is http(s); the WebSocket URL swaps the scheme to ws(s)
-// and points at `/positions/stream`. Auth uses a token query parameter
-// because browsers cannot set Authorization headers on a WS handshake;
-// the gateway validates it against the same Keycloak realm + role as the
-// REST endpoints.
+// and points at `/positions/stream`. Browsers cannot set an Authorization
+// header on a WS handshake, so the token rides the Sec-WebSocket-Protocol
+// header instead of the URL: the client offers ["bearer.jwt", <token>] and the
+// gateway echoes "bearer.jwt". This keeps the token out of the URL, access logs
+// and history. The gateway validates it against the same Keycloak realm + role
+// as the REST endpoints.
 //
 // Returns:
 //   {
@@ -23,15 +25,18 @@ import { CAMARA_API_BASE } from "../config";
 const RECONNECT_INITIAL_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 
-function buildWsUrl(token) {
+// The token carrier: a scheme marker the gateway echoes to accept the handshake.
+const WS_TOKEN_SCHEME = "bearer.jwt";
+
+function buildWsUrl() {
   // CAMARA_API_BASE typically reads like "http://localhost:8087". Swap to
   // ws/wss while keeping host + port. URL constructor handles both
-  // relative ("/api") and absolute bases.
+  // relative ("/api") and absolute bases. No token in the URL: it rides the
+  // Sec-WebSocket-Protocol header (see connect()).
   const base = new URL(CAMARA_API_BASE, window.location.origin);
   const proto = base.protocol === "https:" ? "wss:" : "ws:";
   const path = `${base.pathname.replace(/\/$/, "")}/positions/stream`;
-  const params = new URLSearchParams({ token });
-  return `${proto}//${base.host}${path}?${params.toString()}`;
+  return `${proto}//${base.host}${path}`;
 }
 
 export function usePositionsStream(token, { paused = false } = {}) {
@@ -55,7 +60,7 @@ export function usePositionsStream(token, { paused = false } = {}) {
 
     const connect = () => {
       if (cancelled) return;
-      const ws = new WebSocket(buildWsUrl(token));
+      const ws = new WebSocket(buildWsUrl(), [WS_TOKEN_SCHEME, token]);
       wsRef.current = ws;
 
       ws.onopen = () => {

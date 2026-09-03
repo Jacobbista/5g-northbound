@@ -5,10 +5,12 @@ is a MEC application, the engine is an internal service). The gateway
 opens a single upstream connection to the engine's broadcast WebSocket
 and forwards every payload to authenticated browser clients.
 
-Each browser client opens `ws[s]://<gateway>/positions/stream?token=<jwt>`.
-Token is supplied as a query parameter because browsers cannot set
-`Authorization` headers on WebSocket handshakes. The token is validated
-against the same Keycloak realm + required role as the REST endpoints.
+Browsers cannot set an `Authorization` header on a WebSocket handshake, so the
+client carries the token in the `Sec-WebSocket-Protocol` header instead: it
+offers `["bearer.jwt", "<jwt>"]` and the gateway echoes `bearer.jwt` to complete
+the handshake. The token stays out of the URL, and so out of access logs, browser
+history and referrers (RFC 6750 section 5.3). It is validated against the same
+Keycloak realm + required role as the REST endpoints.
 """
 
 import asyncio
@@ -17,7 +19,7 @@ import logging
 from urllib.parse import urlparse
 
 import websockets
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
 from ..assets import list_assets
@@ -28,6 +30,20 @@ log = logging.getLogger(__name__)
 router = APIRouter(tags=["positions-stream"])
 
 _CONNECT_TIMEOUT_S = 5.0
+
+# The subprotocol marker the browser pairs with the token: it offers
+# ["bearer.jwt", "<jwt>"] and the gateway echoes the marker to accept.
+_WS_TOKEN_SCHEME = "bearer.jwt"
+
+
+def _ws_token(subprotocol_header: str) -> tuple[str, str | None]:
+    """Extract the auth token from the Sec-WebSocket-Protocol carrier. The client
+    offers ["bearer.jwt", "<jwt>"]; returns (token, marker to echo), or ("", None)
+    when the carrier is absent or malformed, which then fails validation."""
+    protos = [p.strip() for p in (subprotocol_header or "").split(",") if p.strip()]
+    if len(protos) >= 2 and protos[0] == _WS_TOKEN_SCHEME:
+        return protos[1], _WS_TOKEN_SCHEME
+    return "", None
 
 
 def _enrich(raw: str, org: str | None = None) -> str:
@@ -105,7 +121,8 @@ def _engine_ws_url() -> str:
 
 
 @router.websocket("/positions/stream")
-async def positions_stream(websocket: WebSocket, token: str = Query(default="")):
+async def positions_stream(websocket: WebSocket):
+    token, accept_proto = _ws_token(websocket.headers.get("sec-websocket-protocol", ""))
     claims = await validate_token(token)
     org = consumer_org(claims)
     if claims is None:
@@ -120,7 +137,9 @@ async def positions_stream(websocket: WebSocket, token: str = Query(default=""))
         await websocket.close(code=1011, reason="positioning_engine_url not configured")
         return
 
-    await websocket.accept()
+    # Echo the offered subprotocol so a browser handshake using the token carrier
+    # completes; None (query-param path) accepts with no subprotocol.
+    await websocket.accept(subprotocol=accept_proto)
     log.info("positions_stream: client connected, upstream=%s", engine_url)
 
     try:
