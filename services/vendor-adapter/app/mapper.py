@@ -14,7 +14,7 @@ from .schema import (
     Mapping,
     PathSpec,
 )
-from .vocabulary import MOVING_SPEED_THRESHOLD_MPS, is_core
+from .vocabulary import EXTENSION_BAG, MOVING_SPEED_THRESHOLD_MPS, is_core
 
 
 def get_path(obj: Any, dotted: str) -> Any:
@@ -234,7 +234,7 @@ def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
 
     out = dict(core)
     if extra:
-        out["x_vendor"] = extra
+        out[EXTENSION_BAG] = extra
     return out
 
 

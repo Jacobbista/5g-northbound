@@ -40,7 +40,10 @@ stage-contracts:
 	@mkdir -p services/camara-gateway/contracts/spec
 	@cp -r schema services/camara-gateway/contracts/schema
 	@cp -r spec/private-profile services/camara-gateway/contracts/spec/private-profile
-	@echo "  -> staged contracts into services/camara-gateway/contracts/"
+	@rm -rf services/vendor-adapter/contracts
+	@mkdir -p services/vendor-adapter/contracts
+	@cp spec/private-profile/diagnostics-vocabulary.json services/vendor-adapter/contracts/diagnostics-vocabulary.json
+	@echo "  -> staged contracts into camara-gateway/ and vendor-adapter/"
 # Bootstrap committed templates into the gitignored runtime files the first
 # time `make demo` runs. Idempotent: only copies when the working file is
 # absent, so existing local edits (real Mapbox tokens, the real venue

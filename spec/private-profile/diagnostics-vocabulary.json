@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "description": "Normative core diagnostics vocabulary for the private-asset profile. The gateway publishes it (GET /contracts/diagnostics-vocabulary.json); the vendor-adapter imports it to route mapped fields. A mapped field named as a core key is coerced to the core unit; every other mapped name is routed raw into the x_vendor bag.",
+  "extension_bag": "x_vendor",
+  "core": {
+    "battery":   { "standard": "OMA LwM2M 3/0/9",           "type": "number",  "unit": "percent",       "minimum": 0, "maximum": 100, "tier_default": "on_demand" },
+    "last_seen": { "standard": "omlox timestamp_generated",  "type": "number",  "unit": "epoch_seconds",                  "tier_default": "on_demand" },
+    "accuracy":  { "standard": "omlox accuracy",             "type": "number",  "unit": "m",                              "tier_default": "on_demand" },
+    "moving":    { "standard": "derived",                    "type": "boolean", "unit": null,                             "tier_default": "stream",
+                   "derivation": { "from": "speed", "op": "gt", "threshold_mps": 0.15 } }
+  }
+}

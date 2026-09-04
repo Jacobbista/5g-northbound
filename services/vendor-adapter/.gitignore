@@ -1,0 +1,4 @@
+# Normative diagnostics vocabulary staged from the repo root by
+# `make stage-contracts` for the image build. Generated; the repo root
+# (spec/private-profile/) stays the single source of truth.
+/contracts/

@@ -53,6 +53,14 @@ its own core.
 | `accuracy` | omlox `accuracy` | number, metres |
 | `moving` | derived | boolean |
 
+This table is the human view of a machine-readable contract: the gateway serves
+the normative vocabulary at `GET /contracts/diagnostics-vocabulary.json` (field
+names, units, adopted standards, default delivery tier, and the `x_vendor` rule).
+The vendor-adapter imports the same artifact to route mapped fields, so a
+consumer wiring a vendor reads the targets from the contract rather than from
+prose. The artifact is the single source of truth; the adapter never hardcodes
+the vocabulary.
+
 `moving` is derived from the omlox-standard `speed`: `moving = speed >
 MOVING_SPEED_THRESHOLD_MPS`, a normative constant of `0.15` m/s fixed once here,
 not a per-vendor knob. A vendor that exposes its own moving/stationary state maps
