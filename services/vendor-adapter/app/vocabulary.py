@@ -12,25 +12,42 @@ it. Hence the artifact, not this module, is authoritative.
 """
 
 import json
+import os
 from pathlib import Path
 
 _ARTIFACT_NAME = "diagnostics-vocabulary.json"
 
-# First existing path wins: the copy baked into the image by `make
-# stage-contracts`, then the repo tree (parents[3] is the repo root from
-# services/vendor-adapter/app/vocabulary.py) for dev and tests.
-_CANDIDATES = [
-    Path("/app/contracts") / _ARTIFACT_NAME,
-    Path(__file__).resolve().parents[3] / "spec/private-profile" / _ARTIFACT_NAME,
-]
+
+def _candidate_paths(module_file: str, override: str | None, baked_dir: Path) -> list[Path]:
+    """Where the artifact might live, first existing wins:
+
+    - ``override``: an explicit CONTRACTS_DIR, holding the file flat.
+    - ``baked_dir``: the copy `make stage-contracts` bakes into the image.
+    - any ancestor of this module carrying `spec/private-profile/<artifact>`,
+      for dev and tests running from the repo tree.
+
+    The image copies `app/` to `/app/app/`, so the module sits shallow at
+    `/app/app/vocabulary.py`; the repo nests it deeper. Walking ``.parents``
+    (never indexing a fixed depth) resolves both layouts without assuming one.
+    """
+    out: list[Path] = []
+    if override:
+        out.append(Path(override) / _ARTIFACT_NAME)
+    out.append(baked_dir / _ARTIFACT_NAME)
+    for parent in Path(module_file).resolve().parents:
+        out.append(parent / "spec/private-profile" / _ARTIFACT_NAME)
+    return out
 
 
 def _load() -> dict:
-    for path in _CANDIDATES:
+    candidates = _candidate_paths(
+        __file__, os.environ.get("CONTRACTS_DIR"), Path("/app/contracts")
+    )
+    for path in candidates:
         if path.is_file():
             return json.loads(path.read_text())
     raise RuntimeError(
-        f"diagnostics vocabulary artifact not found; tried {[str(p) for p in _CANDIDATES]}"
+        f"diagnostics vocabulary artifact not found; tried {[str(p) for p in candidates]}"
     )
 
 
