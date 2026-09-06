@@ -66,3 +66,13 @@ async def test_schema_contract_describes_the_pydantic_model():
     r = await _get("/contract/schema")
     assert r.json() == Schema.model_json_schema()
 
+
+async def test_schema_contract_documents_mapping_fields():
+    # The Mapping fields carry descriptions so an operator (and the thesis)
+    # can read the semantics - notably that latitude/longitude double as the
+    # local x/z, and that y/confidence are optional.
+    r = await _get("/contract/schema")
+    mapping = r.json()["$defs"]["Mapping"]["properties"]
+    for field in ("frame", "latitude", "longitude", "accuracy_m", "confidence", "y", "timestamp"):
+        assert mapping[field].get("description"), f"{field} lacks a description"
+

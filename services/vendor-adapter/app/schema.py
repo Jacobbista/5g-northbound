@@ -104,20 +104,39 @@ FieldSpec = Union[ConstSpec, PathSpec]
 
 
 class Mapping(BaseModel):
-    """Mapping from vendor response onto the engine `Measurement` fields.
+    """Mapping from the vendor response onto the engine `Measurement` fields.
 
-    `frame` may be either "local" or "wgs84". The other six fields each carry
-    a ConstSpec or a PathSpec.
+    `frame` is "wgs84" or "local". In wgs84 `latitude`/`longitude` are
+    geographic degrees; in a local frame they carry the room-local x / z in
+    metres (the field names are kept so one spec serves either frame). `y`
+    (height) and `confidence` are optional: a 2D vendor, or one that reports
+    only an accuracy radius, omits them and they default to 0.
     """
 
     model_config = ConfigDict(extra="forbid")
-    frame: FieldSpec
-    latitude: FieldSpec
-    longitude: FieldSpec
-    accuracy_m: FieldSpec
-    confidence: FieldSpec
-    y: FieldSpec
-    timestamp: FieldSpec
+    frame: FieldSpec = Field(
+        description="Coordinate frame of the position: 'wgs84' (geographic) or 'local' (a room-local x/z grid in metres)."
+    )
+    latitude: FieldSpec = Field(
+        description="wgs84: geographic latitude in degrees. local: the room-local x coordinate in metres."
+    )
+    longitude: FieldSpec = Field(
+        description="wgs84: geographic longitude in degrees. local: the room-local z coordinate in metres."
+    )
+    accuracy_m: FieldSpec = Field(
+        description="Horizontal accuracy radius in metres; surfaced as the core `accuracy` diagnostic."
+    )
+    confidence: Optional[FieldSpec] = Field(
+        default=None,
+        description="Optional fix confidence in [0,1]. Omit when the vendor reports only an accuracy radius; defaults to 0.",
+    )
+    y: Optional[FieldSpec] = Field(
+        default=None,
+        description="Optional vertical coordinate (height / level) in metres. Omit for a 2D vendor; defaults to 0.",
+    )
+    timestamp: FieldSpec = Field(
+        description="Fix time. A PathSpec with format:'iso8601' coerces an ISO string to epoch seconds; a numeric epoch passes through.",
+    )
 
 
 class DiscoverMapping(BaseModel):

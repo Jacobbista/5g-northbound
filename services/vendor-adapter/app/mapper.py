@@ -94,7 +94,8 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
         "source": vendor_name,
         "frame": frame,
         "accuracy_m": float(resolve_field(mapping.accuracy_m, payload) or 0.0),
-        "confidence": float(resolve_field(mapping.confidence, payload) or 0.0),
+        # confidence and y are optional in the mapping; absent -> 0.0.
+        "confidence": float(_resolve_optional(mapping.confidence, payload) or 0.0),
     }
     if frame == "wgs84":
         out["latitude"] = float(lat_raw)
@@ -104,7 +105,7 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
         # by convention so the same spec works for either frame.
         out["x"] = float(lat_raw)
         out["z"] = float(lon_raw)
-    out["y"] = float(resolve_field(mapping.y, payload) or 0.0)
+    out["y"] = float(_resolve_optional(mapping.y, payload) or 0.0)
     ts = resolve_field(mapping.timestamp, payload)
     if ts is not None:
         out["timestamp"] = float(ts)

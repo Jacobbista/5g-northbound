@@ -45,6 +45,26 @@ def test_field_spec_rejects_both_const_and_path():
         Schema.model_validate(bad)
 
 
+def test_mapping_omits_optional_y_and_confidence():
+    # A wgs84 vendor with no height/confidence source omits both instead of
+    # const-stuffing; they default to None (the mapper emits 0.0).
+    s = Schema.model_validate({
+        "vendor": "v",
+        "default_base_url": "http://x",
+        "path": "/devices/{device_id}",
+        "auth": {"scheme": "none"},
+        "mapping": {
+            "frame":      {"const": "wgs84"},
+            "latitude":   {"path": "lat"},
+            "longitude":  {"path": "lon"},
+            "accuracy_m": {"path": "acc"},
+            "timestamp":  {"path": "ts"},
+        },
+    })
+    assert s.mapping.y is None
+    assert s.mapping.confidence is None
+
+
 def test_schema_accepts_bearer_auth():
     s = Schema.model_validate({
         "vendor": "v",
