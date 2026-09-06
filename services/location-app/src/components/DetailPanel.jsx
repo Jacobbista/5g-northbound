@@ -142,14 +142,29 @@ function StatusPill({ live }) {
   );
 }
 
+// A reported fix older than this is stale: the device is still live (an adapter
+// reports it) but its position is not current. Keep the two facts distinct.
+const STALE_FIX_SECS = 120;
+
+function fixAgeSecs(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+}
+
+// Relative age with day granularity, falling back to an absolute date+time once
+// the fix is over a week old, so a stale fix never reads as the current time.
 function fmtTime(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (isNaN(d)) return iso;
-  const secs = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+  const secs = fixAgeSecs(iso);
   if (secs < 60) return `${secs}s ago`;
   if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
-  return d.toLocaleTimeString();
+  if (secs < 86400) return `${Math.round(secs / 3600)}h ago`;
+  if (secs < 7 * 86400) return `${Math.round(secs / 86400)}d ago`;
+  return d.toLocaleString();
 }
 
 function DevicePanel({ token, device, onClose, frame, lastFix }) {
@@ -215,7 +230,9 @@ function DevicePanel({ token, device, onClose, frame, lastFix }) {
               <div style={sectionTitle}>last known fix</div>
               <div style={statRow}>
                 <span style={sLabel}>seen</span>
-                <span style={sVal}>{fmtTime(lastFix.observedAt || lastFix.lastLocationTime)}</span>
+                <span style={sVal} title={lastFix.observedAt || lastFix.lastLocationTime || ""}>
+                  {fmtTime(lastFix.observedAt || lastFix.lastLocationTime)}
+                </span>
               </div>
               <div style={statRow}>
                 <span style={sLabel}>lat / lon</span>
@@ -322,10 +339,21 @@ function DevicePanel({ token, device, onClose, frame, lastFix }) {
             </>
           )}
 
-          <div style={{ ...statRow, paddingBottom: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: 6 }}>
-            <span style={sLabel}>last fix</span>
-            <span style={{ ...sVal, color: INK.secondary }}>{fmtTime(t.lastLocationTime)}</span>
-          </div>
+          {(() => {
+            // The device is live (telemetry present) but its fix may be old.
+            // Surface the fix age separately, amber past the stale threshold,
+            // so a stale position is not mistaken for the current one.
+            const secs = fixAgeSecs(t.lastLocationTime);
+            const stale = secs != null && secs > STALE_FIX_SECS;
+            return (
+              <div style={{ ...statRow, paddingBottom: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", marginTop: 6 }}>
+                <span style={sLabel}>last fix</span>
+                <span style={{ ...sVal, color: stale ? STATUS.warn : INK.secondary }} title={t.lastLocationTime || ""}>
+                  {fmtTime(t.lastLocationTime)}{stale ? " · stale" : ""}
+                </span>
+              </div>
+            );
+          })()}
         </>
       )}
     </aside>

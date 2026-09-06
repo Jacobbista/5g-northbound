@@ -46,6 +46,9 @@ describe("DetailPanel · device diagnostics vocabulary", () => {
     expect(screen.getByText("MOVING")).toBeInTheDocument();
     // lat/lon always shown; no coordinate toggle
     expect(screen.getByText("lat / lon")).toBeInTheDocument();
+    // The device is live (telemetry present) but lastLocationTime is days old:
+    // the fix reads as stale, distinct from device liveness, not the current time.
+    expect(screen.getByText(/stale/)).toBeInTheDocument();
   });
 });
 
