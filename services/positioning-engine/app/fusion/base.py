@@ -15,6 +15,10 @@ class FusedPosition:
     accuracy_m: float
     sources: list[str]
     timestamp: Optional[float] = None
+    # Most recent last-communication across the fused sources, epoch seconds.
+    # Attached after fusion (strategies do not compute it); drives liveness
+    # downstream. None when no contributing source reported one.
+    last_seen: Optional[float] = None
     # Vendor fidelity carried from a single routed source (stream tier);
     # attached after fusion, not computed by strategies.
     diagnostics: dict = field(default_factory=dict)

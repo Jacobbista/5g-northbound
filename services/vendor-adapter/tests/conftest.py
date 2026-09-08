@@ -27,6 +27,9 @@ def wittra_sample_payload() -> dict:
     return {
         "deviceId": "D001",
         "deviceType": "tag",
+        # When the device last talked to the vendor. Distinct from the fix
+        # timestamp below, which freezes while a still tag keeps reporting.
+        "lastSeen": "2026-06-03 14:40:02.000000+00:00",
         "latest": {
             "data": {
                 "location": {

@@ -247,3 +247,36 @@ async def test_http_adapter_trailing_slash_normalised():
     m = await a.get_measurement("dev")
     await a.aclose()
     assert m is not None and m.x == 1.0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_measurement_carries_last_seen():
+    # The adapter contract passes last_seen through from the vendor adapter so
+    # the engine can broadcast it as the liveness clock.
+    respx.get("http://x/measurement/dev1").mock(
+        return_value=Response(200, json={
+            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "accuracy_m": 1.0, "confidence": 0.5,
+            "timestamp": 1700000000.0, "last_seen": 1700000600.0,
+        })
+    )
+    a = HttpAdapter("x", "http://x")
+    m = await a.get_measurement("dev1")
+    assert m.last_seen == 1700000600.0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_measurement_last_seen_none_when_absent():
+    # A source with no last-communication signal yields None, so liveness stays
+    # undetermined rather than being faked from the fix time.
+    respx.get("http://x/measurement/dev1").mock(
+        return_value=Response(200, json={
+            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "accuracy_m": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
+        })
+    )
+    a = HttpAdapter("x", "http://x")
+    m = await a.get_measurement("dev1")
+    assert m.last_seen is None

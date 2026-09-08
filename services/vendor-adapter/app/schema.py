@@ -137,6 +137,15 @@ class Mapping(BaseModel):
     timestamp: FieldSpec = Field(
         description="Fix time. A PathSpec with format:'iso8601' coerces an ISO string to epoch seconds; a numeric epoch passes through.",
     )
+    last_seen: Optional[FieldSpec] = Field(
+        default=None,
+        description=(
+            "Optional time the device last communicated with the vendor. This is NOT the fix "
+            "time: a still asset freezes its fix while still reporting, so this is the signal "
+            "that drives liveness downstream. Use format:'iso8601' for an ISO string. Omit when "
+            "the vendor exposes no such field."
+        ),
+    )
 
 
 class DiscoverMapping(BaseModel):

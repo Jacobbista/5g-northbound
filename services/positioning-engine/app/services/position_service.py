@@ -91,6 +91,7 @@ class PositionService:
             frame="local",
             x=x, y=m.y, z=z,
             timestamp=m.timestamp,
+            last_seen=m.last_seen,
             diagnostics=m.diagnostics,
         )
 
@@ -123,6 +124,11 @@ class PositionService:
         # path routes one adapter). Fusion strategies do not compute it.
         if len(measurements) == 1:
             primary.diagnostics = measurements[0].diagnostics
+        # The device is as live as its liveliest contributing source, so carry
+        # the most recent last-communication across the fused measurements.
+        seen = [m.last_seen for m in measurements if m.last_seen is not None]
+        if seen:
+            primary.last_seen = max(seen)
         compare: list[StrategyResult] = []
         for strat in self._compare:
             out = strat.fuse(device_id, measurements, self._floor_plan)

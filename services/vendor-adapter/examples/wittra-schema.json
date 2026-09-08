@@ -47,6 +47,10 @@
     "timestamp": {
       "path": "latest.data.location.timestamp",
       "format": "iso8601"
+    },
+    "last_seen": {
+      "path": "lastSeen",
+      "format": "iso8601"
     }
   },
   "discover": {

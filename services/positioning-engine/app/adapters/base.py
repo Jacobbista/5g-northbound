@@ -25,6 +25,11 @@ class Measurement:
     latitude: float = 0.0
     longitude: float = 0.0
     timestamp: Optional[float] = None
+    # When the device last communicated with its source, epoch seconds. Distinct
+    # from `timestamp` (the fix time, which freezes for a still asset that keeps
+    # reporting): this is what liveness is derived from. None when the source
+    # exposes no such signal.
+    last_seen: Optional[float] = None
     # Optional vendor fidelity (stream tier, e.g. {"motion": ...}); passthrough.
     diagnostics: dict = field(default_factory=dict)
 

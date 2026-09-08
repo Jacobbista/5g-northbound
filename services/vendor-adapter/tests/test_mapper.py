@@ -138,3 +138,27 @@ def test_map_fetch_diagnostics_maps_mapping():
     assert map_fetch_diagnostics(fetch, payload) == {
         "x_vendor": {"rssi": [-93, -87], "kind": "vendor-radius"}
     }
+
+
+def test_to_measurement_carries_last_seen(wittra_schema, wittra_sample_payload):
+    # last_seen is the device's last communication, mapped on the fast path so
+    # the engine can broadcast it. Distinct from the fix timestamp.
+    out = to_measurement(wittra_schema.mapping, wittra_sample_payload, vendor_name="wittra")
+    assert isinstance(out["last_seen"], float)
+
+
+def test_to_measurement_omits_last_seen_when_unmapped(wittra_schema_dict):
+    # A vendor with no last-communication field omits the mapping; the
+    # measurement then carries no last_seen and liveness stays undetermined
+    # rather than being faked from the fix time.
+    from app.schema import Schema
+    d = dict(wittra_schema_dict)
+    d["mapping"] = {k: v for k, v in d["mapping"].items() if k != "last_seen"}
+    schema = Schema.model_validate(d)
+    out = to_measurement(schema.mapping, {
+        "latest": {"data": {"location": {
+            "value": {"latitude": 1.0, "longitude": 2.0, "accuracy": 1.0, "height": 0.0},
+            "timestamp": "2026-09-01T10:00:00Z",
+        }}},
+    }, vendor_name="wittra")
+    assert "last_seen" not in out

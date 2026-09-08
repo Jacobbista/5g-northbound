@@ -118,3 +118,52 @@ async def test_compare_strategies_populated(floor_plan):
     assert result is not None
     assert len(result.compare) == 1
     assert result.compare[0].name == "weighted_avg"
+
+
+@pytest.mark.asyncio
+async def test_last_seen_is_the_most_recent_across_fused_sources(floor_plan):
+    # The device is as live as its liveliest source, so the fused result keeps
+    # the most recent last-communication, not the first or the oldest.
+    a = _StaticAdapter(Measurement(
+        source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0,
+        frame="local", last_seen=1000.0,
+    ))
+    b = _StaticAdapter(Measurement(
+        source="b", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0,
+        frame="local", last_seen=5000.0,
+    ))
+    svc = PositionService(
+        adapters={"a": a, "b": b}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    result = await svc.get_position("dev1")
+    assert result.primary.fused.last_seen == 5000.0
+
+
+@pytest.mark.asyncio
+async def test_last_seen_survives_wgs84_normalisation(floor_plan):
+    # Normalising a wgs84 measurement rebuilds it; last_seen must not be lost
+    # on that path (it is the path every geographic vendor takes).
+    a = _StaticAdapter(Measurement(
+        source="a", latitude=59.4, longitude=17.9, accuracy_m=1.0, confidence=1.0,
+        frame="wgs84", last_seen=4242.0,
+    ))
+    svc = PositionService(
+        adapters={"a": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    result = await svc.get_position("dev1")
+    assert result.primary.fused.last_seen == 4242.0
+
+
+@pytest.mark.asyncio
+async def test_last_seen_absent_when_no_source_reports_it(floor_plan):
+    a = _StaticAdapter(Measurement(
+        source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local",
+    ))
+    svc = PositionService(
+        adapters={"a": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    result = await svc.get_position("dev1")
+    assert result.primary.fused.last_seen is None

@@ -112,6 +112,9 @@ class HttpAdapter(Adapter):
                 latitude=float(body.get("latitude", 0.0)),
                 longitude=float(body.get("longitude", 0.0)),
                 timestamp=body.get("timestamp"),
+                last_seen=(
+                    float(body["last_seen"]) if body.get("last_seen") is not None else None
+                ),
                 diagnostics=body.get("diagnostics") or {},
             )
         except (KeyError, ValueError, TypeError) as exc:

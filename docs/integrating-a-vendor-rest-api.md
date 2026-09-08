@@ -154,7 +154,8 @@ The two contracts an operator must get right (see step 5):
     "accuracy_m": { "path": "latest.data.location.value.accuracy", "default": 5.0 },
     "confidence": { "const": 0.5 },
     "y":          { "path": "latest.data.location.value.height", "default": 0.0 },
-    "timestamp":  { "path": "latest.data.location.timestamp", "format": "iso8601" }
+    "timestamp":  { "path": "latest.data.location.timestamp", "format": "iso8601" },
+    "last_seen":  { "path": "lastSeen", "format": "iso8601" }
   },
   "discover": {
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
@@ -186,6 +187,7 @@ The two contracts an operator must get right (see step 5):
 - **Credentials never live in the schema.** Only `{ "env": "VAR_NAME" }` references. The schema can be committed to a public repo or pasted into a UI without leaking anything.
 - **`mapping.accuracy_m`** pulls from `latest.data.location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
 - **`format: "iso8601"`** parses the timestamp string to a Unix epoch float so the engine can reason about staleness.
+- **`mapping.last_seen`** is when the *device* last communicated with the vendor, and it is what liveness is derived from. Map it whenever the vendor exposes such a field (Wittra: top-level `lastSeen`). It is not the fix time: a still asset freezes `timestamp` while it keeps reporting, so `timestamp` cannot separate a quiet device from a live one, and the engine's `observed_at` cannot either (it is fresh on every broadcast tick for as long as the vendor answers). The adapter carries it on the fast path, the engine broadcasts it as `last_seen`, and a consumer compares its age against the device's own observed cadence - vendors often report adaptively, sparse while still and frequent while moving. Omit the mapping when the vendor has no such field; consumers then have no liveness signal and must say so rather than assume the device is live.
 - **`cache_ttl_s`** keeps us off the vendor's rate limit: the engine polls at ~1 Hz, the adapter caches each response for the TTL.
 - **`diagnostics`** (optional) surfaces vendor fidelity as a profile extension, never mixed into the CAMARA payload. `stream` fields ride the current-fix record onto the position stream; `on_demand` entries are extra fetches served by `GET /diagnostics/{id}` (link quality, accuracy provenance). See [profile-extensions.md](profile-extensions.md).
 

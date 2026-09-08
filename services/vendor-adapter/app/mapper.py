@@ -109,6 +109,12 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     ts = resolve_field(mapping.timestamp, payload)
     if ts is not None:
         out["timestamp"] = float(ts)
+    # When the device last talked to the vendor, distinct from the fix time
+    # (which freezes for a still asset). Carried on the fast path so the engine
+    # can broadcast it and consumers derive liveness from it.
+    last_seen = _resolve_optional(mapping.last_seen, payload)
+    if last_seen is not None:
+        out["last_seen"] = float(last_seen)
     return out
 
 
