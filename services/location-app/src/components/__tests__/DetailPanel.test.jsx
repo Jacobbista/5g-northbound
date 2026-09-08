@@ -50,6 +50,20 @@ describe("DetailPanel · device diagnostics vocabulary", () => {
     // the fix reads as stale, distinct from device liveness, not the current time.
     expect(screen.getByText(/stale/)).toBeInTheDocument();
   });
+
+  it("renders the state the caller computed, so the pill cannot contradict the row", () => {
+    // The bug this guards: the pill said "live" (telemetry present) while the
+    // fix was days old. The caller passes one state for both surfaces.
+    render(
+      <DetailPanel
+        selection={{ kind: "device", device: { assetId: "pkg-1", label: "pkg-1", color: "#5dffb0", source: "wittra" } }}
+        token="t" onClose={() => {}} frame={null} state="stale"
+      />
+    );
+    // The pill carries the state; "live" must not appear anywhere.
+    expect(screen.queryByText("live")).not.toBeInTheDocument();
+    expect(screen.getByText("stale")).toBeInTheDocument();
+  });
 });
 
 // A georef frame (inverse of gpsToRoomLocal): identity-ish so the anchor's

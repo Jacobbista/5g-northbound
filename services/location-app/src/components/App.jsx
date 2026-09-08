@@ -8,6 +8,7 @@ import { usePositionsStream } from "../hooks/usePositionsStream";
 import { useSelection } from "../hooks/useSelection";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
 import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
+import { livenessFor, recordLastSeen } from "../lib/liveness";
 import { FloorPlanScene, TECH_KEYS } from "./FloorPlanScene";
 import { DetailPanel } from "./DetailPanel";
 
@@ -109,10 +110,14 @@ function adaptStreamItem(item) {
     // Fix time (CAMARA lastLocationTime): freezes while a stationary asset
     // reports the same fix - drives position-age display, NOT liveness.
     lastLocationTime: item.timestamp,
-    // When the source last answered (this broadcast tick). Drives liveness, so
-    // a still-but-reachable asset stays live. Falls back to the fix time for an
-    // older engine that does not emit observed_at.
+    // The broadcast tick. Kept for latency/debugging only: it is fresh on
+    // every tick, so it can never reveal a device that stopped reporting.
     observedAt: item.observed_at || item.timestamp,
+    // When the DEVICE last communicated with its source. This is the liveness
+    // clock: unlike the fix time it does not freeze for a still asset, and
+    // unlike observed_at it ages when the device goes quiet. Absent for a
+    // source that exposes no such signal.
+    lastSeen: item.last_seen || null,
     area: {
       areaType: "CIRCLE",
       center: { latitude: item.latitude, longitude: item.longitude },
@@ -519,18 +524,27 @@ const sceneWrap = {
   WebkitUserSelect: "none",
 };
 
-function deviceState({ position }) {
+function deviceState({ position, deviceId }) {
   // Called only for a SELECTED device; deselected rows show "hidden" upstream.
-  // Liveness is measured from observedAt (when the source last answered), NOT
-  // from lastLocationTime (the fix time, which freezes for a stationary asset).
-  // A still but reachable asset is live, not stale.
+  // One function, used by the sidebar row AND the detail pill, so the two can
+  // never disagree about the same asset.
+  const radius = position?.area?.radius;
+  const imprecise = radius != null && radius > ACCURACY_MAX_M;
+  // Prefer the device's own last communication when the source reports it,
+  // judged against that device's learned cadence. Neither the fix time (which
+  // freezes for a still asset) nor observedAt (fresh on every tick) can tell a
+  // quiet device from a live one.
+  if (position?.lastSeen) {
+    const state = livenessFor(deviceId, position.lastSeen);
+    if (state !== "live") return state;
+    return imprecise ? "imprecise" : "live";
+  }
+  // Sources with no last-communication signal keep the previous heuristic.
   const liveAt = position?.observedAt || position?.lastLocationTime;
   if (!liveAt) return "offline";
   const ageMs = Date.now() - new Date(liveAt).getTime();
   if (ageMs > STALE_MS) return "stale";
-  const radius = position?.area?.radius;
-  if (radius != null && radius > ACCURACY_MAX_M) return "imprecise";
-  return "live";
+  return imprecise ? "imprecise" : "live";
 }
 
 const standbyPill = {
@@ -646,7 +660,7 @@ function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggl
   // Liveness is intrinsic to the asset, not to whether it is shown: the pill
   // reads live/offline from the stream regardless of the eye toggle.
   const canShow = Boolean(position);
-  const state = deviceState({ position });
+  const state = deviceState({ position, deviceId: device.assetId });
   const coordStr = (() => {
     if (!center) return null;
     const ll = `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`;
@@ -933,6 +947,9 @@ export function App() {
   useEffect(() => {
     for (const [assetId, entry] of Object.entries(byAsset)) {
       if (entry.position) lastFixRef.current[assetId] = entry.position;
+      // Learn each asset's reporting rhythm, so staleness is judged against
+      // its own cadence rather than one threshold for every vendor.
+      if (entry.position?.lastSeen) recordLastSeen(assetId, entry.position.lastSeen);
     }
   }, [byAsset]);
 
@@ -1193,6 +1210,16 @@ export function App() {
                 selection={renderedSelection}
                 token={token}
                 frame={frameFromLayout(layout)}
+                // Same state function the sidebar row uses, so the pill and
+                // the row can never disagree about one asset.
+                state={
+                  renderedSelection.kind === "device"
+                    ? deviceState({
+                        position: byAsset[renderedSelection.device?.assetId]?.position,
+                        deviceId: renderedSelection.device?.assetId,
+                      })
+                    : null
+                }
                 lastFix={
                   renderedSelection.kind === "device"
                     ? lastFixRef.current[renderedSelection.device?.assetId]

@@ -132,12 +132,23 @@ const statRow = {
 const sLabel = { color: INK.muted, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" };
 const sVal = { fontFamily: "ui-monospace, monospace", fontSize: 12, color: INK.primary, wordBreak: "break-word" };
 
-function StatusPill({ live }) {
-  const c = live ? STATUS.ok : INK.muted;
+// One pill for the asset's state, driven by the same function the sidebar row
+// uses. `stale` is its own state: the source still answers but the device has
+// gone quiet, so "live" would overclaim.
+const STATE_COLOR = {
+  live: STATUS.ok,
+  stale: STATUS.warn,
+  imprecise: STATUS.warn,
+  offline: INK.muted,
+};
+
+function StatusPill({ state }) {
+  const c = STATE_COLOR[state] || INK.muted;
+  const glow = state === "live";
   return (
     <span style={{ ...chip(c), gap: 5 }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: c, boxShadow: live ? `0 0 6px ${c}` : "none" }} />
-      {live ? "live" : "offline"}
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: c, boxShadow: glow ? `0 0 6px ${c}` : "none" }} />
+      {state || "offline"}
     </span>
   );
 }
@@ -167,7 +178,7 @@ function fmtTime(iso) {
   return d.toLocaleString();
 }
 
-function DevicePanel({ token, device, onClose, frame, lastFix }) {
+function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
   // Diagnostics come from a per-device vendor GET, independent of a current
   // position fix: an offline asset still reports battery / last_seen. Fetch
@@ -197,7 +208,9 @@ function DevicePanel({ token, device, onClose, frame, lastFix }) {
           <button style={closeBtn} onClick={onClose} aria-label="close">✕</button>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
-          <StatusPill live={Boolean(t)} />
+          {/* The caller's state wins; fall back to presence of telemetry only
+              when it was not supplied. */}
+          <StatusPill state={state || (t ? "live" : "offline")} />
         </div>
       </div>
 
@@ -447,10 +460,10 @@ function ApPanel({ ap, onClose, token, frame }) {
   );
 }
 
-export function DetailPanel({ selection, token, onClose, frame, lastFix }) {
+export function DetailPanel({ selection, token, onClose, frame, lastFix, state }) {
   if (!selection) return null;
   if (selection.kind === "device")
-    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} lastFix={lastFix} />;
+    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} lastFix={lastFix} state={state} />;
   if (selection.kind === "ap") return <ApPanel ap={selection.ap} onClose={onClose} token={token} frame={frame} />;
   return null;
 }
