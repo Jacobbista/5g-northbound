@@ -69,7 +69,7 @@ def _cfg() -> dict:
     return {
         "engine_url": os.environ.get("POSITIONING_ENGINE_URL", "").rstrip("/"),
         "name": os.environ.get("ADAPTER_NAME", ""),
-        "base_url": os.environ.get("ADAPTER_BASE_URL", ""),
+        "baseUrl": os.environ.get("ADAPTER_BASE_URL", ""),
         "kind": os.environ.get("ADAPTER_KIND", "adapter"),
         "heartbeat_s": float(os.environ.get("ADAPTER_HEARTBEAT_S", "15")),
         "capabilities": _caps(),
@@ -90,7 +90,7 @@ async def heartbeat_loop() -> None:
             "(POSITIONING_ENGINE_URL / ADAPTER_NAME / ADAPTER_BASE_URL not all set)"
         )
         return
-    payload = {"name": c["name"], "base_url": c["base_url"], "kind": c["kind"], "capabilities": c["capabilities"]}
+    payload = {"name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"], "capabilities": c["capabilities"]}
     url = f"{c['engine_url']}/adapters"
     first = True
     while True:

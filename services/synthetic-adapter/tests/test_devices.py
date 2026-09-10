@@ -39,7 +39,7 @@ async def test_devices_mixes_assets_and_infrastructure(app, monkeypatch):
     assert [d["id"] for d in body["devices"]] == ["tag-1", "tag-2", "anchor-1"]
     assert by_id["tag-1"]["role"] == "asset"
     assert by_id["anchor-1"]["role"] == "infrastructure"
-    assert all(d["source_class"] == "uwb" for d in body["devices"])
+    assert all(d["sourceClass"] == "uwb" for d in body["devices"])
 
 
 async def test_devices_omits_source_class_when_unset(app, monkeypatch):
@@ -50,4 +50,4 @@ async def test_devices_omits_source_class_when_unset(app, monkeypatch):
     monkeypatch.setattr(settings, "source_class", "")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/devices")
-    assert "source_class" not in r.json()["devices"][0]
+    assert "sourceClass" not in r.json()["devices"][0]

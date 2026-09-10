@@ -52,7 +52,7 @@ def test_classify_entry_source_class_rules_grammar():
             SourceClassRule(when=ClassifyPredicate(requirePath="miotyConfig"), value="mioty"),
         ],
     )
-    assert classify_entry(cl, {"miotyConfig": {"eui": "x"}}) == {"source_class": "mioty"}
+    assert classify_entry(cl, {"miotyConfig": {"eui": "x"}}) == {"sourceClass": "mioty"}
     # No rule matches and no default -> no source_class emitted at all.
     assert classify_entry(cl, {"deviceType": "beacon"}) == {}
 

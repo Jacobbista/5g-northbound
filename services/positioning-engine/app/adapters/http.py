@@ -58,10 +58,10 @@ class HttpAdapter(Adapter):
         remaining = max(0.0, self._cooldown_until - now)
         return {
             "name": self.name,
-            "base_url": self.base_url,
-            "fail_count": self._fail_count,
-            "in_cooldown": now < self._cooldown_until,
-            "cooldown_seconds_remaining": round(remaining, 2),
+            "baseUrl": self.base_url,
+            "failCount": self._fail_count,
+            "inCooldown": now < self._cooldown_until,
+            "cooldownSecondsRemaining": round(remaining, 2),
         }
 
     def _record_failure(self) -> None:
@@ -103,7 +103,7 @@ class HttpAdapter(Adapter):
             body = r.json()
             measurement = Measurement(
                 source=body.get("source", self.name),
-                accuracy_m=float(body["accuracy_m"]),
+                accuracy=float(body["accuracy"]),
                 confidence=float(body["confidence"]),
                 frame=body.get("frame", "local"),
                 x=float(body.get("x", 0.0)),
@@ -112,8 +112,8 @@ class HttpAdapter(Adapter):
                 latitude=float(body.get("latitude", 0.0)),
                 longitude=float(body.get("longitude", 0.0)),
                 timestamp=body.get("timestamp"),
-                last_seen=(
-                    float(body["last_seen"]) if body.get("last_seen") is not None else None
+                lastSeen=(
+                    float(body["lastSeen"]) if body.get("lastSeen") is not None else None
                 ),
                 diagnostics=body.get("diagnostics") or {},
             )

@@ -20,10 +20,10 @@ MOCK_FLOOR_PLAN = FloorPlan(
 class RandomWalkAdapter(Adapter):
     """Deterministic-ish test adapter that wanders inside the floor bounds."""
 
-    def __init__(self, source: str, floor: Floor, accuracy_m: float, confidence: float, step: float = 0.3):
+    def __init__(self, source: str, floor: Floor, accuracy: float, confidence: float, step: float = 0.3):
         self._source = source
         self._floor = floor
-        self._accuracy_m = accuracy_m
+        self._accuracy_m = accuracy
         self._confidence = confidence
         self._step = step
         self._state: dict[str, tuple[float, float, float]] = {}
@@ -42,7 +42,7 @@ class RandomWalkAdapter(Adapter):
         z = self._clamp(z + self._rng.uniform(-self._step, self._step), 0, self._floor.depth_m)
         self._state[device_id] = (x, y, z)
         return Measurement(
-            source=self._source, accuracy_m=self._accuracy_m, confidence=self._confidence,
+            source=self._source, accuracy=self._accuracy_m, confidence=self._confidence,
             frame="local", x=x, y=y, z=z,
         )
 
@@ -60,9 +60,9 @@ def floor_plan():
 @pytest.fixture
 def adapters(floor):
     return {
-        "fiveg": RandomWalkAdapter("fiveg", floor, accuracy_m=3.0, confidence=0.6),
-        "wifi":  RandomWalkAdapter("wifi",  floor, accuracy_m=2.0, confidence=0.7),
-        "uwb":   RandomWalkAdapter("uwb",   floor, accuracy_m=0.3, confidence=0.95),
+        "fiveg": RandomWalkAdapter("fiveg", floor, accuracy=3.0, confidence=0.6),
+        "wifi":  RandomWalkAdapter("wifi",  floor, accuracy=2.0, confidence=0.7),
+        "uwb":   RandomWalkAdapter("uwb",   floor, accuracy=0.3, confidence=0.95),
     }
 
 

@@ -17,8 +17,8 @@ class _StaticAdapter(Adapter):
 
 @pytest.mark.asyncio
 async def test_device_map_routes_to_named_adapter(floor_plan):
-    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local"))
-    b = _StaticAdapter(Measurement(source="b", x=9.0, y=0.0, z=9.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0, frame="local"))
+    b = _StaticAdapter(Measurement(source="b", x=9.0, y=0.0, z=9.0, accuracy=1.0, confidence=1.0, frame="local"))
     svc = PositionService(
         adapters={"a": a, "b": b},
         floor_plan=floor_plan,
@@ -37,8 +37,8 @@ async def test_device_map_routes_to_named_adapter(floor_plan):
 async def test_source_hint_routes_to_matching_adapter(floor_plan):
     """Capability routing: a `source` hint (from the gateway, which knows the
     asset's source) routes straight to that adapter - no DEVICE_MAP needed."""
-    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local"))
-    b = _StaticAdapter(Measurement(source="b", x=9.0, y=0.0, z=9.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0, frame="local"))
+    b = _StaticAdapter(Measurement(source="b", x=9.0, y=0.0, z=9.0, accuracy=1.0, confidence=1.0, frame="local"))
     svc = PositionService(
         adapters={"a": a, "b": b}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
@@ -51,7 +51,7 @@ async def test_source_hint_routes_to_matching_adapter(floor_plan):
 
 @pytest.mark.asyncio
 async def test_unknown_source_falls_back_to_fan_out(floor_plan):
-    a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy=1.0, confidence=1.0, frame="local"))
     svc = PositionService(
         adapters={"a": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
@@ -63,8 +63,8 @@ async def test_unknown_source_falls_back_to_fan_out(floor_plan):
 
 @pytest.mark.asyncio
 async def test_device_without_map_uses_all_adapters(floor_plan):
-    a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy_m=1.0, confidence=1.0, frame="local"))
-    b = _StaticAdapter(Measurement(source="b", x=4.0, y=0.0, z=4.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    a = _StaticAdapter(Measurement(source="a", x=2.0, y=0.0, z=2.0, accuracy=1.0, confidence=1.0, frame="local"))
+    b = _StaticAdapter(Measurement(source="b", x=4.0, y=0.0, z=4.0, accuracy=1.0, confidence=1.0, frame="local"))
     svc = PositionService(
         adapters={"a": a, "b": b}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
@@ -81,7 +81,7 @@ async def test_wgs84_measurement_normalised_to_local(floor_plan):
     near_origin = Measurement(
         source="wittra", frame="wgs84",
         latitude=45.064312, longitude=7.659154,
-        accuracy_m=0.3, confidence=0.95,
+        accuracy=0.3, confidence=0.95,
     )
     svc = PositionService(
         adapters={"wittra": _StaticAdapter(near_origin)},
@@ -108,7 +108,7 @@ async def test_no_measurements_returns_none(floor_plan):
 
 @pytest.mark.asyncio
 async def test_compare_strategies_populated(floor_plan):
-    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local"))
+    a = _StaticAdapter(Measurement(source="a", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0, frame="local"))
     svc = PositionService(
         adapters={"a": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"),
@@ -125,45 +125,45 @@ async def test_last_seen_is_the_most_recent_across_fused_sources(floor_plan):
     # The device is as live as its liveliest source, so the fused result keeps
     # the most recent last-communication, not the first or the oldest.
     a = _StaticAdapter(Measurement(
-        source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0,
-        frame="local", last_seen=1000.0,
+        source="a", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0,
+        frame="local", lastSeen=1000.0,
     ))
     b = _StaticAdapter(Measurement(
-        source="b", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0,
-        frame="local", last_seen=5000.0,
+        source="b", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0,
+        frame="local", lastSeen=5000.0,
     ))
     svc = PositionService(
         adapters={"a": a, "b": b}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
     result = await svc.get_position("dev1")
-    assert result.primary.fused.last_seen == 5000.0
+    assert result.primary.fused.lastSeen == 5000.0
 
 
 @pytest.mark.asyncio
 async def test_last_seen_survives_wgs84_normalisation(floor_plan):
-    # Normalising a wgs84 measurement rebuilds it; last_seen must not be lost
+    # Normalising a wgs84 measurement rebuilds it; lastSeen must not be lost
     # on that path (it is the path every geographic vendor takes).
     a = _StaticAdapter(Measurement(
-        source="a", latitude=59.4, longitude=17.9, accuracy_m=1.0, confidence=1.0,
-        frame="wgs84", last_seen=4242.0,
+        source="a", latitude=59.4, longitude=17.9, accuracy=1.0, confidence=1.0,
+        frame="wgs84", lastSeen=4242.0,
     ))
     svc = PositionService(
         adapters={"a": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
     result = await svc.get_position("dev1")
-    assert result.primary.fused.last_seen == 4242.0
+    assert result.primary.fused.lastSeen == 4242.0
 
 
 @pytest.mark.asyncio
 async def test_last_seen_absent_when_no_source_reports_it(floor_plan):
     a = _StaticAdapter(Measurement(
-        source="a", x=1.0, y=0.0, z=1.0, accuracy_m=1.0, confidence=1.0, frame="local",
+        source="a", x=1.0, y=0.0, z=1.0, accuracy=1.0, confidence=1.0, frame="local",
     ))
     svc = PositionService(
         adapters={"a": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
     result = await svc.get_position("dev1")
-    assert result.primary.fused.last_seen is None
+    assert result.primary.fused.lastSeen is None

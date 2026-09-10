@@ -36,7 +36,7 @@ async def devices(request: Request) -> dict:
             continue
         entry = {"id": vid}
         for src, dst in (("label", "label"), ("deviceType", "deviceType"),
-                         ("role", "role"), ("source_class", "source_class")):
+                         ("role", "role"), ("sourceClass", "sourceClass")):
             if d.get(src) is not None:
                 entry[dst] = d[src]
         lat, lon = d.get("latitude"), d.get("longitude")

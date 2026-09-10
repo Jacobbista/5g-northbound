@@ -24,4 +24,4 @@ async def get_diagnostics(device_id: str, request: Request):
         merged.update(map_fetch_diagnostics(fetch, payload))
     if not merged:
         raise HTTPException(404, detail="no diagnostics available")
-    return {"device_id": device_id, "diagnostics": merged}
+    return {"positioningId": device_id, "diagnostics": merged}

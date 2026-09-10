@@ -19,13 +19,13 @@ def registry(tmp_path):
     reg.upsert("nocaps", "http://x:8080", "adapter", SEED, {})  # no `devices` -> excluded
     reg.adapters["wifi"].get_devices = AsyncMock(
         return_value={"origin": "observed",
-                      "devices": [{"id": "w1", "last_seen": 5.0, "role": "asset",
-                                   "source_class": "wifi"}]}
+                      "devices": [{"id": "w1", "lastSeen": 5.0, "role": "asset",
+                                   "sourceClass": "wifi"}]}
     )
     reg.adapters["wittra"].get_devices = AsyncMock(
         return_value={"origin": "inventory",
                       "devices": [{"id": "D001", "label": "Tag",
-                                   "role": "infrastructure", "source_class": "uwb"}]}
+                                   "role": "infrastructure", "sourceClass": "uwb"}]}
     )
     reg.adapters["nocaps"].get_devices = AsyncMock(
         return_value={"origin": "inventory", "devices": [{"id": "zzz"}]}
@@ -47,12 +47,12 @@ async def test_devices_aggregates_capable_live_adapters(registry):
     assert devs["w1"]["source"] == "wifi"
     assert devs["w1"]["origin"] == "observed"
     assert devs["w1"]["role"] == "asset"
-    assert devs["w1"]["source_class"] == "wifi"
+    assert devs["w1"]["sourceClass"] == "wifi"
     assert devs["D001"]["source"] == "wittra"
     assert devs["D001"]["label"] == "Tag"
     # role + source_class pass straight through the aggregate.
     assert devs["D001"]["role"] == "infrastructure"
-    assert devs["D001"]["source_class"] == "uwb"
+    assert devs["D001"]["sourceClass"] == "uwb"
 
 
 async def test_devices_skips_unreachable_capable_adapter(registry):

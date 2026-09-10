@@ -16,7 +16,7 @@ class Measurement:
     """
 
     source: str
-    accuracy_m: float
+    accuracy: float          # metres; x-unit on the wire schema
     confidence: float
     frame: Literal["local", "wgs84"] = "local"
     x: float = 0.0
@@ -29,7 +29,7 @@ class Measurement:
     # from `timestamp` (the fix time, which freezes for a still asset that keeps
     # reporting): this is what liveness is derived from. None when the source
     # exposes no such signal.
-    last_seen: Optional[float] = None
+    lastSeen: Optional[float] = None
     # Optional vendor fidelity (stream tier, e.g. {"motion": ...}); passthrough.
     diagnostics: dict = field(default_factory=dict)
 

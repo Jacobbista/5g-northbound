@@ -45,19 +45,19 @@ async def test_cooldown_surfaces_as_unreachable(registry):
     r = await _get("/adapters")
     by = {a["name"]: a for a in r.json()["adapters"]}
     assert by["wifi"]["state"] == "live"
-    assert by["wifi"]["in_cooldown"] is False
+    assert by["wifi"]["inCooldown"] is False
     # heartbeat fresh (seed, never ages) but polls fail -> unreachable, not stale
     assert by["wittra"]["state"] == "unreachable"
-    assert by["wittra"]["in_cooldown"] is True
-    assert by["wittra"]["fail_count"] == 5
+    assert by["wittra"]["inCooldown"] is True
+    assert by["wittra"]["failCount"] == 5
 
 
 async def test_exposes_base_url_kind_provenance(registry):
     r = await _get("/adapters")
     by = {a["name"]: a for a in r.json()["adapters"]}
-    assert by["wifi"]["base_url"] == "http://wifi-adapter:8080"
-    assert by["wifi"]["registered_via"] == "seed"
-    assert "last_seen_s_ago" in by["wifi"]
+    assert by["wifi"]["baseUrl"] == "http://wifi-adapter:8080"
+    assert by["wifi"]["registeredVia"] == "seed"
+    assert "lastSeenSAgo" in by["wifi"]
 
 
 async def test_self_entry_goes_stale_then_evicts(tmp_path):
@@ -94,7 +94,7 @@ async def test_post_register_and_delete_roundtrip(tmp_path):
     reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
     _app.state.registry = reg
     async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as c:
-        post = await c.post("/adapters", json={"name": "edge-wifi", "base_url": "http://edge:8080", "kind": "adapter"})
+        post = await c.post("/adapters", json={"name": "edge-wifi", "baseUrl": "http://edge:8080", "kind": "adapter"})
         assert post.status_code == 200
         assert "edge-wifi" in reg.adapters
         # self entry not persisted

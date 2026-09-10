@@ -33,9 +33,9 @@ manager = ConnectionManager()
 
 def build_payload_item(did, res, origin):
     """One broadcast item from a fused result. `timestamp` is the fix time
-    (freezes for a stationary asset); `observed_at` is this tick; `last_seen` is
+    (freezes for a stationary asset); `observed_at` is this tick; `lastSeen` is
     when the device last communicated with its source, present only when a
-    source reports it. Liveness is derived from `last_seen`, never from
+    source reports it. Liveness is derived from `lastSeen`, never from
     `observed_at` (which is fresh on every tick) or `timestamp` (which freezes).
     `diagnostics` (stream tier, e.g. motion) is attached only when the routed
     source reports it."""
@@ -45,19 +45,19 @@ def build_payload_item(did, res, origin):
         base = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
         alt = round(base + res.primary.fused.y, 3)
     item = {
-        "device_id": did,
+        "positioningId": did,
         "latitude": lat,
         "longitude": lon,
-        "accuracy_m": round(res.primary.fused.accuracy_m, 4),
-        "altitude_m": alt,
+        "accuracy": round(res.primary.fused.accuracy, 4),
+        "altitude": alt,
         "timestamp": ts_to_iso(res.primary.fused.timestamp),
-        "observed_at": now_iso(),
+        "observedAt": now_iso(),
         "sources": res.primary.fused.sources,
         "strategy": res.primary.name,
     }
-    last_seen = getattr(res.primary.fused, "last_seen", None)
-    if last_seen is not None:
-        item["last_seen"] = ts_to_iso(last_seen)
+    lastSeen = getattr(res.primary.fused, "lastSeen", None)
+    if lastSeen is not None:
+        item["lastCommunicationTime"] = ts_to_iso(lastSeen)
     diag = getattr(res.primary.fused, "diagnostics", None)
     if diag:
         item["diagnostics"] = diag

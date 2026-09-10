@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GpsOrigin(BaseModel):
@@ -122,6 +122,6 @@ class Measurement(BaseModel):
     x: float
     y: float = 0.0  # height; not estimated by RSSI
     z: float
-    accuracy_m: float
+    accuracy: float = Field(json_schema_extra={"x-unit": "m"})
     confidence: float
     timestamp: Optional[float] = None

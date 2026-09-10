@@ -84,7 +84,7 @@ class AdapterRegistry:
         existing = self._entries.get(name)
         if existing is not None and existing.base_url == base_url:
             # Same endpoint: a heartbeat. Keep the HttpAdapter (and its cooldown
-            # state); refresh last_seen + capabilities. Allow self -> seed/manual
+            # state); refresh lastSeen + capabilities. Allow self -> seed/manual
             # promotion, never demote a declared entry back to self.
             existing.last_seen = now
             if capabilities:
@@ -125,8 +125,8 @@ class AdapterRegistry:
 
     def persist(self) -> None:
         keep = [
-            {"name": e.name, "base_url": e.base_url, "kind": e.kind,
-             "registered_via": e.registered_via, "capabilities": e.capabilities}
+            {"name": e.name, "baseUrl": e.base_url, "kind": e.kind,
+             "registeredVia": e.registered_via, "capabilities": e.capabilities}
             for e in self._entries.values()
             if e.registered_via in _PERSISTED_VIA
         ]
@@ -148,10 +148,10 @@ class AdapterRegistry:
             log.warning("registry: persisted file unreadable (%s); ignoring", exc)
             return 0
         for d in data:
-            via = d.get("registered_via") or MANUAL
+            via = d.get("registeredVia") or MANUAL
             if via not in _PERSISTED_VIA:
                 continue
-            self.upsert(d["name"], d["base_url"], d.get("kind") or "adapter", via, d.get("capabilities"))
+            self.upsert(d["name"], d["baseUrl"], d.get("kind") or "adapter", via, d.get("capabilities"))
         return len(self._entries)
 
     def is_empty(self) -> bool:
@@ -160,7 +160,7 @@ class AdapterRegistry:
     # --- read --------------------------------------------------------------
 
     def _state(self, e: _Entry, now: float) -> str:
-        in_cooldown = e.adapter.status().get("in_cooldown", False)
+        in_cooldown = e.adapter.status().get("inCooldown", False)
         if e.registered_via == SELF and (now - e.last_seen) > self._heartbeat:
             return "stale"
         if in_cooldown:
@@ -185,8 +185,8 @@ class AdapterRegistry:
             st = e.adapter.status()
             st.update(
                 kind=e.kind,
-                registered_via=e.registered_via,
-                last_seen_s_ago=round(now - e.last_seen, 1),
+                registeredVia=e.registered_via,
+                lastSeenSAgo=round(now - e.last_seen, 1),
                 state=self._state(e, now),
                 capabilities=e.capabilities,
             )

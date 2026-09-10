@@ -11,7 +11,7 @@ def test_gps_origin_from_floor_plan_georef():
         "floor_plans": [
             {"label": "6th floor", "georef": {
                 "latitude": 59.4042, "longitude": 17.9492,
-                "azimuth_deg": -36.4, "altitude_m": 0, "width_m": 40, "height_m": 40}}
+                "azimuth_deg": -36.4, "altitude": 0, "width_m": 40, "height_m": 40}}
         ],
         "rooms": [{"width_m": 13, "height_m": 32}],
     }

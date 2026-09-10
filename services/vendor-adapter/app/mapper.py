@@ -214,7 +214,7 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
     if source_class is None:
         source_class = classify.sourceClassDefault
     if source_class:
-        out["source_class"] = source_class
+        out["sourceClass"] = source_class
     return out
 
 

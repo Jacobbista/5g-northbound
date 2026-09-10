@@ -42,7 +42,7 @@ async def test_diagnostics_route_maps_on_demand(wittra_schema_dict, monkeypatch)
         r = await c.get("/diagnostics/D001")
     assert r.status_code == 200
     body = r.json()
-    assert body["device_id"] == "D001"
+    assert body["positioningId"] == "D001"
     assert body["diagnostics"] == {
         "vendorSpecific": {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}
     }

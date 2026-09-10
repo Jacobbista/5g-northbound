@@ -30,7 +30,7 @@ async def get_measurement(device_id: str, request: Request):
         x=round(fx, 4),
         y=round(y, 4),
         z=round(fz, 4),
-        accuracy_m=settings.accuracy_m,
+        accuracy=settings.accuracy_m,
         confidence=settings.confidence,
         timestamp=ts,
     )

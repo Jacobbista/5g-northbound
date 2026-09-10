@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Measurement(BaseModel):
@@ -10,6 +10,6 @@ class Measurement(BaseModel):
     x: float
     y: float
     z: float
-    accuracy_m: float
+    accuracy: float = Field(json_schema_extra={"x-unit": "m"})
     confidence: float
     timestamp: Optional[float] = None

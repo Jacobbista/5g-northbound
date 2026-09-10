@@ -23,7 +23,7 @@ def _csv(raw: str) -> list[str]:
 def _entry(device_id: str, role: str) -> dict:
     out = {"id": device_id, "role": role}
     if settings.source_class:
-        out["source_class"] = settings.source_class
+        out["sourceClass"] = settings.source_class
     return out
 
 

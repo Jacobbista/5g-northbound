@@ -12,7 +12,7 @@ async def test_http_adapter_propagates_correlator():
     route = respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
-            "accuracy_m": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
+            "accuracy": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
         })
     )
     correlator_var.set("corr-engine")
@@ -28,7 +28,7 @@ async def test_http_adapter_decodes_local_measurement():
     respx.get("http://wifi-adapter:8080/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "wifi", "x": 5.0, "y": 0.0, "z": 12.3,
-            "accuracy_m": 1.5, "confidence": 0.7, "timestamp": 1700000000.0,
+            "accuracy": 1.5, "confidence": 0.7, "timestamp": 1700000000.0,
         })
     )
     a = HttpAdapter("wifi", "http://wifi-adapter:8080")
@@ -38,7 +38,7 @@ async def test_http_adapter_decodes_local_measurement():
     assert m.source == "wifi"
     assert m.frame == "local"
     assert m.x == 5.0 and m.z == 12.3
-    assert m.accuracy_m == 1.5
+    assert m.accuracy == 1.5
     assert m.timestamp == 1700000000.0
 
 
@@ -49,7 +49,7 @@ async def test_http_adapter_decodes_wgs84_measurement():
         return_value=Response(200, json={
             "source": "wittra", "frame": "wgs84",
             "latitude": 45.064412, "longitude": 7.659254,
-            "accuracy_m": 0.3, "confidence": 0.95,
+            "accuracy": 0.3, "confidence": 0.95,
         })
     )
     a = HttpAdapter("wittra", "http://wittra")
@@ -65,7 +65,7 @@ async def test_http_adapter_decodes_wgs84_measurement():
 @respx.mock
 async def test_http_adapter_uses_adapter_name_when_source_missing():
     respx.get("http://x/measurement/d").mock(
-        return_value=Response(200, json={"x": 1, "y": 0, "z": 2, "accuracy_m": 1, "confidence": 0.5})
+        return_value=Response(200, json={"x": 1, "y": 0, "z": 2, "accuracy": 1, "confidence": 0.5})
     )
     a = HttpAdapter("custom-name", "http://x")
     m = await a.get_measurement("d")
@@ -98,7 +98,7 @@ async def test_http_adapter_sends_configured_headers():
     route = respx.get("http://wittra/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "wittra", "x": 1.0, "y": 0, "z": 2.0,
-            "accuracy_m": 0.3, "confidence": 0.95,
+            "accuracy": 0.3, "confidence": 0.95,
         })
     )
     a = HttpAdapter("wittra", "http://wittra", headers={"X-API-Key": "secret-token"})
@@ -176,7 +176,7 @@ async def test_http_adapter_success_resets_failure_counter():
             _httpx.ConnectError("down"),
             Response(200, json={
                 "source": "x", "x": 1, "y": 0, "z": 2,
-                "accuracy_m": 1, "confidence": 0.5,
+                "accuracy": 1, "confidence": 0.5,
             }),
         ]
     )
@@ -228,7 +228,7 @@ async def test_http_adapter_4xx_other_than_404_does_not_trip_cooldown():
 @respx.mock
 async def test_http_adapter_malformed_body_counts_as_failure():
     respx.get("http://x/measurement/dev").mock(
-        return_value=Response(200, json={"source": "x"})  # missing accuracy_m, confidence
+        return_value=Response(200, json={"source": "x"})  # missing accuracy, confidence
     )
     a = HttpAdapter("x", "http://x")
     m = await a.get_measurement("dev")
@@ -241,7 +241,7 @@ async def test_http_adapter_malformed_body_counts_as_failure():
 async def test_http_adapter_trailing_slash_normalised():
     respx.get("http://x/measurement/dev").mock(
         return_value=Response(200, json={"source": "wifi", "x": 1, "y": 0, "z": 2,
-                                          "accuracy_m": 1, "confidence": 0.5})
+                                          "accuracy": 1, "confidence": 0.5})
     )
     a = HttpAdapter("wifi", "http://x/")
     m = await a.get_measurement("dev")
@@ -252,18 +252,18 @@ async def test_http_adapter_trailing_slash_normalised():
 @pytest.mark.asyncio
 @respx.mock
 async def test_measurement_carries_last_seen():
-    # The adapter contract passes last_seen through from the vendor adapter so
+    # The adapter contract passes lastSeen through from the vendor adapter so
     # the engine can broadcast it as the liveness clock.
     respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
-            "accuracy_m": 1.0, "confidence": 0.5,
-            "timestamp": 1700000000.0, "last_seen": 1700000600.0,
+            "accuracy": 1.0, "confidence": 0.5,
+            "timestamp": 1700000000.0, "lastSeen": 1700000600.0,
         })
     )
     a = HttpAdapter("x", "http://x")
     m = await a.get_measurement("dev1")
-    assert m.last_seen == 1700000600.0
+    assert m.lastSeen == 1700000600.0
 
 
 @pytest.mark.asyncio
@@ -274,9 +274,9 @@ async def test_measurement_last_seen_none_when_absent():
     respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
-            "accuracy_m": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
+            "accuracy": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
         })
     )
     a = HttpAdapter("x", "http://x")
     m = await a.get_measurement("dev1")
-    assert m.last_seen is None
+    assert m.lastSeen is None

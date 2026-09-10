@@ -22,8 +22,8 @@ async def test_devices_unfiltered_passes_role_and_source_class(wittra_schema, mo
         # discover() has already merged classify (role/source_class) per entry.
         return [
             {"vendorDeviceId": "BEACON1", "label": "b1", "latitude": 59.4,
-             "longitude": 17.9, "role": "infrastructure", "source_class": "uwb"},
-            {"vendorDeviceId": "TAG1", "role": "asset", "source_class": "uwb"},
+             "longitude": 17.9, "role": "infrastructure", "sourceClass": "uwb"},
+            {"vendorDeviceId": "TAG1", "role": "asset", "sourceClass": "uwb"},
             {"label": "no-id"},  # dropped: no vendorDeviceId
         ]
 
@@ -38,7 +38,7 @@ async def test_devices_unfiltered_passes_role_and_source_class(wittra_schema, mo
     devs = {d["id"]: d for d in body["devices"]}
     assert set(devs) == {"BEACON1", "TAG1"}
     assert devs["BEACON1"]["role"] == "infrastructure"
-    assert devs["BEACON1"]["source_class"] == "uwb"
+    assert devs["BEACON1"]["sourceClass"] == "uwb"
     assert devs["BEACON1"]["position"] == {"latitude": 59.4, "longitude": 17.9}
     assert devs["TAG1"]["role"] == "asset"
     assert "position" not in devs["TAG1"]  # a tag has no fixedLocation

@@ -153,6 +153,10 @@ class WifiAdapter:
     def __init__(self, config: WifiConfig):
         self.cfg = config
         self._cache: dict[str, Measurement] = {}
+        # Devices still ingesting under the superseded identifier field. The
+        # adapter already knows which device sent each scan, so the fact is
+        # reported per device on GET /devices rather than left in the log.
+        self._superseded_ingest: dict[str, str] = {}
         self._trackers: dict[str, Tracker2D] = {}
         self._last_ts: dict[str, float] = {}
         # Optional ingest hook. The calibration router installs one here
@@ -166,6 +170,14 @@ class WifiAdapter:
         Used by the calibration apply path to install per-router params
         without restarting the container."""
         self.cfg = config
+
+    def note_superseded_ingest(self, device_id: str, field: str) -> bool:
+        """Record that this device posted under a superseded identifier field.
+        Returns True the first time, so the caller logs once per device instead
+        of once per scan."""
+        first = device_id not in self._superseded_ingest
+        self._superseded_ingest[device_id] = field
+        return first
 
     def ingest(self, device_id: str, scan: Scan, ts: Optional[float] = None) -> bool:
         if self.on_ingest is not None:
@@ -196,7 +208,7 @@ class WifiAdapter:
             x=fx,
             y=0.0,
             z=fz,
-            accuracy_m=accuracy_m,
+            accuracy=accuracy_m,
             confidence=max(0.01, confidence / 100.0),
             timestamp=ts,
         )
@@ -228,11 +240,16 @@ class WifiAdapter:
                 # A device seen on the air is a tracked asset (paper vocab), not
                 # infrastructure; the wifi anchors (APs) live in the bindings.
                 "role": "asset",
-                "source_class": "wifi",
-                "last_seen": m.timestamp,
+                "sourceClass": "wifi",
+                "lastSeen": m.timestamp,
                 "position": {"x": m.x, "y": m.y, "z": m.z},
+                **(
+                    {"supersededIngestField": self._superseded_ingest[device_id]}
+                    if device_id in self._superseded_ingest
+                    else {}
+                ),
             }
             for device_id, m in self._cache.items()
         ]
-        out.sort(key=lambda d: d["last_seen"] or 0, reverse=True)
+        out.sort(key=lambda d: d["lastSeen"] or 0, reverse=True)
         return out

@@ -86,12 +86,12 @@ class PositionService:
         x, z = gps_to_local(m.latitude, m.longitude, self._floor_plan.gps_origin)
         return Measurement(
             source=m.source,
-            accuracy_m=m.accuracy_m,
+            accuracy=m.accuracy,
             confidence=m.confidence,
             frame="local",
             x=x, y=m.y, z=z,
             timestamp=m.timestamp,
-            last_seen=m.last_seen,
+            lastSeen=m.lastSeen,
             diagnostics=m.diagnostics,
         )
 
@@ -126,9 +126,9 @@ class PositionService:
             primary.diagnostics = measurements[0].diagnostics
         # The device is as live as its liveliest contributing source, so carry
         # the most recent last-communication across the fused measurements.
-        seen = [m.last_seen for m in measurements if m.last_seen is not None]
+        seen = [m.lastSeen for m in measurements if m.lastSeen is not None]
         if seen:
-            primary.last_seen = max(seen)
+            primary.lastSeen = max(seen)
         compare: list[StrategyResult] = []
         for strat in self._compare:
             out = strat.fuse(device_id, measurements, self._floor_plan)

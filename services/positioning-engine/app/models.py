@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GpsOrigin(BaseModel):
@@ -74,7 +74,7 @@ class FusionOutput(BaseModel):
 
     latitude: float
     longitude: float
-    accuracy_m: float
+    accuracy: float
     sources: list[str]
 
 
@@ -89,10 +89,10 @@ class EnginePosition(BaseModel):
     it absent and consume the top-level fields.
     """
 
-    device_id: str
+    positioningId: str
     latitude: float
     longitude: float
-    accuracy_m: float
+    accuracy: float = Field(json_schema_extra={"x-unit": "m"})
     timestamp: str
     sources: list[str]
     strategy: str = "weighted_avg"
@@ -101,4 +101,6 @@ class EnginePosition(BaseModel):
     # stacked storage). `altitude_m` is the fused vertical position; absent
     # when the engine has no height estimate. The gateway exposes it as the
     # profile `altitude` extension. CAMARA's 2D Circle drops this.
-    altitude_m: Optional[float] = None
+    altitude: Optional[float] = Field(
+        default=None, json_schema_extra={"x-unit": "m"}
+    )

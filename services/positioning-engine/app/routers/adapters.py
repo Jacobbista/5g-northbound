@@ -22,7 +22,7 @@ router = APIRouter(tags=["adapters"])
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: str
-    base_url: str
+    baseUrl: str
     kind: str = "adapter"
     # Self-advertised positioning traits (frame, streaming, z, accuracy_class,
     # kinds). Optional: an adapter that omits it contributes no capability
@@ -41,9 +41,9 @@ async def list_adapters(request: Request):
 @router.post("/adapters")
 async def register_adapter(req: RegisterRequest, request: Request):
     """Register or heartbeat a self-registering adapter. Idempotent: same
-    name+base_url just refreshes last_seen."""
+    name+baseUrl just refreshes lastSeen."""
     registry = request.app.state.registry
-    orphan = registry.upsert(req.name, req.base_url, req.kind, SELF, req.capabilities)
+    orphan = registry.upsert(req.name, req.baseUrl, req.kind, SELF, req.capabilities)
     registry.persist()
     if orphan is not None:
         await _safe_aclose(orphan)

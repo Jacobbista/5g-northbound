@@ -8,11 +8,11 @@ async def test_position_contract_shape(client):
     resp = await client.get("/position/uwb-tag-001")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["device_id"] == "uwb-tag-001"
+    assert body["positioningId"] == "uwb-tag-001"
     assert isinstance(body["latitude"], float)
     assert isinstance(body["longitude"], float)
-    assert isinstance(body["accuracy_m"], float)
-    assert body["accuracy_m"] > 0
+    assert isinstance(body["accuracy"], float)
+    assert body["accuracy"] > 0
     assert isinstance(body["sources"], list)
     assert len(body["sources"]) > 0
     # no local x/y/z leaks across the northbound boundary

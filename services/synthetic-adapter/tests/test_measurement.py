@@ -6,7 +6,7 @@ async def test_measurement_shape(client):
     assert body["frame"] == "local"
     assert 0.0 <= body["x"] <= 20.0
     assert 0.0 <= body["z"] <= 30.0
-    assert body["accuracy_m"] > 0
+    assert body["accuracy"] > 0
     assert 0.0 <= body["confidence"] <= 1.0
     assert isinstance(body["timestamp"], float)
 
