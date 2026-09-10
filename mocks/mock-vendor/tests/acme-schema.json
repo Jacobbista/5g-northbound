@@ -1,51 +1,103 @@
 {
   "vendor": "acme",
   "transport": "rest",
-  "base_url": { "env": "ACME_BASE_URL" },
+  "baseUrl": {
+    "env": "ACME_BASE_URL"
+  },
   "path": "/api/{tenant}/device/{device_id}/pos",
-  "path_vars": {
-    "tenant": { "env": "ACME_TENANT" }
+  "pathVars": {
+    "tenant": {
+      "env": "ACME_TENANT"
+    }
   },
   "auth": {
     "scheme": "bearer",
-    "token": { "env": "ACME_TOKEN" }
+    "token": {
+      "env": "ACME_TOKEN"
+    }
   },
   "mapping": {
-    "frame": { "const": "wgs84" },
-    "latitude": { "path": "data.lat" },
-    "longitude": { "path": "data.lng" },
-    "accuracy_m": { "path": "data.acc", "default": 5.0 },
-    "confidence": { "const": 0.5 },
-    "y": { "path": "data.alt", "default": 0.0 },
-    "timestamp": { "path": "data.ts", "format": "iso8601" }
+    "frame": {
+      "const": "wgs84"
+    },
+    "latitude": {
+      "path": "data.lat"
+    },
+    "longitude": {
+      "path": "data.lng"
+    },
+    "accuracy": {
+      "path": "data.acc",
+      "default": 5.0
+    },
+    "confidence": {
+      "const": 0.5
+    },
+    "y": {
+      "path": "data.alt",
+      "default": 0.0
+    },
+    "timestamp": {
+      "path": "data.ts",
+      "format": "iso8601"
+    }
   },
   "discover": {
     "path": "/api/{tenant}/devices",
-    "list_path": "items",
-    "path_vars": {
-      "tenant": { "env": "ACME_TENANT" }
+    "listPath": "items",
+    "pathVars": {
+      "tenant": {
+        "env": "ACME_TENANT"
+      }
     },
     "mapping": {
-      "vendor_device_id": { "path": "id" },
-      "label": { "path": "name" },
-      "latitude": { "path": "anchor.lat" },
-      "longitude": { "path": "anchor.lng" },
-      "height_m": { "path": "anchor.h" },
-      "device_type": { "path": "kind" }
+      "vendorDeviceId": {
+        "path": "id"
+      },
+      "label": {
+        "path": "name"
+      },
+      "latitude": {
+        "path": "anchor.lat"
+      },
+      "longitude": {
+        "path": "anchor.lng"
+      },
+      "height": {
+        "path": "anchor.h"
+      },
+      "deviceType": {
+        "path": "kind"
+      }
     },
     "classify": {
-      "asset_when": { "path": "kind", "equals": "mobile" }
+      "assetWhen": {
+        "path": "kind",
+        "equals": "mobile"
+      }
     }
   },
   "diagnostics": {
-    "stream": { "motion": { "path": "data.motion" } },
-    "on_demand": [
+    "stream": {
+      "motion": {
+        "path": "data.motion"
+      }
+    },
+    "onDemand": [
       {
         "path": "/api/{tenant}/device/{device_id}/uwb",
-        "path_vars": { "tenant": { "env": "ACME_TENANT" } },
+        "pathVars": {
+          "tenant": {
+            "env": "ACME_TENANT"
+          }
+        },
         "mapping": {
-          "rssi": { "path": "uwb.rssi" },
-          "accuracy_kind": { "const": "vendor-radius" }
+          "rssi": {
+            "path": "uwb.rssi"
+          },
+          "accuracy_kind": {
+            "const": "vendor-radius"
+          }
         }
       }
     ]

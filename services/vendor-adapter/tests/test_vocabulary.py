@@ -28,7 +28,7 @@ def test_candidate_paths_include_repo_spec_dir():
 
 
 def test_core_names_cover_v1():
-    assert set(CORE_DIAGNOSTICS) == {"battery", "last_seen", "accuracy", "moving"}
+    assert set(CORE_DIAGNOSTICS) == {"battery", "lastSeen", "accuracy", "moving"}
 
 
 def test_vocabulary_loaded_from_artifact():
@@ -37,7 +37,7 @@ def test_vocabulary_loaded_from_artifact():
         (_REPO / "spec/private-profile/diagnostics-vocabulary.json").read_text()
     )
     assert set(CORE_DIAGNOSTICS) == set(artifact["core"])
-    assert EXTENSION_BAG == artifact["extension_bag"]
+    assert EXTENSION_BAG == artifact["extensionBag"]
 
 
 def test_vocabulary_agrees_with_published_diagnostics_schema():

@@ -111,11 +111,11 @@ def _set_if_path(entry: dict, spec: Any, value: Any) -> None:
 def build_discover(discover: dict, lat: float, lon: float, height: float) -> Any:
     """Build a device list that exercises the schema's `discover` block: one
     mobile asset (no fixed position) and one fixed-position node, with the
-    device_type each `classify` branch keys off, so onboarding sees both an
+    deviceType each `classify` branch keys off, so onboarding sees both an
     asset and an infrastructure candidate."""
     dmap = discover.get("mapping", {})
     classify = discover.get("classify") or {}
-    asset_when = classify.get("asset_when") or {}
+    asset_when = classify.get("assetWhen") or {}
     asset_type = asset_when.get("equals") if asset_when.get("path") else None
 
     specs = [
@@ -125,17 +125,17 @@ def build_discover(discover: dict, lat: float, lon: float, height: float) -> Any
     entries = []
     for s in specs:
         entry: dict = {}
-        _set_if_path(entry, dmap.get("vendor_device_id"), s["id"])
+        _set_if_path(entry, dmap.get("vendorDeviceId"), s["id"])
         _set_if_path(entry, dmap.get("label"), s["label"])
         if s["type"] is not None:
-            _set_if_path(entry, dmap.get("device_type"), s["type"])
+            _set_if_path(entry, dmap.get("deviceType"), s["type"])
         if s["fixed"]:
             _set_if_path(entry, dmap.get("latitude"), lat)
             _set_if_path(entry, dmap.get("longitude"), lon)
-            _set_if_path(entry, dmap.get("height_m"), height)
+            _set_if_path(entry, dmap.get("height"), height)
         entries.append(entry)
 
-    list_path = discover.get("list_path", "")
+    list_path = discover.get("listPath", "")
     if list_path:
         return set_path(_root_for(list_path), list_path, entries)
     return entries

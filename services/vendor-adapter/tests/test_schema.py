@@ -11,12 +11,12 @@ def test_example_wittra_schema_validates(wittra_schema):
     assert wittra_schema.mapping.latitude.path == "latest.data.location.value.latitude"
     # Discover block ships in the example so the editor's sync flow can be
     # exercised against the local mock-vendor. Real Wittra v4 returns the
-    # device array directly (no envelope) so list_path is empty and
+    # device array directly (no envelope) so listPath is empty and
     # pagination is disabled.
     assert wittra_schema.discover is not None
-    assert wittra_schema.discover.mapping.vendor_device_id.path == "deviceId"
+    assert wittra_schema.discover.mapping.vendorDeviceId.path == "deviceId"
     assert wittra_schema.discover.pagination.type == "none"
-    assert wittra_schema.discover.list_path == ""
+    assert wittra_schema.discover.listPath == ""
 
 
 def test_schema_rejects_extra_top_level_field(wittra_schema_dict):
@@ -28,14 +28,14 @@ def test_schema_rejects_extra_top_level_field(wittra_schema_dict):
 def test_field_spec_rejects_both_const_and_path():
     bad = {
         "vendor": "v",
-        "base_url": {"env": "X_BASE_URL"},
+        "baseUrl": {"env": "X_BASE_URL"},
         "path": "/{device_id}",
         "auth": {"scheme": "none"},
         "mapping": {
             "frame":      {"const": "wgs84"},
             "latitude":   {"const": 1.0, "path": "a"},
             "longitude":  {"const": 0.0},
-            "accuracy_m": {"const": 1.0},
+            "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
             "y":          {"const": 0.0},
             "timestamp":  {"const": 0.0},
@@ -50,14 +50,14 @@ def test_mapping_omits_optional_y_and_confidence():
     # const-stuffing; they default to None (the mapper emits 0.0).
     s = Schema.model_validate({
         "vendor": "v",
-        "base_url": {"env": "X_BASE_URL"},
+        "baseUrl": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "none"},
         "mapping": {
             "frame":      {"const": "wgs84"},
             "latitude":   {"path": "lat"},
             "longitude":  {"path": "lon"},
-            "accuracy_m": {"path": "acc"},
+            "accuracy": {"path": "acc"},
             "timestamp":  {"path": "ts"},
         },
     })
@@ -68,14 +68,14 @@ def test_mapping_omits_optional_y_and_confidence():
 def test_schema_accepts_bearer_auth():
     s = Schema.model_validate({
         "vendor": "v",
-        "base_url": {"env": "X_BASE_URL"},
+        "baseUrl": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "bearer", "token": {"env": "VENDOR_TOKEN"}},
         "mapping": {
             "frame":      {"const": "wgs84"},
             "latitude":   {"path": "lat"},
             "longitude":  {"path": "lon"},
-            "accuracy_m": {"const": 1.0},
+            "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
             "y":          {"const": 0.0},
             "timestamp":  {"path": "ts"},
@@ -87,14 +87,14 @@ def test_schema_accepts_bearer_auth():
 def test_schema_accepts_header_auth():
     s = Schema.model_validate({
         "vendor": "v",
-        "base_url": {"env": "X_BASE_URL"},
+        "baseUrl": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "header", "header": "X-API-Key", "value": {"env": "VENDOR_KEY"}},
         "mapping": {
             "frame":      {"const": "local"},
             "latitude":   {"path": "x"},
             "longitude":  {"path": "z"},
-            "accuracy_m": {"const": 1.0},
+            "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
             "y":          {"const": 0.0},
             "timestamp":  {"path": "ts"},
@@ -108,7 +108,7 @@ def test_diagnostics_block_parses(wittra_schema_dict):
     d = dict(wittra_schema_dict)
     d["diagnostics"] = {
         "stream": {"motion": {"path": "latest.data.location.value.motion"}},
-        "on_demand": [
+        "onDemand": [
             {
                 "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
                 "mapping": {
@@ -120,7 +120,7 @@ def test_diagnostics_block_parses(wittra_schema_dict):
     }
     sc = Schema.model_validate(d)
     assert "motion" in sc.diagnostics.stream
-    assert sc.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"
+    assert sc.diagnostics.onDemand[0].mapping["accuracy_kind"].const == "vendor-radius"
 
 
 def test_diagnostics_absent_is_none(wittra_schema_dict):
@@ -131,7 +131,7 @@ def test_diagnostics_absent_is_none(wittra_schema_dict):
 
 def test_example_schema_declares_diagnostics(wittra_schema):
     assert "motion" in wittra_schema.diagnostics.stream
-    assert wittra_schema.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"
+    assert wittra_schema.diagnostics.onDemand[0].mapping["accuracy_kind"].const == "vendor-radius"
 
 
 def test_env_ref_accepts_a_posix_name():
@@ -148,7 +148,7 @@ def test_schema_rejects_a_document_carrying_a_vendor_url(wittra_schema_dict):
     # The image is generic: a schema may name the variable holding the vendor
     # API root, never the root itself.
     doc = dict(wittra_schema_dict)
-    doc.pop("base_url")
+    doc.pop("baseUrl")
     doc["default_base_url"] = "https://api.wittra.se"
     with pytest.raises(ValidationError):
         Schema.model_validate(doc)

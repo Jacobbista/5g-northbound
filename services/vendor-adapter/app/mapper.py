@@ -93,7 +93,7 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     out: dict[str, Any] = {
         "source": vendor_name,
         "frame": frame,
-        "accuracy_m": float(resolve_field(mapping.accuracy_m, payload) or 0.0),
+        "accuracy": float(resolve_field(mapping.accuracy, payload) or 0.0),
         # confidence and y are optional in the mapping; absent -> 0.0.
         "confidence": float(_resolve_optional(mapping.confidence, payload) or 0.0),
     }
@@ -112,9 +112,9 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     # When the device last talked to the vendor, distinct from the fix time
     # (which freezes for a still asset). Carried on the fast path so the engine
     # can broadcast it and consumers derive liveness from it.
-    last_seen = _resolve_optional(mapping.last_seen, payload)
-    if last_seen is not None:
-        out["last_seen"] = float(last_seen)
+    lastSeen = _resolve_optional(mapping.lastSeen, payload)
+    if lastSeen is not None:
+        out["lastSeen"] = float(lastSeen)
     return out
 
 
@@ -137,46 +137,46 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
     """Map one element from the vendor's device-list response into the
     normalised shape the editor consumes:
 
-        { vendor_device_id: str,
+        { vendorDeviceId: str,
           label:       str|None,
           latitude:    float|None,
           longitude:   float|None,
-          height_m:    float|None }
+          height:    float|None }
 
     `fixed` is True when the entry resolved a position (a fixed-location
     anchor) and False otherwise (a mobile tag). A single discover list carries
     both; each consumer filters - the editor keeps fixed anchors for the
     blueprint, asset onboarding keeps mobile tags for the registry.
 
-    Returns None when the entry has no `vendor_device_id` (skipped silently
+    Returns None when the entry has no `vendorDeviceId` (skipped silently
     so a sparse list element does not break the whole sync).
     """
-    raw_id = resolve_field(mapping.vendor_device_id, entry)
+    raw_id = resolve_field(mapping.vendorDeviceId, entry)
     if raw_id is None or str(raw_id).strip() == "":
         return None
     label_val = _resolve_optional(mapping.label, entry)
     lat = _coerce_float(_resolve_optional(mapping.latitude, entry))
     lon = _coerce_float(_resolve_optional(mapping.longitude, entry))
-    device_type_val = _resolve_optional(mapping.device_type, entry)
+    device_type_val = _resolve_optional(mapping.deviceType, entry)
     return {
-        "vendor_device_id": str(raw_id),
+        "vendorDeviceId": str(raw_id),
         "label": str(label_val) if label_val is not None else None,
         "latitude": lat,
         "longitude": lon,
-        "height_m": _coerce_float(_resolve_optional(mapping.height_m, entry)),
-        "device_type": str(device_type_val) if device_type_val is not None else None,
+        "height": _coerce_float(_resolve_optional(mapping.height, entry)),
+        "deviceType": str(device_type_val) if device_type_val is not None else None,
         "fixed": lat is not None and lon is not None,
     }
 
 
 def _predicate_matches(pred: Optional[ClassifyPredicate], entry: Any) -> bool:
     """A structural predicate against one raw vendor record. An empty predicate
-    (neither `require_path` nor `path`) never matches."""
+    (neither `requirePath` nor `path`) never matches."""
     if pred is None:
         return False
     matched_any = False
-    if pred.require_path is not None:
-        if get_path(entry, pred.require_path) is None:
+    if pred.requirePath is not None:
+        if get_path(entry, pred.requirePath) is None:
             return False
         matched_any = True
     if pred.path is not None:
@@ -193,26 +193,26 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if classify is None:
         return out
-    # asset_when wins if declared: match -> asset, else infrastructure (unknown
-    # defaults to infra, not auto-onboarded). infrastructure_when is the inverse
+    # assetWhen wins if declared: match -> asset, else infrastructure (unknown
+    # defaults to infra, not auto-onboarded). infrastructureWhen is the inverse
     # convention: match -> infrastructure, else asset.
-    if classify.asset_when is not None:
+    if classify.assetWhen is not None:
         out["role"] = (
-            "asset" if _predicate_matches(classify.asset_when, entry) else "infrastructure"
+            "asset" if _predicate_matches(classify.assetWhen, entry) else "infrastructure"
         )
-    elif classify.infrastructure_when is not None:
+    elif classify.infrastructureWhen is not None:
         out["role"] = (
             "infrastructure"
-            if _predicate_matches(classify.infrastructure_when, entry)
+            if _predicate_matches(classify.infrastructureWhen, entry)
             else "asset"
         )
     source_class = None
-    for rule in classify.source_class_rules:
+    for rule in classify.sourceClassRules:
         if _predicate_matches(rule.when, entry):
             source_class = rule.value
             break
     if source_class is None:
-        source_class = classify.source_class_default
+        source_class = classify.sourceClassDefault
     if source_class:
         out["source_class"] = source_class
     return out
@@ -220,7 +220,7 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
 
 def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
     """Resolve each mapped field, then split by the core vocabulary: core names
-    at the top, everything else under `x_vendor`, raw. `moving` is derived from
+    at the top, everything else under `vendorSpecific`, raw. `moving` is derived from
     the omlox-standard `speed` when the schema did not map `moving` directly.
     Omits any field that does not resolve, so a sparse record stays clean."""
     core: dict[str, Any] = {}

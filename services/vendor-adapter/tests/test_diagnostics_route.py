@@ -12,9 +12,9 @@ def _schema(wittra_schema_dict):
     d = dict(wittra_schema_dict)
     d["diagnostics"] = {
         "stream": {"motion": {"path": "latest.data.location.value.motion"}},
-        "on_demand": [{
+        "onDemand": [{
             "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
-            "path_vars": {"org_id": {"env": "WITTRA_ORG_ID"}, "project_id": {"env": "WITTRA_PROJECT_ID"}},
+            "pathVars": {"org_id": {"env": "WITTRA_ORG_ID"}, "project_id": {"env": "WITTRA_PROJECT_ID"}},
             "mapping": {
                 "accuracy_value": {"path": "latest.data.location.value.accuracy"},
                 "accuracy_kind": {"const": "vendor-radius"},
@@ -44,7 +44,7 @@ async def test_diagnostics_route_maps_on_demand(wittra_schema_dict, monkeypatch)
     body = r.json()
     assert body["device_id"] == "D001"
     assert body["diagnostics"] == {
-        "x_vendor": {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}
+        "vendorSpecific": {"accuracy_value": 0.9, "accuracy_kind": "vendor-radius", "motion": "MOVING"}
     }
 
 

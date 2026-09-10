@@ -21,10 +21,10 @@ async def test_devices_unfiltered_passes_role_and_source_class(wittra_schema, mo
         calls["apply_filter"] = apply_filter
         # discover() has already merged classify (role/source_class) per entry.
         return [
-            {"vendor_device_id": "BEACON1", "label": "b1", "latitude": 59.4,
+            {"vendorDeviceId": "BEACON1", "label": "b1", "latitude": 59.4,
              "longitude": 17.9, "role": "infrastructure", "source_class": "uwb"},
-            {"vendor_device_id": "TAG1", "role": "asset", "source_class": "uwb"},
-            {"label": "no-id"},  # dropped: no vendor_device_id
+            {"vendorDeviceId": "TAG1", "role": "asset", "source_class": "uwb"},
+            {"label": "no-id"},  # dropped: no vendorDeviceId
         ]
 
     monkeypatch.setattr("app.routers.devices.discover", fake_discover)

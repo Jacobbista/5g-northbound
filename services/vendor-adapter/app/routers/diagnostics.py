@@ -1,7 +1,7 @@
 """On-demand vendor diagnostics: GET /diagnostics/{device_id}.
 
 A private-profile extension surface, not CAMARA Device Location. Fetches the
-schema's on_demand diagnostics sources and returns their merged mapping."""
+schema's onDemand diagnostics sources and returns their merged mapping."""
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -14,11 +14,11 @@ router = APIRouter(tags=["diagnostics"])
 @router.get("/diagnostics/{device_id}")
 async def get_diagnostics(device_id: str, request: Request):
     schema = request.app.state.store.schema
-    if schema is None or schema.diagnostics is None or not schema.diagnostics.on_demand:
+    if schema is None or schema.diagnostics is None or not schema.diagnostics.onDemand:
         raise HTTPException(404, detail="no diagnostics configured")
     merged: dict = {}
-    for fetch in schema.diagnostics.on_demand:
-        payload = await vendor_client.fetch_path(schema, device_id, fetch.path, fetch.path_vars)
+    for fetch in schema.diagnostics.onDemand:
+        payload = await vendor_client.fetch_path(schema, device_id, fetch.path, fetch.pathVars)
         if payload is None:
             continue
         merged.update(map_fetch_diagnostics(fetch, payload))

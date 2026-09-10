@@ -20,14 +20,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/schema", tags=["schema"])
 
 
-def _x_vendor_keys(schema: Schema) -> list[str]:
-    """Diagnostics mapping keys that route to `x_vendor` (not a core field, and
+def _vendorSpecificKeys(schema: Schema) -> list[str]:
+    """Diagnostics mapping keys that route to `vendorSpecific` (not a core field, and
     not the derivation-only `speed`). A typo of a core name shows up here."""
     diag = schema.diagnostics
     if diag is None:
         return []
     keys: set[str] = {k for k in diag.stream if not is_core(k) and k != "speed"}
-    for fetch in diag.on_demand:
+    for fetch in diag.onDemand:
         keys |= {k for k in fetch.mapping if not is_core(k) and k != "speed"}
     return sorted(keys)
 
@@ -58,7 +58,7 @@ async def put_schema(payload: dict, request: Request):
         "status": "ok",
         "vendor": schema.vendor,
         "persisted": persisted,
-        "x_vendor_keys": _x_vendor_keys(schema),
+        "vendorSpecificKeys": _vendorSpecificKeys(schema),
     }
     if not persisted:
         resp["warning"] = (

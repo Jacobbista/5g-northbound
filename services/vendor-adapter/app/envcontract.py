@@ -26,9 +26,9 @@ def _sites(schema: Schema) -> list[_Site]:
     Sensitivity is positional: a credential is the auth password, token or
     header value. A path variable and a basic-auth username are not secrets.
     """
-    out: list[_Site] = [("base_url", schema.base_url.env, False, "url")]
-    for name, ref in schema.path_vars.items():
-        out.append((f"path_vars.{name}", ref.env, False, "string"))
+    out: list[_Site] = [("baseUrl", schema.baseUrl.env, False, "url")]
+    for name, ref in schema.pathVars.items():
+        out.append((f"pathVars.{name}", ref.env, False, "string"))
     auth = schema.auth
     if isinstance(auth, AuthBasic):
         out.append(("auth.username", auth.username.env, False, "string"))
@@ -38,14 +38,14 @@ def _sites(schema: Schema) -> list[_Site]:
     elif isinstance(auth, AuthHeader):
         out.append(("auth.value", auth.value.env, True, "string"))
     if schema.discover is not None:
-        for name, ref in schema.discover.path_vars.items():
-            out.append((f"discover.path_vars.{name}", ref.env, False, "string"))
+        for name, ref in schema.discover.pathVars.items():
+            out.append((f"discover.pathVars.{name}", ref.env, False, "string"))
     if schema.diagnostics is not None:
-        for i, fetch in enumerate(schema.diagnostics.on_demand):
-            for name, ref in fetch.path_vars.items():
+        for i, fetch in enumerate(schema.diagnostics.onDemand):
+            for name, ref in fetch.pathVars.items():
                 out.append(
                     (
-                        f"diagnostics.on_demand[{i}].path_vars.{name}",
+                        f"diagnostics.onDemand[{i}].pathVars.{name}",
                         ref.env,
                         False,
                         "string",

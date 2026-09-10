@@ -60,7 +60,7 @@ async def test_schema_contract_served_without_auth_and_without_instance():
     body = r.json()
     assert body["type"] == "object"
     required = body.get("required") or []
-    for key in ("vendor", "base_url", "path", "auth", "mapping"):
+    for key in ("vendor", "baseUrl", "path", "auth", "mapping"):
         assert key in required
         assert key in body["properties"]
     assert "diagnostics" in body["properties"]
@@ -83,7 +83,7 @@ async def test_schema_contract_documents_mapping_fields():
     # local x/z, and that y/confidence are optional.
     r = await _get("/contract/schema")
     mapping = r.json()["$defs"]["Mapping"]["properties"]
-    for field in ("frame", "latitude", "longitude", "accuracy_m", "confidence", "y", "timestamp"):
+    for field in ("frame", "latitude", "longitude", "accuracy", "confidence", "y", "timestamp"):
         assert mapping[field].get("description"), f"{field} lacks a description"
 
 
@@ -125,9 +125,9 @@ async def test_no_wittra_name_reaches_a_differently_bound_instance(wittra_schema
     # ask an acme operator for Wittra credentials.
     doc = dict(wittra_schema_dict)
     doc["vendor"] = "acme"
-    doc["base_url"] = {"env": "ACME_BASE_URL"}
+    doc["baseUrl"] = {"env": "ACME_BASE_URL"}
     doc["path"] = "/api/{tenant}/device/{device_id}"
-    doc["path_vars"] = {"tenant": {"env": "ACME_TENANT"}}
+    doc["pathVars"] = {"tenant": {"env": "ACME_TENANT"}}
     doc["auth"] = {"scheme": "bearer", "token": {"env": "ACME_TOKEN"}}
     doc.pop("discover", None)
     doc.pop("diagnostics", None)

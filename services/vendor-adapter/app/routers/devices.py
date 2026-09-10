@@ -31,11 +31,11 @@ async def devices(request: Request) -> dict:
     found = await discover(schema, apply_filter=False)
     out = []
     for d in found or []:
-        vid = d.get("vendor_device_id")
+        vid = d.get("vendorDeviceId")
         if not vid:
             continue
         entry = {"id": vid}
-        for src, dst in (("label", "label"), ("device_type", "device_type"),
+        for src, dst in (("label", "label"), ("deviceType", "deviceType"),
                          ("role", "role"), ("source_class", "source_class")):
             if d.get(src) is not None:
                 entry[dst] = d[src]

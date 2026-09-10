@@ -5,7 +5,7 @@ schema declares it. Returns a flat list of normalised entries the editor
 can consume to populate / sync the room's anchors.
 
 Generic by construction: the only vendor-specific bits live in the
-schema (path, list_path, pagination rules, mapping). Adding a new vendor
+schema (path, listPath, pagination rules, mapping). Adding a new vendor
 to this flow is a JSON edit; the code does not change.
 """
 
@@ -24,24 +24,24 @@ log = logging.getLogger(__name__)
 _MAX_PAGES = 100
 
 
-def _extract_list(payload: Any, list_path: str) -> list:
-    """Pull the device array out of one page. `list_path` is the dotted
+def _extract_list(payload: Any, listPath: str) -> list:
+    """Pull the device array out of one page. `listPath` is the dotted
     path to the array (`""` means the response itself is the array)."""
-    if not list_path:
+    if not listPath:
         return payload if isinstance(payload, list) else []
-    found = get_path(payload, list_path)
+    found = get_path(payload, listPath)
     return found if isinstance(found, list) else []
 
 
 def _entry_passes_filter(entry: Any, filt: Optional[DiscoverFilter]) -> bool:
     """True when the entry should be included in the discover output.
-    The single supported rule today is `require_path`: skip when the
+    The single supported rule today is `requirePath`: skip when the
     named dotted path resolves to None on this entry.
     """
     if filt is None:
         return True
-    if filt.require_path:
-        if get_path(entry, filt.require_path) is None:
+    if filt.requirePath:
+        if get_path(entry, filt.requirePath) is None:
             return False
     return True
 
@@ -64,10 +64,10 @@ async def _walk_pages(schema: Schema) -> Optional[list[Any]]:
         body = await fetch_discover_page(schema, page=None)
         if body is None:
             return None
-        items = _extract_list(body, block.list_path)
+        items = _extract_list(body, block.listPath)
         log.info(
-            "discover: vendor=%s items_in_response=%d (list_path=%r)",
-            schema.vendor, len(items), block.list_path,
+            "discover: vendor=%s items_in_response=%d (listPath=%r)",
+            schema.vendor, len(items), block.listPath,
         )
         return items
 
@@ -77,16 +77,16 @@ async def _walk_pages(schema: Schema) -> Optional[list[Any]]:
         body = await fetch_discover_page(schema, page=page)
         if body is None:
             return None if not raw else raw
-        items = _extract_list(body, block.list_path)
+        items = _extract_list(body, block.listPath)
         log.info(
-            "discover: vendor=%s page=%d items_in_page=%d (list_path=%r)",
-            schema.vendor, page, len(items), block.list_path,
+            "discover: vendor=%s page=%d items_in_page=%d (listPath=%r)",
+            schema.vendor, page, len(items), block.listPath,
         )
         if not items:
             break
         raw.extend(items)
         if declared_total is None:
-            t = get_path(body, pagination.total_path)
+            t = get_path(body, pagination.totalPath)
             if isinstance(t, (int, float)):
                 declared_total = int(t)
                 log.info("discover: vendor=%s declared_total=%d", schema.vendor, declared_total)
@@ -139,7 +139,7 @@ def _normalise(
     items: list, mapping, classify: Optional[Classify] = None
 ) -> list[dict[str, Any]]:
     """Bulk-apply the per-entry mapping. Entries that produce None
-    (missing vendor_device_id) are silently dropped. When a `classify` block is
+    (missing vendorDeviceId) are silently dropped. When a `classify` block is
     present, merge the derived `role` + `source_class` (evaluated on the raw
     record, so structural predicates see the vendor's own fields)."""
     out: list[dict[str, Any]] = []

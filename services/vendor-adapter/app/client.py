@@ -26,25 +26,25 @@ def base_url(schema: Schema) -> Optional[str]:
     vendor URL, so an unset variable is a misconfiguration like a missing path
     var and the callers turn it into a 503.
     """
-    val = _resolve_env(schema.base_url.env)
+    val = _resolve_env(schema.baseUrl.env)
     if val is None:
-        log.warning("missing required env var %s for base_url", schema.base_url.env)
+        log.warning("missing required env var %s for baseUrl", schema.baseUrl.env)
         return None
     return val.rstrip("/")
 
 
 def _substitute_path_vars(schema: Schema, device_id: str) -> Optional[str]:
-    """Render `path` by substituting {device_id} plus any path_vars from env.
+    """Render `path` by substituting {device_id} plus any pathVars from env.
 
     Returns None if a required env var is unset - the caller maps this to a
     503 so the operator sees that the pod is misconfigured.
     """
     path = schema.path
     values: dict[str, str] = {"device_id": device_id}
-    for name, ref in schema.path_vars.items():
+    for name, ref in schema.pathVars.items():
         val = _resolve_env(ref.env)
         if val is None:
-            log.warning("missing required env var %s for path_vars.%s", ref.env, name)
+            log.warning("missing required env var %s for pathVars.%s", ref.env, name)
             return None
         values[name] = val
     try:
@@ -110,7 +110,7 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
     headers.update(corr_headers())
     url = f"{root}{path}"
     try:
-        async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
+        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
             resp = await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         log.warning("vendor %s unreachable: %s", schema.vendor, exc)
@@ -127,12 +127,12 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
         return None
 
 
-async def fetch_path(schema: Schema, device_id: str, override_path: str, path_vars: dict) -> Optional[dict]:
-    """GET an arbitrary vendor path (with {device_id} + the given path_vars)
-    using the schema's base_url and auth. Reused by the on-demand diagnostics
+async def fetch_path(schema: Schema, device_id: str, override_path: str, pathVars: dict) -> Optional[dict]:
+    """GET an arbitrary vendor path (with {device_id} + the given pathVars)
+    using the schema's base URL and auth. Reused by the on-demand diagnostics
     fetches. Returns parsed JSON on 200, or None on any error."""
     values: dict[str, str] = {"device_id": device_id}
-    for name, ref in path_vars.items():
+    for name, ref in pathVars.items():
         val = _resolve_env(ref.env)
         if val is None:
             log.warning("missing env %s for diagnostics path var %s", ref.env, name)
@@ -152,7 +152,7 @@ async def fetch_path(schema: Schema, device_id: str, override_path: str, path_va
     headers.update(corr_headers())
     url = f"{root}{rendered}"
     try:
-        async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
+        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
             resp = await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         log.warning("vendor %s diagnostics unreachable: %s", schema.vendor, exc)
@@ -173,10 +173,10 @@ def _substitute_discover_path_vars(schema: Schema) -> Optional[str]:
         return None
     path = schema.discover.path
     values: dict[str, str] = {}
-    for name, ref in schema.discover.path_vars.items():
+    for name, ref in schema.discover.pathVars.items():
         val = _resolve_env(ref.env)
         if val is None:
-            log.warning("missing required env var %s for discover.path_vars.%s", ref.env, name)
+            log.warning("missing required env var %s for discover.pathVars.%s", ref.env, name)
             return None
         values[name] = val
     try:
@@ -214,14 +214,14 @@ async def fetch_discover_page(
     params: dict[str, str] = {}
     pag = schema.discover.pagination
     if pag.type == "page" and page is not None:
-        params[pag.page_param] = str(page)
-        params[pag.size_param] = str(pag.page_size)
+        params[pag.pageParam] = str(page)
+        params[pag.sizeParam] = str(pag.pageSize)
     url = f"{root}{path}"
     debug = os.environ.get("VENDOR_ADAPTER_DEBUG", "0") not in ("", "0", "false", "False")
     if debug:
         log.info("discover: GET %s params=%s", url, params)
     try:
-        async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
+        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
             resp = await client.get(url, headers=headers, params=params or None)
     except httpx.HTTPError as exc:
         log.warning("vendor %s discover unreachable: %s", schema.vendor, exc)
@@ -239,7 +239,7 @@ async def fetch_discover_page(
         return None
     if debug:
         # Dump first 800 chars of the response so the operator can see
-        # whether the array key matches `list_path`, what fields each
+        # whether the array key matches `listPath`, what fields each
         # entry carries, and whether positions are populated for offline
         # devices.
         import json as _json

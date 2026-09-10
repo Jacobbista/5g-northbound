@@ -49,7 +49,7 @@ def wittra_sample_payload() -> dict:
 def wittra_sample_discover_page() -> list:
     """Trimmed Wittra v4 device-list response, mirroring the real shape: the
     array comes back directly with no envelope (the example schema uses
-    `list_path: ""`, `pagination.type: "none"`), each record carries a clean
+    `listPath: ""`, `pagination.type: "none"`), each record carries a clean
     `deviceType` string + a human `name`, and only anchors have `fixedLocation`.
     Three device classes so classification is exercised: a fixed beacon
     (infrastructure), a meshrouter with no fixedLocation (still infrastructure),

@@ -100,7 +100,7 @@ async def serve(full_path: str, request: Request):
     telem = match_template(SCHEMA["path"], req_path, query)
     if telem is not None:
         _check_auth(request)
-        _check_path_vars(SCHEMA.get("path_vars", {}), telem)
+        _check_path_vars(SCHEMA.get("pathVars", {}), telem)
         device_id = telem.get("device_id", "unknown")
         lat, lon = _walk(device_id)
         values = {
@@ -119,15 +119,15 @@ async def serve(full_path: str, request: Request):
         disc = match_template(discover["path"], req_path, query)
         if disc is not None:
             _check_auth(request)
-            _check_path_vars(discover.get("path_vars", {}), disc)
+            _check_path_vars(discover.get("pathVars", {}), disc)
             lat, lon = _walk("_discover")
             return build_discover(discover, lat, lon, _HEIGHT_M)
 
-    for entry in SCHEMA.get("diagnostics", {}).get("on_demand", []):
+    for entry in SCHEMA.get("diagnostics", {}).get("onDemand", []):
         diag = match_template(entry["path"], req_path, query)
         if diag is not None:
             _check_auth(request)
-            _check_path_vars(entry.get("path_vars", {}), diag)
+            _check_path_vars(entry.get("pathVars", {}), diag)
             return build_diagnostics(entry.get("mapping", {}))
 
     raise HTTPException(404, detail="No schema route matches this path")

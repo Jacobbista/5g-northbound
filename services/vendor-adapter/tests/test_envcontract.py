@@ -25,10 +25,10 @@ def test_a_name_used_at_several_sites_appears_once(wittra_schema):
     assert len(org) == 1
     assert org[0]["sensitive"] is False
     assert org[0]["declared_at"] == [
-        "path_vars.org_id",
+        "pathVars.org_id",
         "auth.username",
-        "discover.path_vars.org_id",
-        "diagnostics.on_demand[0].path_vars.org_id",
+        "discover.pathVars.org_id",
+        "diagnostics.onDemand[0].pathVars.org_id",
     ]
 
 
@@ -46,13 +46,13 @@ def test_entries_carry_no_values(wittra_schema):
 def test_the_base_url_variable_is_typed_as_a_url(wittra_schema):
     entry = [e for e in vendor_env(wittra_schema) if e["name"] == "WITTRA_BASE_URL"]
     assert entry and entry[0]["type"] == "url"
-    assert entry[0]["declared_at"] == ["base_url"]
+    assert entry[0]["declared_at"] == ["baseUrl"]
 
 
 def test_an_open_vendor_asks_for_no_credentials(wittra_schema_dict):
     doc = dict(wittra_schema_dict)
     doc["auth"] = {"scheme": "none"}
-    doc["path_vars"] = {}
+    doc["pathVars"] = {}
     doc["path"] = "/devices/{device_id}"
     doc.pop("discover", None)
     doc.pop("diagnostics", None)
@@ -62,11 +62,11 @@ def test_an_open_vendor_asks_for_no_credentials(wittra_schema_dict):
 
 def test_unmapped_reports_supported_fields_the_document_does_not_map(wittra_schema_dict):
     doc = dict(wittra_schema_dict)
-    doc["mapping"] = {k: v for k, v in doc["mapping"].items() if k != "last_seen"}
+    doc["mapping"] = {k: v for k, v in doc["mapping"].items() if k != "lastSeen"}
     cov = mapping_coverage(Schema.model_validate(doc))
-    assert "last_seen" in cov["supported"]
-    assert "last_seen" in cov["unmapped"]
-    assert "last_seen" not in cov["mapped"]
+    assert "lastSeen" in cov["supported"]
+    assert "lastSeen" in cov["unmapped"]
+    assert "lastSeen" not in cov["mapped"]
     assert "latitude" in cov["mapped"]
 
 

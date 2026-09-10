@@ -47,5 +47,5 @@ async def get_measurement(device_id: str, request: Request):
         diag = map_stream_diagnostics(schema.diagnostics, payload)
         if diag:
             measurement["diagnostics"] = diag
-    state.cache_put(device_id, measurement, schema.cache_ttl_s)
+    state.cache_put(device_id, measurement, schema.cacheTtl)
     return measurement

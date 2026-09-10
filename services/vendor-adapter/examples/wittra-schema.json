@@ -1,9 +1,11 @@
 {
   "vendor": "wittra",
   "transport": "rest",
-  "base_url": { "env": "WITTRA_BASE_URL" },
+  "baseUrl": {
+    "env": "WITTRA_BASE_URL"
+  },
   "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
-  "path_vars": {
+  "pathVars": {
     "org_id": {
       "env": "WITTRA_ORG_ID"
     },
@@ -20,8 +22,8 @@
       "env": "WITTRA_API_KEY"
     }
   },
-  "cache_ttl_s": 5.0,
-  "request_timeout_s": 5.0,
+  "cacheTtl": 5.0,
+  "requestTimeout": 5.0,
   "mapping": {
     "frame": {
       "const": "wgs84"
@@ -32,7 +34,7 @@
     "longitude": {
       "path": "latest.data.location.value.longitude"
     },
-    "accuracy_m": {
+    "accuracy": {
       "path": "latest.data.location.value.accuracy",
       "default": 5.0
     },
@@ -47,15 +49,15 @@
       "path": "latest.data.location.timestamp",
       "format": "iso8601"
     },
-    "last_seen": {
+    "lastSeen": {
       "path": "lastSeen",
       "format": "iso8601"
     }
   },
   "discover": {
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
-    "list_path": "",
-    "path_vars": {
+    "listPath": "",
+    "pathVars": {
       "org_id": {
         "env": "WITTRA_ORG_ID"
       },
@@ -67,7 +69,7 @@
       "type": "none"
     },
     "mapping": {
-      "vendor_device_id": {
+      "vendorDeviceId": {
         "path": "deviceId"
       },
       "label": {
@@ -80,19 +82,19 @@
       "longitude": {
         "path": "fixedLocation.longitude"
       },
-      "height_m": {
+      "height": {
         "path": "fixedLocation.height",
         "default": 0
       },
-      "device_type": {
+      "deviceType": {
         "path": "deviceType"
       }
     },
     "filter": {
-      "require_path": "fixedLocation.latitude"
+      "requirePath": "fixedLocation.latitude"
     },
     "classify": {
-      "asset_when": {
+      "assetWhen": {
         "path": "deviceType",
         "equals": "tag"
       }
@@ -100,21 +102,38 @@
   },
   "diagnostics": {
     "stream": {
-      "motion": { "path": "latest.data.location.value.motion" }
+      "motion": {
+        "path": "latest.data.location.value.motion"
+      }
     },
-    "on_demand": [
+    "onDemand": [
       {
         "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
-        "path_vars": {
-          "org_id": { "env": "WITTRA_ORG_ID" },
-          "project_id": { "env": "WITTRA_PROJECT_ID" }
+        "pathVars": {
+          "org_id": {
+            "env": "WITTRA_ORG_ID"
+          },
+          "project_id": {
+            "env": "WITTRA_PROJECT_ID"
+          }
         },
         "mapping": {
-          "battery": { "path": "latest.data.battery.percentage" },
-          "last_seen": { "path": "latest.data.location.timestamp", "format": "iso8601" },
-          "motion": { "path": "latest.data.location.value.motion" },
-          "accuracy_value": { "path": "latest.data.location.value.accuracy" },
-          "accuracy_kind": { "const": "vendor-radius" }
+          "battery": {
+            "path": "latest.data.battery.percentage"
+          },
+          "motion": {
+            "path": "latest.data.location.value.motion"
+          },
+          "accuracy_value": {
+            "path": "latest.data.location.value.accuracy"
+          },
+          "accuracy_kind": {
+            "const": "vendor-radius"
+          },
+          "lastSeen": {
+            "path": "latest.data.location.timestamp",
+            "format": "iso8601"
+          }
         }
       }
     ]

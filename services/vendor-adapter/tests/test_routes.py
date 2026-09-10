@@ -53,7 +53,7 @@ async def test_put_schema_validates_and_persists(
 
 
 @pytest.mark.asyncio
-async def test_put_schema_reports_x_vendor_keys(
+async def test_put_schema_reports_vendorSpecificKeys(
     client, wittra_schema_dict, monkeypatch, tmp_path
 ):
     monkeypatch.setattr(
@@ -69,8 +69,8 @@ async def test_put_schema_reports_x_vendor_keys(
     }
     r = await client.put("/schema", json=d)
     assert r.status_code == 200
-    assert "temperature" in r.json()["x_vendor_keys"]
-    assert "battery" not in r.json()["x_vendor_keys"]
+    assert "temperature" in r.json()["vendorSpecificKeys"]
+    assert "battery" not in r.json()["vendorSpecificKeys"]
 
 
 @pytest.mark.asyncio
@@ -200,4 +200,4 @@ async def test_measurement_carries_stream_diagnostics(
 
     r = await client.get("/measurement/D001")
     assert r.status_code == 200
-    assert r.json()["diagnostics"] == {"x_vendor": {"motion": "STATIONARY"}}
+    assert r.json()["diagnostics"] == {"vendorSpecific": {"motion": "STATIONARY"}}

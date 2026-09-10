@@ -13,15 +13,15 @@ def test_to_discover_entry_extracts_known_fields(wittra_schema, wittra_sample_di
     entry = wittra_sample_discover_page[0]
     out = to_discover_entry(wittra_schema.discover.mapping, entry)
     assert out is not None
-    assert out["vendor_device_id"] == "D001"
+    assert out["vendorDeviceId"] == "D001"
     # label maps from the real Wittra `name` field.
     assert out["label"] == "Position Beacon 01"
-    # deviceType is a clean string, surfaced verbatim as device_type.
-    assert out["device_type"] == "beacon"
+    # deviceType is a clean string, surfaced verbatim as deviceType.
+    assert out["deviceType"] == "beacon"
     assert out["latitude"] == pytest.approx(45.064547)
     assert out["longitude"] == pytest.approx(7.659272)
-    # height_m maps from fixedLocation.height.
-    assert out["height_m"] == pytest.approx(2.0)
+    # height maps from fixedLocation.height.
+    assert out["height"] == pytest.approx(2.0)
 
 
 def test_classify_entry_role_from_devicetype(wittra_schema):
@@ -34,7 +34,7 @@ def test_classify_entry_role_from_devicetype(wittra_schema):
     assert classify_entry(cl, {"deviceType": "tag"}) == {"role": "asset"}
     for infra_type in ("beacon", "meshrouter", "gateway"):
         assert classify_entry(cl, {"deviceType": infra_type}) == {"role": "infrastructure"}
-    # An UNKNOWN deviceType defaults to infrastructure (asset_when: not
+    # An UNKNOWN deviceType defaults to infrastructure (assetWhen: not
     # auto-onboarded), never asset.
     assert classify_entry(cl, {"deviceType": "some-future-node"}) == {"role": "infrastructure"}
 
@@ -48,8 +48,8 @@ def test_classify_entry_source_class_rules_grammar():
     from app.schema import Classify, ClassifyPredicate, SourceClassRule
 
     cl = Classify(
-        source_class_rules=[
-            SourceClassRule(when=ClassifyPredicate(require_path="miotyConfig"), value="mioty"),
+        sourceClassRules=[
+            SourceClassRule(when=ClassifyPredicate(requirePath="miotyConfig"), value="mioty"),
         ],
     )
     assert classify_entry(cl, {"miotyConfig": {"eui": "x"}}) == {"source_class": "mioty"}
@@ -63,7 +63,7 @@ async def test_discover_unfiltered_keeps_tags(wittra_schema, monkeypatch):
     from app.discover import discover
     from app.schema import DiscoverFilter
 
-    wittra_schema.discover.filter = DiscoverFilter(require_path="fixedLocation.latitude")
+    wittra_schema.discover.filter = DiscoverFilter(requirePath="fixedLocation.latitude")
     raw = [
         {
             "deviceId": "BEACON1",
@@ -79,10 +79,10 @@ async def test_discover_unfiltered_keeps_tags(wittra_schema, monkeypatch):
     monkeypatch.setattr("app.discover.fetch_discover_page", fake_fetch)
 
     filtered = await discover(wittra_schema, apply_filter=True)
-    assert {d["vendor_device_id"] for d in filtered} == {"BEACON1"}  # tag dropped
+    assert {d["vendorDeviceId"] for d in filtered} == {"BEACON1"}  # tag dropped
 
     unfiltered = await discover(wittra_schema, apply_filter=False)
-    by_id = {d["vendor_device_id"]: d for d in unfiltered}
+    by_id = {d["vendorDeviceId"]: d for d in unfiltered}
     assert set(by_id) == {"BEACON1", "TAG1"}  # tag kept
     assert by_id["BEACON1"]["role"] == "infrastructure"
     assert by_id["TAG1"]["role"] == "asset"
@@ -96,14 +96,14 @@ def test_to_discover_entry_returns_none_when_id_missing(wittra_schema):
 def test_to_discover_entry_handles_missing_optional_fields(wittra_schema):
     out = to_discover_entry(wittra_schema.discover.mapping, {"deviceId": "D003"})
     assert out is not None
-    assert out["vendor_device_id"] == "D003"
+    assert out["vendorDeviceId"] == "D003"
     # No `name` on this record -> label is None (default).
     assert out["label"] is None
     assert out["latitude"] is None
     assert out["longitude"] is None
-    # height_m falls back to the mapping default (0) when fixedLocation is absent.
-    assert out["height_m"] == 0
-    assert out["device_type"] is None
+    # height falls back to the mapping default (0) when fixedLocation is absent.
+    assert out["height"] == 0
+    assert out["deviceType"] is None
 
 
 @respx.mock
@@ -123,8 +123,8 @@ async def test_run_discover_walks_paginated_endpoint(
     devices = await run_discover(wittra_schema, apply_filter=False)
     assert devices is not None
     assert len(devices) == 3
-    assert devices[0]["vendor_device_id"] == "D001"
-    by_id = {d["vendor_device_id"]: d for d in devices}
+    assert devices[0]["vendorDeviceId"] == "D001"
+    by_id = {d["vendorDeviceId"]: d for d in devices}
     assert by_id["D001"]["role"] == "infrastructure"
     assert by_id["MR1"]["role"] == "infrastructure"
     assert by_id["TAG1"]["role"] == "asset"
@@ -166,7 +166,7 @@ async def test_discover_route_returns_normalised_devices(
     assert body["vendor"] == "wittra"
     # /discover is the editor path: the anchor-only filter keeps the fixed
     # beacon and drops the meshrouter and tag (no fixedLocation).
-    assert {d["vendor_device_id"] for d in body["devices"]} == {"D001"}
+    assert {d["vendorDeviceId"] for d in body["devices"]} == {"D001"}
 
 
 @respx.mock

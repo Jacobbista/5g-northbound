@@ -10,17 +10,17 @@ Shape:
       "vendor": "<schema.vendor>",
       "devices": [
         {
-          "vendor_device_id": "f8f8052000ea96f8",
+          "vendorDeviceId": "f8f8052000ea96f8",
           "label":            "Tag 01",
           "latitude":         59.4047,
           "longitude":        17.9492,
-          "height_m":         3.0
+          "height":         3.0
         },
         ...
       ]
     }
 
-`label`, `latitude`, `longitude`, `height_m` are optional and may be
+`label`, `latitude`, `longitude`, `height` are optional and may be
 absent when the vendor does not expose them. The editor falls back to
 manual placement for entries without coordinates.
 

@@ -85,7 +85,7 @@ Transform = Annotated[
 
 class ConstSpec(BaseModel):
     """A constant value, returned verbatim. Use for fields the vendor does
-    not expose (e.g. `accuracy_m` when the vendor only reports confidence)."""
+    not expose (e.g. `accuracy` when the vendor only reports confidence)."""
 
     model_config = ConfigDict(extra="forbid")
     const: Any
@@ -128,8 +128,9 @@ class Mapping(BaseModel):
     longitude: FieldSpec = Field(
         description="wgs84: geographic longitude in degrees. local: the room-local z coordinate in metres."
     )
-    accuracy_m: FieldSpec = Field(
-        description="Horizontal accuracy radius in metres; surfaced as the core `accuracy` diagnostic."
+    accuracy: FieldSpec = Field(
+        json_schema_extra={"x-unit": "m"},
+        description="Horizontal accuracy radius; surfaced as the core `accuracy` diagnostic.",
     )
     confidence: Optional[FieldSpec] = Field(
         default=None,
@@ -142,7 +143,7 @@ class Mapping(BaseModel):
     timestamp: FieldSpec = Field(
         description="Fix time. A PathSpec with format:'iso8601' coerces an ISO string to epoch seconds; a numeric epoch passes through.",
     )
-    last_seen: Optional[FieldSpec] = Field(
+    lastSeen: Optional[FieldSpec] = Field(
         default=None,
         description=(
             "Optional time the device last communicated with the vendor. This is NOT the fix "
@@ -161,22 +162,22 @@ class DiscoverMapping(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    vendor_device_id: FieldSpec
+    vendorDeviceId: FieldSpec
     label: Optional[FieldSpec] = None
     latitude: Optional[FieldSpec] = None
     longitude: Optional[FieldSpec] = None
-    height_m: Optional[FieldSpec] = None
+    height: Optional[FieldSpec] = Field(default=None, json_schema_extra={"x-unit": "m"})
     # Native vendor device type (e.g. Wittra `deviceType`: "beacon" / "tag" /
-    # "meshrouter" / "gateway"). Surfaced as `device_type` on discovery and used
+    # "meshrouter" / "gateway"). Surfaced as `deviceType` on discovery and used
     # by the `classify` block's predicates to derive role + source_class.
-    device_type: Optional[FieldSpec] = None
+    deviceType: Optional[FieldSpec] = None
 
 
 class Pagination(BaseModel):
     """How to walk the vendor's pagination, if any.
 
     `type = page`: query params control 1-indexed page number + page size,
-    body carries the total count under `total_path`. Pull pages until the
+    body carries the total count under `totalPath`. Pull pages until the
     accumulated list reaches `total`.
 
     `type = none`: response carries the full list in one go.
@@ -184,10 +185,10 @@ class Pagination(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     type: Literal["none", "page"] = "none"
-    page_param: str = "page"
-    size_param: str = "size"
-    page_size: int = 100
-    total_path: str = "total"
+    pageParam: str = "page"
+    sizeParam: str = "size"
+    pageSize: int = 100
+    totalPath: str = "total"
 
 
 class DiscoverFilter(BaseModel):
@@ -199,30 +200,30 @@ class DiscoverFilter(BaseModel):
     """
 
     model_config = ConfigDict(extra="ignore")
-    # Skip the entry when get_path(entry, require_path) is None.
-    require_path: Optional[str] = None
+    # Skip the entry when get_path(entry, requirePath) is None.
+    requirePath: Optional[str] = None
 
 
 class ClassifyPredicate(BaseModel):
     """A structural test against one raw vendor device record. Matches when:
-      - `require_path` (if set) resolves to a non-null value, AND
+      - `requirePath` (if set) resolves to a non-null value, AND
       - `path` == `equals` (if both set).
     Vendors differ: some expose a clean type string (Wittra's `deviceType` is
     "beacon" / "tag" / "meshrouter" / "gateway" - match with `path` + `equals`);
     others only encode it structurally, as a sub-object's presence (a MIOTY node
     has a `miotyConfig`, a border router has a `borderrouter` - match with
-    `require_path`). Both forms are the schema author's, written against the
+    `requirePath`). Both forms are the schema author's, written against the
     vendor's own fields; the adapter code stays vendor-agnostic."""
 
     model_config = ConfigDict(extra="forbid")
-    require_path: Optional[str] = None
+    requirePath: Optional[str] = None
     path: Optional[str] = None
     equals: Optional[Any] = None
 
 
 class SourceClassRule(BaseModel):
     """When `when` matches, the device's `source_class` is `value`. First
-    matching rule wins; `Classify.source_class_default` applies if none do."""
+    matching rule wins; `Classify.sourceClassDefault` applies if none do."""
 
     model_config = ConfigDict(extra="forbid")
     when: ClassifyPredicate
@@ -237,12 +238,12 @@ class Classify(BaseModel):
         outside the 3GPP trust domain, never onboarded as an asset) vs `asset`
         (the tracked entity). Declare exactly ONE of two predicates, which sets
         the default for an unmatched device:
-          * `asset_when`          - match -> asset, else infrastructure.
+          * `assetWhen`          - match -> asset, else infrastructure.
             Positively names the asset; an UNKNOWN device defaults to
             infrastructure (conservative: not auto-onboarded). Preferred when
             the vendor's device list is mostly fixed gear and only a small,
             named type is trackable (Wittra: `deviceType == tag`).
-          * `infrastructure_when` - match -> infrastructure, else asset.
+          * `infrastructureWhen` - match -> infrastructure, else asset.
             An unknown device defaults to asset (onboardable). Use when the
             trackable set is open-ended and infra is the small, named set.
       - source_class: the positioning technology (uwb / ble / wifi / gnss /
@@ -252,14 +253,14 @@ class Classify(BaseModel):
 
     Everything is optional: declare neither role predicate and no `role` is
     emitted (every candidate stays onboardable); omit source_class and none is
-    emitted. If both role predicates are set, `asset_when` wins.
+    emitted. If both role predicates are set, `assetWhen` wins.
     """
 
     model_config = ConfigDict(extra="forbid")
-    asset_when: Optional[ClassifyPredicate] = None
-    infrastructure_when: Optional[ClassifyPredicate] = None
-    source_class_default: Optional[str] = None
-    source_class_rules: list[SourceClassRule] = Field(default_factory=list)
+    assetWhen: Optional[ClassifyPredicate] = None
+    infrastructureWhen: Optional[ClassifyPredicate] = None
+    sourceClassDefault: Optional[str] = None
+    sourceClassRules: list[SourceClassRule] = Field(default_factory=list)
 
 
 class DiscoverBlock(BaseModel):
@@ -274,8 +275,8 @@ class DiscoverBlock(BaseModel):
     path: str
     # JSON dotted path to the array inside the response. Empty / "" means
     # the response itself IS the array.
-    list_path: str = ""
-    path_vars: dict[str, EnvRef] = Field(default_factory=dict)
+    listPath: str = ""
+    pathVars: dict[str, EnvRef] = Field(default_factory=dict)
     pagination: Pagination = Field(default_factory=Pagination)
     mapping: DiscoverMapping
     # The editor's anchor-only include filter. Onboarding discovery reads the
@@ -289,8 +290,8 @@ class DiscoverBlock(BaseModel):
 class DiagnosticsFetch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str
-    list_path: str = ""
-    path_vars: dict[str, EnvRef] = Field(default_factory=dict)
+    listPath: str = ""
+    pathVars: dict[str, EnvRef] = Field(default_factory=dict)
     mapping: dict[str, FieldSpec] = Field(default_factory=dict)
 
 
@@ -299,11 +300,11 @@ class DiagnosticsBlock(BaseModel):
 
     `stream` fields resolve against the SAME record `/measurement` maps (the
     current-fix payload), so motion rides the broadcast at no extra fetch.
-    `on_demand` entries are extra vendor fetches, issued only by the
+    `onDemand` entries are extra vendor fetches, issued only by the
     GET /diagnostics/{id} endpoint."""
     model_config = ConfigDict(extra="forbid")
     stream: dict[str, FieldSpec] = Field(default_factory=dict)
-    on_demand: list[DiagnosticsFetch] = Field(default_factory=list)
+    onDemand: list[DiagnosticsFetch] = Field(default_factory=list)
 
 
 class Schema(BaseModel):
@@ -317,12 +318,12 @@ class Schema(BaseModel):
     # The vendor's API root. An EnvRef, never a literal: the image is generic
     # and the URL is operator input, so the document names only the variable
     # the operator fills.
-    base_url: EnvRef
+    baseUrl: EnvRef
     path: str
-    path_vars: dict[str, EnvRef] = Field(default_factory=dict)
+    pathVars: dict[str, EnvRef] = Field(default_factory=dict)
     auth: Auth
-    cache_ttl_s: float = 5.0
-    request_timeout_s: float = 5.0
+    cacheTtl: float = Field(default=5.0, json_schema_extra={"x-unit": "s"})
+    requestTimeout: float = Field(default=5.0, json_schema_extra={"x-unit": "s"})
     mapping: Mapping
     discover: Optional[DiscoverBlock] = None
     diagnostics: Optional[DiagnosticsBlock] = None
