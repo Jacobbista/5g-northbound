@@ -109,6 +109,6 @@ curl -X PUT http://localhost:8092/schema \
 
 ## See also
 
-- [`docs/integrating-a-vendor-rest-api.md`](../docs/integrating-a-vendor-rest-api.md) - operator-facing guide
-- [`docs/adapters.md`](../docs/adapters.md) - adapter contract this image satisfies
+- [`docs/integrating-a-vendor-rest-api.md`](../../docs/integrating-a-vendor-rest-api.md) - operator-facing guide
+- [`docs/adapters.md`](../../docs/adapters.md) - adapter contract this image satisfies
 - [`mock-vendor/`](../../mocks/mock-vendor/) - local Wittra cloud fake used by the demo

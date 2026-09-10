@@ -90,7 +90,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 ## Constraints
 
 - **JWT validation in `camara-gateway` is mandatory for all CAMARA endpoints.** `/health` is exempt; `SKIP_AUTH=true` is a development override only.
-- The CAMARA OpenAPI documents under [`services/camara-gateway/spec/`](services/camara-gateway/spec/) are pinned to the meta-release recorded in `spec/VERSION`. Treat them as source of truth; do not hand-edit. To bump the pin: refetch from upstream at the new commit and update `VERSION`.
+- The CAMARA OpenAPI documents under [`services/camara-gateway/spec/`](services/camara-gateway/spec/) are pinned to the meta-release recorded in `services/camara-gateway/spec/VERSION`. Treat them as source of truth; do not hand-edit. To bump the pin: refetch from upstream at the new commit and update `VERSION`.
 - The adapter contract (`GET /measurement/{device_id}` → `Measurement`) is the only stable surface between the engine and any positioning source. Changing it requires updating every adapter implementation. See [`docs/adapters.md`](docs/adapters.md).
 - The engine-gateway contract (`GET /position/{device_id}` → `EnginePosition`, in WGS84) is geometry-agnostic on the gateway side. The engine owns coordinate conversion; the gateway does not project or rotate.
 - Do not add `gps_origin` to the production `floor-plan.json` ConfigMap until a real GPS reference for the lab has been measured. The engine degrades gracefully (`latitude: 0, longitude: 0` with a warning) when it is absent.

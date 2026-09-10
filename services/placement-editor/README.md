@@ -182,6 +182,6 @@ The scaffold does not validate JWTs. Production deployments MUST front the servi
 
 ## See also
 
-- [`docs/data-contracts.md` § Placement-editor API](../docs/data-contracts.md#placement-editor-api)
-- [`docs/api-reference.md`](../docs/api-reference.md) - one-row-per-endpoint index
-- [`docs/architecture.md`](../docs/architecture.md) - service topology diagram
+- [`docs/data-contracts.md` § Placement-editor API](../../docs/data-contracts.md#placement-editor-api)
+- [`docs/api-reference.md`](../../docs/api-reference.md) - one-row-per-endpoint index
+- [`docs/architecture.md`](../../docs/architecture.md) - service topology diagram

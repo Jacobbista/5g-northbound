@@ -99,7 +99,7 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skelet
 | Vendor credentials          | `services/vendor-adapter/.env`              | `Secret` (names come from the active vendor schema) |
 | Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
 | Asset Identity Map          | `dev/assets.json`                         | **PVC** (`ASSET_STORE_FILE`) seeded from `ASSET_SEED_FILE` |
-| Engine floor-plan georef    | `dev/floor-plan.json`                     | `ConfigMap` (`FLOOR_PLAN_PATH`)                   |
+| Venue blueprint (georef)    | `dev/floor-plan.json` (first-boot seed)   | **PVC** (`BLUEPRINT_PATH`), seeded once from `BLUEPRINT_SEED_PATH` |
 
 The blueprint/bindings split and its cluster mounts are detailed in [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md); the georef workflow, if you re-calibrate for a new venue, in [`georeferencing.md`](georeferencing.md).
 
@@ -144,7 +144,8 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the asset's `source` (adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
 | `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
 | `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
-| `FLOOR_PLAN_PATH`       | `/app/config/floor-plan.json`        | Mounted from `positioning-floor-plan` ConfigMap |
+| `BLUEPRINT_PATH`        | `/app/data/blueprint.json`           | The engine's own writable copy of the venue blueprint; it is the blueprint authority and serves it at `GET/PUT /blueprint`. Needs a PVC, not a ConfigMap |
+| `BLUEPRINT_SEED_PATH`   | empty                                | One-time read-only seed migrated into the store on first boot when `BLUEPRINT_PATH` is empty. Unset in steady state: the editor PUTs the blueprint over HTTP |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
 | `DEVICE_IDS`            | `uwb-tag-001`                        | Cold-start seed for the WebSocket broadcast; normally unset, since the engine learns its target ids from adapters advertising the `devices` capability |
 | `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
@@ -162,7 +163,7 @@ The split into blueprint + bindings is a deliberate architectural choice: bluepr
 
 ### synthetic-adapter
 
-Synthetic random-walk adapter. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-adapter`, so the engine treats them uniformly.
+Synthetic adapter driving a waypoint walker, with wall and opening collision when a blueprint is available. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-adapter`, so the engine treats them uniformly.
 
 | Variable      | Default | Notes |
 |---------------|---------|-------|
@@ -170,7 +171,12 @@ Synthetic random-walk adapter. No external configuration file; bounds and motion
 | `WIDTH_M`     | `20.0`  | Room width along x (metres); positions are clamped to `[0, WIDTH_M]` |
 | `DEPTH_M`     | `30.0`  | Room depth along z |
 | `HEIGHT_M`    | `3.0`   | Room height along y |
-| `STEP_M`      | `0.3`   | Random-walk step per poll (metres). Larger values produce more visible motion in the demo |
+| `SPEED_MPS`   | `1.0`   | Walking speed for the waypoint walker (m/s). 1.0 reads as indoor ambling |
+| `STEP_M`      | `0.3`   | Legacy random-walk step per poll (metres). Kept so old configs parse; the waypoint walker does not use it |
+| `LAYOUT_PATH` | unset   | Optional placement-editor layout JSON. When set and readable the walker loads inner walls + openings and stays inside the room geometry; unset it rectangles inside the `WIDTH_M` x `DEPTH_M` box |
+| `DEVICE_IDS`  | empty   | Device ids this source serves (CSV). Empty serves every id, which pollutes fusion when the engine fans out; set it so the adapter 404s for devices it does not own |
+| `ANCHOR_IDS`  | empty   | Fixed infrastructure ids (CSV), surfaced on `/devices` with `role=infrastructure`. Not walked, so `/measurement` 404s for them |
+| `SOURCE_CLASS`| `uwb`   | Positioning technology this synthetic source stands in for; surfaced as `source_class` on `/devices` |
 | `ACCURACY_M`  | `1.5`   | Fixed accuracy reported on every measurement |
 | `CONFIDENCE`  | `0.6`   | Fixed confidence reported on every measurement |
 | `RNG_SEED`    | `0`     | Set non-zero for reproducible trajectories in tests / recordings |
