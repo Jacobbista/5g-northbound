@@ -11,14 +11,14 @@
       "external_origin": "CAMARA_GATEWAY_EXTERNAL_ORIGIN"
     },
     {
-      "service": "placement-editor",
-      "kind": "ui",
-      "external_origin": "PLACEMENT_EDITOR_EXTERNAL_ORIGIN"
-    },
-    {
       "service": "location-app",
       "kind": "ui",
       "external_origin": "LOCATION_APP_EXTERNAL_ORIGIN"
+    },
+    {
+      "service": "placement-editor",
+      "kind": "ui",
+      "external_origin": "PLACEMENT_EDITOR_EXTERNAL_ORIGIN"
     },
     {
       "service": "positioning-engine",
@@ -44,6 +44,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "vendor-adapter",
         "wifi-adapter"
@@ -60,6 +61,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -74,6 +76,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "vendor-adapter",
         "wifi-adapter"
@@ -90,6 +93,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "vendor-adapter",
         "wifi-adapter"
@@ -106,6 +110,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": true,
+      "type": "path",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -120,6 +125,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -134,6 +140,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -148,6 +155,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "path",
       "consumed_by": [
         "camara-gateway"
       ],
@@ -162,6 +170,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": true,
+      "type": "path",
       "consumed_by": [
         "camara-gateway"
       ],
@@ -176,6 +185,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": true,
+      "type": "path",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -190,6 +200,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "path",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -204,6 +215,7 @@
       "routes_to": "Secret",
       "set_by": "secret",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "camara-gateway"
       ],
@@ -218,11 +230,27 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "placement-editor"
       ],
       "services": [
         "placement-editor"
+      ]
+    },
+    {
+      "name": "DEVICE_DISCOVERY_INTERVAL_S",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "positioning-engine"
+      ],
+      "services": [
+        "positioning-engine"
       ]
     },
     {
@@ -232,6 +260,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -246,6 +275,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -260,6 +290,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -274,6 +305,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "positioning-engine"
       ],
@@ -288,6 +320,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "camara-gateway"
       ],
@@ -302,6 +335,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "camara-gateway"
       ],
@@ -316,11 +350,27 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "path",
       "consumed_by": [
         "wifi-adapter"
       ],
       "services": [
         "wifi-adapter"
+      ]
+    },
+    {
+      "name": "LOCATION_CACHE_TTL_S",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "camara-gateway"
+      ],
+      "services": [
+        "camara-gateway"
       ]
     },
     {
@@ -330,6 +380,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "camara-gateway",
         "placement-editor",
@@ -350,39 +401,12 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "camara-gateway"
       ],
       "services": [
         "camara-gateway"
-      ]
-    },
-    {
-      "name": "VENDOR_ADAPTER_DEBUG",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "vendor-adapter"
-      ],
-      "services": [
-        "vendor-adapter"
-      ]
-    },
-    {
-      "name": "VENDOR_ADAPTER_URL",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "placement-editor"
-      ],
-      "services": [
-        "placement-editor"
       ]
     },
     {
@@ -392,6 +416,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": true,
+      "type": "path",
       "consumed_by": [
         "vendor-adapter"
       ],
@@ -406,11 +431,42 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "boolean",
       "consumed_by": [
         "camara-gateway"
       ],
       "services": [
         "camara-gateway"
+      ]
+    },
+    {
+      "name": "VENDOR_ADAPTER_DEBUG",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "boolean",
+      "consumed_by": [
+        "vendor-adapter"
+      ],
+      "services": [
+        "vendor-adapter"
+      ]
+    },
+    {
+      "name": "VENDOR_ADAPTER_URL",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "url",
+      "consumed_by": [
+        "placement-editor"
+      ],
+      "services": [
+        "placement-editor"
       ]
     },
     {
@@ -420,6 +476,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "location-app"
       ],
@@ -434,6 +491,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "location-app"
       ],
@@ -448,6 +506,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "location-app"
       ],
@@ -462,6 +521,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "location-app"
       ],
@@ -476,6 +536,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "location-app"
       ],
@@ -490,6 +551,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "number",
       "consumed_by": [
         "location-app"
       ],
@@ -504,6 +566,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "location-app"
       ],
@@ -518,6 +581,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "location-app"
       ],
@@ -532,6 +596,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "url",
       "consumed_by": [
         "location-app"
       ],
@@ -546,6 +611,7 @@
       "routes_to": "Secret",
       "set_by": "operator",
       "writable": false,
+      "type": "string",
       "consumed_by": [
         "placement-editor"
       ],
@@ -560,11 +626,29 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "integer",
       "consumed_by": [
         "positioning-engine"
       ],
       "services": [
         "positioning-engine"
+      ]
+    },
+    {
+      "name": "WIFI_ADAPTER_URL",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "url",
+      "consumed_by": [
+        "camara-gateway",
+        "placement-editor"
+      ],
+      "services": [
+        "camara-gateway",
+        "placement-editor"
       ]
     },
     {
@@ -574,6 +658,7 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": true,
+      "type": "path",
       "consumed_by": [
         "wifi-adapter"
       ],
@@ -588,83 +673,12 @@
       "routes_to": "ConfigMap",
       "set_by": "compose",
       "writable": false,
+      "type": "boolean",
       "consumed_by": [
         "wifi-adapter"
       ],
       "services": [
         "wifi-adapter"
-      ]
-    },
-    {
-      "name": "WIFI_ADAPTER_URL",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "camara-gateway",
-        "placement-editor"
-      ],
-      "services": [
-        "camara-gateway",
-        "placement-editor"
-      ]
-    },
-    {
-      "name": "WITTRA_API_KEY",
-      "sensitive": true,
-      "tier": "secret",
-      "routes_to": "Secret",
-      "set_by": "secret",
-      "writable": false,
-      "consumed_by": [
-        "vendor-adapter"
-      ],
-      "services": [
-        "vendor-adapter"
-      ]
-    },
-    {
-      "name": "WITTRA_BASE_URL",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "vendor-adapter"
-      ],
-      "services": [
-        "vendor-adapter"
-      ]
-    },
-    {
-      "name": "WITTRA_ORG_ID",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "vendor-adapter"
-      ],
-      "services": [
-        "vendor-adapter"
-      ]
-    },
-    {
-      "name": "WITTRA_PROJECT_ID",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "consumed_by": [
-        "vendor-adapter"
-      ],
-      "services": [
-        "vendor-adapter"
       ]
     }
   ]

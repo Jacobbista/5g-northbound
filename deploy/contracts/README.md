@@ -24,6 +24,10 @@ required:
   - name: <ENV_VAR_NAME>           # POSIX style, uppercase
     description: <prompt shown to the operator>
     sensitive: <true|false>        # true → k8s Secret, false → ConfigMap
+    type: <string|url|integer|number|boolean|path>
+                                   # optional, default string. Value shape, for
+                                   # form rendering and validation. Orthogonal
+                                   # to `sensitive`.
     example: <optional placeholder>
     runtime_layer: <optional>      # e.g. "window.__ENV__" when the var is
                                    # read by the browser via env-config.js

@@ -29,6 +29,10 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = REPO_ROOT / "deploy" / "compose" / "docker-compose.yml"
 
+# Value shape, for form rendering and validation. Orthogonal to `sensitive`:
+# a secret is a string that routes to a Secret rather than a ConfigMap.
+ALLOWED_TYPES = {"string", "url", "integer", "number", "boolean", "path"}
+
 # Where each service expects its env to be edited, in dev. The deploy portal
 # will replace this with k8s ConfigMap / Secret paths at production time.
 EDIT_PATH = {
@@ -59,6 +63,7 @@ class Var:
     set_by: str | None = None      # compose | secret | operator
     consumed_by: list | None = None
     writable: bool = False         # path the service WRITES at runtime -> needs a PVC, not a read-only mount
+    type: str = "string"           # value shape; see ALLOWED_TYPES
 
 
 @dataclass
@@ -89,6 +94,7 @@ def load_contracts() -> list[Contract]:
                     set_by=entry.get("set_by"),
                     consumed_by=entry.get("consumed_by"),
                     writable=bool(entry.get("writable", False)),
+                    type=entry.get("type", "string"),
                 )
             )
         for entry in raw.get("optional") or []:
@@ -104,6 +110,7 @@ def load_contracts() -> list[Contract]:
                     set_by=entry.get("set_by"),
                     consumed_by=entry.get("consumed_by"),
                     writable=bool(entry.get("writable", False)),
+                    type=entry.get("type", "string"),
                 )
             )
         out.append(
@@ -298,6 +305,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
       ERROR  same var name, conflicting `sensitive` across services
       ERROR  sensitive var carries a real (non-placeholder) default
+      ERROR  var declares a `type` outside ALLOWED_TYPES
       WARN   api/ui service without external_origin (KELT can't route it)
       WARN   var without set_by (dashboard wizard hides/derives from it)
     """
@@ -316,6 +324,10 @@ def cmd_lint(args: argparse.Namespace) -> int:
             # sensitive var MUST say where its value comes from (secret|operator).
             if v.sensitive and v.set_by is None:
                 warns.append(f"{c.service}.{v.name}: sensitive but no set_by (secret|operator)")
+            if v.type not in ALLOWED_TYPES:
+                errors.append(
+                    f"{c.service}.{v.name}: type '{v.type}' is not one of {sorted(ALLOWED_TYPES)}"
+                )
         if c.kind in ("api", "ui") and not c.external_origin:
             warns.append(f"{c.service}: kind={c.kind} but no external_origin (KELT reachability needs it)")
 
@@ -349,6 +361,7 @@ def cmd_sensitivity_manifest(args: argparse.Namespace) -> int:
                 "routes_to": "Secret" if v.sensitive else "ConfigMap",
                 "set_by": v.set_by or "compose",
                 "writable": v.writable,
+                "type": v.type,
                 "consumed_by": set(),
                 "services": set(),
             })
