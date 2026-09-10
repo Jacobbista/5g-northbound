@@ -10,13 +10,13 @@ the data network, exactly like the WiFi scanner already posts scans.
 
 ```mermaid
 flowchart LR
-    M["synthetic-adapter"] -->|"POST /adapters {name, base_url, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
+    M["synthetic-adapter"] -->|"POST /adapters {name, baseUrl, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
     W["wifi-adapter"] --> E
     R["vendor-adapter"] --> E
     E["positioning-engine<br/><i>registry authority:<br/>persists · evicts · polls</i>"]
 ```
 
-- **Self-registration**: each adapter POSTs `{name, base_url, kind}` to
+- **Self-registration**: each adapter POSTs `{name, baseUrl, kind}` to
   `POSITIONING_ENGINE_URL/adapters` at startup and re-POSTs on a heartbeat
   (`ADAPTER_HEARTBEAT_S`, default 15s). The POST is idempotent (upsert).
 - **Eviction**: the engine drops a self-registered adapter after
@@ -29,7 +29,7 @@ flowchart LR
 
 ## Two provenance classes, different lifecycles
 
-| `registered_via` | Source                          | Persisted? | TTL-evicted? | Liveness from        |
+| `registeredVia` | Source                          | Persisted? | TTL-evicted? | Liveness from        |
 |------------------|---------------------------------|-----------|--------------|----------------------|
 | `self`           | adapter POSTs itself            | no        | yes          | heartbeat            |
 | `seed`           | `ADAPTER_URLS` cold-start       | yes       | **no**       | polling (cooldown)   |
@@ -61,9 +61,9 @@ data source is gone. The derived `state` keeps these distinct:
 | `stale`       | a `self` entry that has not re-announced within one heartbeat interval (still within TTL) |
 | (evicted)     | past TTL - removed from the registry, no longer listed                  |
 
-`GET /adapters` returns, per adapter: `name`, `base_url`, `kind`,
-`registered_via`, `last_seen_s_ago`, `fail_count`, `in_cooldown`,
-`cooldown_seconds_remaining`, `state`. The gateway proxies this unchanged so
+`GET /adapters` returns, per adapter: `name`, `baseUrl`, `kind`,
+`registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`,
+`cooldownSecondsRemaining`, `state`. The gateway proxies this unchanged so
 the demo renders OK / degraded; it never reshapes the contract.
 
 ## API
@@ -71,7 +71,7 @@ the demo renders OK / degraded; it never reshapes the contract.
 | Method | Path               | Who    | Notes                                            |
 |--------|--------------------|--------|--------------------------------------------------|
 | GET    | `/adapters`        | engine | membership + reachability snapshot (also proxied by the gateway) |
-| POST   | `/adapters`        | engine | `{name, base_url, kind}` register / heartbeat (upsert) |
+| POST   | `/adapters`        | engine | `{name, baseUrl, kind}` register / heartbeat (upsert) |
 | DELETE | `/adapters/{name}` | engine | deregister                                       |
 
 No auth: the engine is `ClusterIP` and never externally exposed, consistent

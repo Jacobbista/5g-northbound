@@ -46,11 +46,11 @@ No auth (cluster-internal). Mounts:
 | `GET    /position/{positioning_id}?source=` | `EnginePosition` | Routes by `?source=` (adapter whose `ADAPTER_NAME` matches); else `DEVICE_MAP`; else fan out to all adapters + fuse. `404` when no adapter has a fix (legitimate "offline") |
 | `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
 | `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
-| `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `base_url`, `kind`, `registered_via`, `last_seen_s_ago`, `fail_count`, `in_cooldown`, `cooldown_seconds_remaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
+| `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `baseUrl`, `kind`, `registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`, `cooldownSecondsRemaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
 | `GET    /devices`                      | `{"devices":[…]}`  | Aggregates each live adapter's `GET /devices` (those advertising the `devices` capability), tagging each with `source` (adapter name) + `origin`. Best-effort: unreachable sources are skipped. Powers the gateway's `/assets/discoverable` |
-| `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, base_url, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
+| `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, baseUrl, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
 | `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
-| `WS     /ws/positions`                 | stream of `{device_id, latitude, longitude, altitude_m, accuracy_m, timestamp}` | Broadcast loop over the ids the engine learns from adapters advertising the `devices` capability (`DEVICE_IDS` is only a cold-start seed), paced by `WEBSOCKET_INTERVAL_MS`. `device_id` is the capability's positioning id; the gateway enriches it to asset shape and profile names downstream |
+| `WS     /ws/positions`                 | stream of `{positioningId, latitude, longitude, altitude, accuracy, timestamp}` | Broadcast loop over the ids the engine learns from adapters advertising the `devices` capability (`DEVICE_IDS` is only a cold-start seed), paced by `WEBSOCKET_INTERVAL_MS`. `positioningId` is the capability's positioning id; the gateway enriches it to asset shape and profile names downstream |
 
 ## Adapter contract (consumed by the engine)
 
@@ -60,14 +60,14 @@ Every adapter pod implements:
 |----------------------------------------|--------------------|----------------------------------------------------------------------------------|
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
 | `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
-| `GET    /measurement/{device_id}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
-| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, source_class?, device_type?, label?, last_seen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `asset` or `infrastructure` (fixed sensor, not onboardable). `source_class`: positioning tech (`uwb`/`ble`/`wifi`/`gnss`/`cellular`/`other`). Advertised via the `devices` capability; aggregated by the engine |
+| `GET    /measurement/{positioningId}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
+| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, sourceClass?, deviceType?, label?, lastSeen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `asset` or `infrastructure` (fixed sensor, not onboardable). `sourceClass`: positioning tech (`uwb`/`ble`/`wifi`/`gnss`/`cellular`/`other`). Advertised via the `devices` capability; aggregated by the engine |
 
 `wifi-adapter` also exposes:
 
 | Method · path                          | Returns         | Notes                                                                  |
 |----------------------------------------|-----------------|------------------------------------------------------------------------|
-| `POST   /ingest/wifi-scan`             | `202 Accepted`  | Edge client pushes a single scan ({bssid, rssi}[]) here                |
+| `POST   /ingest/wifi-scan`             | `{"ok":true}`   | Edge client pushes a single scan: `{positioningId, scan:{bssid: rssi}, timestamp?}`. The superseded `device_id` is still accepted, answers with a `warning`, and marks the device on `GET /devices` with `supersededIngestField` |
 | `GET    /bindings`                     | `WifiBindings`  | **Operator plane**: export the live per-venue bindings (BSSIDs + RF + samples), full fidelity. Reached only through the `placement-admin`-gated editor; never proxied to the demo/gateway |
 | `PUT    /bindings`                     | `{"status":"ok",…}` | **Operator plane**: replace the bindings file wholesale + hot-reload (accepts `bindings[]` or legacy `routers[]`). The config-transfer import. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
 | `*      /calibration/{...}`            | (various)       | Guided calibration survey: `POST /capture`, `GET /capture/{id}`, `DELETE /capture/{id}`, `GET /state`, `DELETE /samples`, `DELETE /samples/{id}`, `POST /derive`, `POST /apply`, `GET /params`. Proxied by the editor at `/api/wifi/calibration/*`. `/calibration/params` returns per-AP RF **without** BSSIDs |

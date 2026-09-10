@@ -45,7 +45,7 @@ Returns the latest position estimate for the device. Two coordinate frames are s
   "x":           11.5,
   "y":           0.0,
   "z":           10.3,
-  "accuracy_m":  6.6,
+  "accuracy":  6.6,
   "confidence":  0.85,
   "timestamp":   1700000000.0
 }
@@ -59,7 +59,7 @@ Returns the latest position estimate for the device. Two coordinate frames are s
   "frame":       "wgs84",
   "latitude":    45.064412,
   "longitude":   7.659254,
-  "accuracy_m":  0.3,
+  "accuracy":  0.3,
   "confidence":  0.95,
   "timestamp":   1700000000.0
 }
@@ -71,10 +71,10 @@ Returns the latest position estimate for the device. Two coordinate frames are s
 | `frame`                | `"local"`/`"wgs84"` | Defaults to `"local"` when omitted. The engine projects WGS84 replies into the local frame using the floor plan's `gps_origin` before fusion |
 | `x`, `y`, `z`          | float, metres    | Used when `frame = local`. Right-handed local frame: `x` = east, `y` = vertical (height), `z` = north. Origin is the floor-plan lower-left corner |
 | `latitude`, `longitude`| float, degrees   | Used when `frame = wgs84`. Absolute position. The adapter does not need to know the room's GPS origin; the engine does |
-| `accuracy_m`           | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy_m`, and combines the accuracies in quadrature |
+| `accuracy`           | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
 | `confidence`           | float, 0.0–1.0   | Adapter's self-reported reliability. Used as a multiplicative weight in fusion |
 | `timestamp`            | float, optional  | Unix epoch seconds when the underlying measurement was taken. Omit for "now". The engine uses this to decide staleness |
-| `last_seen`            | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
+| `lastSeen`            | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
 
 Pick `local` for adapters that compute their own position from observations gathered inside the room (RSSI, UWB anchors). Pick `wgs84` for adapters whose backend is map-anchored and already reports global coordinates, typically commercial RTLS platforms whose operator places anchors on a real-world map. The engine treats the two paths uniformly downstream.
 
@@ -102,19 +102,19 @@ Enumerate the devices this source knows, so the management layer can onboard the
 GET /devices  ->  { "origin": "inventory" | "observed",
                     "devices": [ { "id": "…",
                                    "role"?: "asset" | "infrastructure",
-                                   "source_class"?: "uwb"|"ble"|"wifi"|"gnss"|"cellular"|"other",
-                                   "device_type"?: "…", "label"?: "…",
-                                   "last_seen"?: <epoch>, "position"?: {…} } ] }
+                                   "sourceClass"?: "uwb"|"ble"|"wifi"|"gnss"|"cellular"|"other",
+                                   "deviceType"?: "…", "label"?: "…",
+                                   "lastSeen"?: <epoch>, "position"?: {…} } ] }
 ```
 
 `origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud - bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested - a human claims + names it). `id` is the value the engine routes on, so it becomes a capability's `positioningId`. Return an empty list rather than erroring when there is nothing to enumerate.
 
-`role` and `source_class` are the two classification axes from the [private-asset paper](https://github.com/Jacobbista/5g-northbound):
+`role` and `sourceClass` are the two classification axes from the [private-asset paper](https://github.com/Jacobbista/5g-northbound):
 
 - **`role`** - `asset` (a tracked entity: tool, pallet, forklift, worker) vs `infrastructure` (a fixed sensor: UWB anchor, BLE gateway - outside the 3GPP trust domain, **never onboarded** as an asset). Leave it off when the source can't classify; the consumer then treats every candidate as onboardable.
-- **`source_class`** - the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
+- **`sourceClass`** - the positioning technology (`uwb` / `ble` / `wifi` / `gnss` / `cellular` / `other`), so a quality-sensitive consumer can weigh a UWB fix differently from a WiFi one at the same radius. A recommended controlled vocabulary, not hard-validated; use `other` for anything unlisted.
 
-wifi only ever surfaces `role: asset` (its infrastructure - the APs - lives in the bindings, not the device list). `synthetic-adapter` mirrors an on-premise RTLS: it surfaces both tracked tags (`role: asset`, from `DEVICE_IDS`) and fixed anchors (`role: infrastructure`, from `ANCHOR_IDS`), each tagged with its `source_class`. A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `vendor-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `source_class`. A different vendor classifies with its own fields - no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+wifi only ever surfaces `role: asset` (its infrastructure - the APs - lives in the bindings, not the device list). `synthetic-adapter` mirrors an on-premise RTLS: it surfaces both tracked tags (`role: asset`, from `DEVICE_IDS`) and fixed anchors (`role: infrastructure`, from `ANCHOR_IDS`), each tagged with its `sourceClass`. A vendor list mixes assets + infrastructure and multiple technologies, so the classification is **schema-declared, not hardcoded**: the `vendor-adapter`'s `discover.classify` block maps structural predicates on the vendor's own record (e.g. "has a `fixedLocation` → infrastructure") to `role` + `sourceClass`. A different vendor classifies with its own fields - no adapter code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
 
 ## Lifecycle
 
@@ -140,7 +140,7 @@ sequenceDiagram
   loop fusion path (~1 Hz)
     ENG->>ADP: GET /measurement/{device_id}
     alt cache hit
-      ADP-->>ENG: 200 Measurement { frame, accuracy_m, confidence, … }
+      ADP-->>ENG: 200 Measurement { frame, accuracy, confidence, … }
     else no fix
       ADP-->>ENG: 404 Not Found
     end
@@ -254,7 +254,7 @@ flowchart LR
 
 - [`app/main.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/main.py): loads `wifi-config.json` (AP map, room dimensions, RSSI calibration) into application state, mounts the routers.
 - [`app/wifi.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/wifi.py): `compute_position(scan, cfg)`: RSSI → distance via log-distance path loss, least-squares multilateration with weighted-centroid fallback. `WifiAdapter.ingest(...)` smooths through a per-device Kalman tracker and caches a `Measurement`.
-- [`app/routers/ingest.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/routers/ingest.py): `POST /ingest/wifi-scan` receives `{device_id, scan: {bssid: rssi_dbm}, timestamp?}` from edge clients (for example, the Raspberry Pi scanner; deploy flow in [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md)) over the 5G data network. Adapter-specific endpoint, not part of the engine contract.
+- [`app/routers/ingest.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/routers/ingest.py): `POST /ingest/wifi-scan` receives `{positioningId, scan: {bssid: rssi_dbm}, timestamp?}` from edge clients, and still accepts the superseded `device_id` so a scanner deployed before the rename keeps reporting; such a scan is answered with a `warning` naming the replacement, and the device is listed on `GET /devices` with `supersededIngestField` until it moves (for example, the Raspberry Pi scanner; deploy flow in [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md)) over the 5G data network. Adapter-specific endpoint, not part of the engine contract.
 - [`app/routers/measurement.py`](https://github.com/Jacobbista/5g-northbound/blob/main/services/wifi-adapter/app/routers/measurement.py): implements `GET /measurement/{device_id}` against the cache.
 
 Reading it end-to-end is the fastest way to understand the shape; replicate the structure in your own technology stack.
@@ -266,7 +266,7 @@ With the compose stack running, the `wifi-adapter` cache starts empty (its `GET 
 ```bash
 curl -s -X POST http://localhost:8089/ingest/wifi-scan \
   -H "Content-Type: application/json" \
-  -d '{"device_id":"wifi-asset-01","scan":{
+  -d '{"positioningId":"wifi-asset-01","scan":{
         "AA:BB:CC:00:01:01":-50,
         "AA:BB:CC:00:02:01":-55,
         "AA:BB:CC:00:03:01":-60,
@@ -286,7 +286,7 @@ from typing import Optional
 class Measurement(BaseModel):
     source: str = "my-source"
     x: float; y: float = 0.0; z: float
-    accuracy_m: float
+    accuracy: float
     confidence: float
     timestamp: Optional[float] = None
 

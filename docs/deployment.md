@@ -178,7 +178,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | `BLUEPRINT_SEED_PATH`   | empty                                | One-time read-only seed migrated into the store on first boot when `BLUEPRINT_PATH` is empty. Unset in steady state: the editor PUTs the blueprint over HTTP |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
 | `DEVICE_IDS`            | `uwb-tag-001`                        | Cold-start seed for the WebSocket broadcast; normally unset, since the engine learns its target ids from adapters advertising the `devices` capability |
-| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{device_id}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
+| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{positioningId}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
 
@@ -206,7 +206,7 @@ Synthetic adapter driving a waypoint walker, with wall and opening collision whe
 | `LAYOUT_PATH` | unset   | Optional placement-editor layout JSON. When set and readable the walker loads inner walls + openings and stays inside the room geometry; unset it rectangles inside the `WIDTH_M` x `DEPTH_M` box |
 | `DEVICE_IDS`  | empty   | Device ids this source serves (CSV). Empty serves every id, which pollutes fusion when the engine fans out; set it so the adapter 404s for devices it does not own |
 | `ANCHOR_IDS`  | empty   | Fixed infrastructure ids (CSV), surfaced on `/devices` with `role=infrastructure`. Not walked, so `/measurement` 404s for them |
-| `SOURCE_CLASS`| `uwb`   | Positioning technology this synthetic source stands in for; surfaced as `source_class` on `/devices` |
+| `SOURCE_CLASS`| `uwb`   | Positioning technology this synthetic source stands in for; surfaced as `sourceClass` on `/devices` |
 | `ACCURACY_M`  | `1.5`   | Fixed accuracy reported on every measurement |
 | `CONFIDENCE`  | `0.6`   | Fixed confidence reported on every measurement |
 | `RNG_SEED`    | `0`     | Set non-zero for reproducible trajectories in tests / recordings |

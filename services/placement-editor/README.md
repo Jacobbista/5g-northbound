@@ -101,7 +101,7 @@ A single drag collapses into one undoable step via a transient stack - intermedi
         "latitude":    45.064312,
         "longitude":   7.659154,
         "azimuth_deg": 12.0,
-        "altitude_m":  240.0,
+        "altitude":  240.0,
         "width_m":     85.0,
         "height_m":    42.0
       }

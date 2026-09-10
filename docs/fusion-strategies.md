@@ -38,7 +38,7 @@ flowchart LR
 
 ### 1. Weighted average (`weighted_avg`), baseline
 
-The implemented strategy. Each measurement gets a weight `w = confidence / accuracy_m`, and the output is the weighted mean of `Measurement.{x, y, z}`. Output accuracy combines the inputs in quadrature, `1 / sqrt(Σ 1/accuracy_m²)`, which is the inverse-variance result: fusing two 3 m sources yields about 2.1 m, and a source contributes in proportion to how much it narrows the estimate. Adding a poor source can therefore only improve the reported radius, which is the property that makes a multi-capability asset worth declaring.
+The implemented strategy. Each measurement gets a weight `w = confidence / accuracy`, and the output is the weighted mean of `Measurement.{x, y, z}`. Output accuracy combines the inputs in quadrature, `1 / sqrt(Σ 1/accuracy²)`, which is the inverse-variance result: fusing two 3 m sources yields about 2.1 m, and a source contributes in proportion to how much it narrows the estimate. Adding a poor source can therefore only improve the reported radius, which is the property that makes a multi-capability asset worth declaring.
 
 - **Strengths:** stateless, O(N) per fusion cycle, robust to one bad adapter when several others agree.
 - **Weaknesses:** no temporal smoothing: output jitters at the noise floor of the worst weighted source. One catastrophically wrong measurement with high confidence drags the result.
@@ -52,7 +52,7 @@ Maintain per-device state `(x, z, vx, vz)` with a constant-velocity process mode
 - **Weaknesses:** introduces lag at direction changes; tuning of process noise `Q` and measurement noise `R` is per-deployment; assumes Gaussian errors.
 - **When to prefer:** moving assets (people, vehicles, mobile robots) where temporal continuity matters more than raw accuracy.
 
-**Implementation note.** The `wifi-adapter` already runs a per-device Kalman filter internally, over WiFi measurements alone. Lifting that pattern to the engine, across heterogeneous adapters and with adapter-supplied `accuracy_m` driving `R`, is the obvious next step and the reason this entry is first in the queue.
+**Implementation note.** The `wifi-adapter` already runs a per-device Kalman filter internally, over WiFi measurements alone. Lifting that pattern to the engine, across heterogeneous adapters and with adapter-supplied `accuracy` driving `R`, is the obvious next step and the reason this entry is first in the queue.
 
 ### 3. Outlier-rejected weighted average (`outlier_reject`)
 
@@ -64,7 +64,7 @@ Before averaging, drop measurements whose distance from the median (or geometric
 
 ### 4. Confidence gating (`gated`)
 
-Pick the single measurement with the highest `confidence x (1/accuracy_m)`. Optionally fall through a configured chain of source names instead (`gated_chain="wittra,wifi,synthetic"`), where the first source with a non-null measurement wins and no fusion happens. The chain names sources, the same values a capability carries and an adapter registers under.
+Pick the single measurement with the highest `confidence x (1/accuracy)`. Optionally fall through a configured chain of source names instead (`gated_chain="wittra,wifi,synthetic"`), where the first source with a non-null measurement wins and no fusion happens. The chain names sources, the same values a capability carries and an adapter registers under.
 
 - **Strengths:** trivial to reason about for operators. No "averaged into nowhere" surprises when one adapter is clearly better in a zone.
 - **Weaknesses:** wastes information from other adapters; introduces step discontinuities when handoff between sources occurs.
@@ -103,13 +103,13 @@ class FusionStrategy(Protocol):
 
     def fuse(
         self,
-        device_id: str,
+        positioningId: str,
         measurements: list[Measurement],
         floor_plan: FloorPlan,
     ) -> Optional[FusedPosition]: ...
 ```
 
-`device_id` is passed so a stateful strategy can key its history without the
+`positioningId` is passed so a stateful strategy can key its history without the
 engine holding that state on its behalf. Registration is one line:
 
 ```python
@@ -119,9 +119,9 @@ STRATEGIES: dict[str, type[FusionStrategy]] = {
 }
 ```
 
-`FusedPosition` carries `x, y, z, accuracy_m, sources` and an optional
+`FusedPosition` carries `x, y, z, accuracy, sources` and an optional
 `timestamp`. Two fields on it are attached after fusion rather than computed by
-a strategy: `last_seen`, the most recent device last-communication across the
+a strategy: `lastSeen`, the most recent device last-communication across the
 fused sources, which drives liveness downstream, and `diagnostics`, the vendor
 fidelity carried from a single routed source. A new strategy neither reads nor
 sets them.

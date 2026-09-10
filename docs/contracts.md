@@ -37,138 +37,69 @@ mirror for anyone without a running gateway. Each service also serves its env
 contract this way at `GET /contract`. See
 [self-describing contracts](superpowers/specs/2026-09-03-self-describing-contracts-design.md).
 
-## Five kinds of surface, five different authorities
+## Who governs which surface
 
-Not every contract here answers to the same authority, and conflating them
-leads to arguing about a naming convention on a surface that no standard
-governs. Before changing a field name, establish which of these it belongs to.
+Not every contract here answers to the same authority. Establish which of these
+a field belongs to before changing its name.
 
 **1. CAMARA surfaces.** The request and response bodies of
 `POST /location-retrieval/v0.5/retrieve` and `/location-verification/v3/verify`,
-the error envelope, paths and query parameters. Governed by the pinned
-DeviceLocation r3.2 documents and by
+the error envelope, paths and query parameters, and the fields the profile
+overlays add inside those bodies. Governed by the pinned DeviceLocation r3.2
+documents and by
 [CAMARA Commonalities](https://github.com/camaraproject/Commonalities/blob/main/documentation/CAMARA-API-Design-Guide.md),
-which makes lowerCamelCase mandatory for JSON properties, kebab-case for paths.
-The profile overlays add fields *inside* these bodies (`source`, `kind`,
-`altitude`, `verticalAccuracy`), so those additions answer to the same rule.
+which makes lowerCamelCase mandatory for JSON properties and kebab-case for
+paths.
 
-**2. Profile extension surfaces.** HTTP and WebSocket APIs this project
-invented and publishes as part of the profile: `/assets`,
-`/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration`,
-`/capabilities`, `/adapters`, `/device-diagnostics/v0/{assetId}`, and the
-`/positions/stream` channel. No CAMARA specification defines them, and
-Commonalities is silent on provider extensions: it mandates a convention for
-CAMARA-defined attributes and says nothing about added ones. The convention
-here is therefore a choice this project makes and must state, not a rule it
-inherits.
+**2. Everything else this project names.** The extension endpoints published
+beside CAMARA (`/assets*`, `/anchors/calibration`, `/capabilities`, `/adapters`,
+`/device-diagnostics/v0/{assetId}`, `/positions/stream`), the core diagnostics
+vocabulary, and the contracts between this stack's own services (the adapter
+contract `GET /measurement/{id}`, the engine contract `GET /position/{id}`, the
+adapter registry, `/devices`, `/discover`, `/diagnostics`). No standard governs
+any of them: Commonalities mandates a convention for CAMARA-defined attributes
+and is silent on added ones. The project therefore declares one, below, and
+applies it to all of them. The reason is not that outsiders read them; it is
+that a name carrying its own unit is a worse name wherever it appears, and two
+conventions inside one stack cost a translation layer that buys nothing.
 
-### The convention this project declares for kind 2
+**3. Operator documents and data at rest.** The Asset Identity Map, the venue
+blueprint, the WiFi bindings, the vendor schema, the env contracts.
+Configuration, not APIs. A key rename here is a data migration of ConfigMaps and
+volumes. Each document keeps its own convention and must be coherent with itself
+and with anything it references: the vendor schema follows the vocabulary
+because its diagnostics mapping keys must match a core name exactly, while the
+blueprint references nothing and is left alone. Two documents carry a second
+authority as well, because the same shape is also a request or response body:
+the asset map is the body of `GET/PUT /assets`, the blueprint of the engine's
+`GET/PUT /blueprint`.
 
-Since no standard governs these surfaces, the project states its own rule, and
-it is the one CAMARA uses next door so a consumer meets one convention across
-the profile:
+**4. Foreign data carried without interpretation.** The contents of the
+`vendorSpecific` bag, and the keys an operator invents inside their own
+document: the `pathVars` names substituted into their own path template, and any
+non-core diagnostics mapping name. Nothing here interprets them, so no
+convention applies and they are carried as authored.
 
-- **Field names are lowerCamelCase**, matching kind 1 and the CAMARA API Design
-  Guide. `assetId`, `positioningId`, `lastLocationTime`, `observedAt`.
-- **The name states the quantity, not the unit.** `accuracy`, not `accuracy_m`;
-  `altitude`, not `altitude_m`. CAMARA does the same with `radius` ("Distance
-  from the center in meters"), and the profile overlay already adds `altitude`
-  unsuffixed inside the CAMARA `Location`.
-- **The unit is declared, not implied.** Carry it in an `x-unit` extension on
-  the schema property, with the prose in `description`. OpenAPI and JSON Schema
-  have no unit facility and `format` describes the type, so without this the
-  unit survives only as prose a generator drops. This is already how
-  `spec/private-profile/diagnostics-vocabulary.json` declares units, where the
-  core field is `accuracy` with `"unit": "m"`.
+**Anchoring is not spelling.** Binding a field to an external standard fixes its
+*definition*. The core vocabulary says `battery` means what OMA LwM2M defines at
+object 3, resource 9: integer, percent, 0 to 100. LwM2M identifies that resource
+by numeric id and labels it "Battery Level"; it defines no JSON field name, so
+`battery` is this project's name for a borrowed definition. The pointer to the
+source lives in the `standard` field of
+`spec/private-profile/diagnostics-vocabulary.json`.
 
-```yaml
-accuracy:
-  type: number
-  format: double
-  x-unit: m
-  description: Horizontal 1-sigma uncertainty radius.
-```
+### The convention
 
-  Unknown `x-` extensions are ignored by tooling, so declaring one breaks no
-  consumer. Where the unit is not conventional for the quantity the declaration
-  is what carries it: `txPowerRef` with `x-unit: dBm` is only safe because the
-  unit is stated. A quantity with no unit at all takes a name that says so:
-  `path_loss_n` becomes `pathLossExponent`, since the `n` was a symbol, not a
-  unit.
-- **Foreign vocabulary bags are carried verbatim.** The keys inside
-  `diagnostics` and `vendorSpecific` are kind 5 and keep their source spelling, so a
-  kind-2 object may contain a snake_case bag by design. That boundary is the
-  one exception, and it is what makes the anchoring to LwM2M and omlox real.
-
-### Coherence is per contract, not global uniformity
-
-Kinds 3, 4 and 5 are not required to adopt the kind-2 convention, but each
-document must be coherent with itself and with whatever it references. Two
-consequences worth stating, because both were missed once:
-
-- **A document that references the vocabulary follows the vocabulary.** The
-  vendor schema is kind 4 and could stay snake_case on its own, except that its
-  diagnostics mapping keys must match a core vocabulary name exactly or the
-  field is demoted into the extension bag. Once those keys are camelCase the
-  document's own grammar follows them, otherwise one object holds both spellings.
-  The keys an operator invents inside it, the `pathVars` names substituted into
-  their own path template and any non-core mapping name, stay entirely theirs.
-- **A document that references nothing keeps its own convention.** The blueprint
-  is kind 3 and 4, has no kind-2 twin and no vocabulary references, so it is
-  coherent as it stands and is left alone. Renaming it would be uniformity for
-  its own sake.
-
-**3. Internal contracts.** Between this stack's own processes, never seen by an
-API consumer: the engine's `GET /position/{positioning_id}`, the adapter
-contract `GET /measurement/{positioning_id}`, the adapter registry, and each
-service's `GET /contract`. Names here are implementation labels. They can change
-without touching the profile, and no external standard reaches them.
-
-**4. Data at rest and operator documents.** The Asset Identity Map, the
-blueprint, the vendor schema document, the env contracts. These are
-configuration, not APIs. A key rename here is a data migration of ConfigMaps and
-volumes, not an API change, and is planned as such. Two of them carry a second
-kind as well, because the same shape is also a request or response body: the
-asset map is the body of `GET/PUT /assets` (kind 2), the blueprint of the
-engine's `GET/PUT /blueprint` (kind 3). A change to either is both an API change
-and a migration.
-
-**5. Foreign data carried without interpretation.** The contents of the
-`vendorSpecific` bag inside `diagnostics`: values an integrator mapped that this
-profile does not define. Their keys are chosen by whoever wrote the vendor
-schema, they are not comparable across vendors, and nothing here interprets
-them. They are passed through as authored, so no convention applies. This is the
-one exception to the rule above, and it is narrow: it covers a bag's contents,
-never a field this project names.
-
-**What kind 5 is not.** Anchoring a field to an external standard fixes its
-*definition*, not its spelling. The core vocabulary says `battery` means what
-OMA LwM2M defines at object 3, resource 9: integer, percent, range 0 to 100.
-LwM2M identifies that resource by numeric id and labels it "Battery Level"; it
-defines no JSON field name at all, so `battery` is this project's name for a
-definition borrowed from elsewhere. The pointer to the source lives in the
-`standard` field of `spec/private-profile/diagnostics-vocabulary.json`, which is
-where a definition reference belongs. Core vocabulary names are therefore kind 2
-and follow the convention below.
-
-### The convention this project declares for kind 2
-
-Since no standard governs these surfaces, the project states its own rule, and
-it is the one CAMARA uses next door so a consumer meets one convention across
-the profile:
-
-- **Field names are lowerCamelCase**, matching kind 1 and the CAMARA API Design
-  Guide. `assetId`, `positioningId`, `lastLocationTime`, `observedAt`.
-- **The name states the quantity, not the unit.** `accuracy`, not `accuracy_m`;
-  `altitude`, not `altitude_m`. CAMARA does the same with `radius` ("Distance
-  from the center in meters"), and the profile overlay already adds `altitude`
-  unsuffixed inside the CAMARA `Location`.
-- **The unit is declared, not implied.** Carry it in an `x-unit` extension on
-  the schema property, with the prose in `description`. OpenAPI and JSON Schema
-  have no unit facility and `format` describes the type, so without this the
-  unit survives only as prose a generator drops. This is already how
-  `spec/private-profile/diagnostics-vocabulary.json` declares units, where the
-  core field is `accuracy` with `"unit": "m"`.
+- **Field names are lowerCamelCase.** `assetId`, `positioningId`,
+  `lastCommunicationTime`, `observedAt`.
+- **The name states the quantity, not the unit.** `accuracy`, not `accuracy_m`.
+  CAMARA does the same with `radius` ("Distance from the center in meters").
+- **The unit is declared, not implied.** `x-unit` on the schema property, with
+  the prose in `description`. OpenAPI and JSON Schema have no unit facility and
+  `format` describes the type, so without this the unit survives only as prose a
+  generator drops. Pydantic models carry it through
+  `json_schema_extra={"x-unit": "m"}`, so it reaches each service's
+  `/openapi.json`.
 
 ```yaml
 accuracy:
@@ -178,59 +109,39 @@ accuracy:
   description: Horizontal 1-sigma uncertainty radius.
 ```
 
-  Unknown `x-` extensions are ignored by tooling, so declaring one breaks no
-  consumer. Where the unit is not conventional for the quantity the declaration
-  is what carries it: `txPowerRef` with `x-unit: dBm` is only safe because the
-  unit is stated. A quantity with no unit at all takes a name that says so:
-  `path_loss_n` becomes `pathLossExponent`, since the `n` was a symbol, not a
-  unit.
-- **Foreign vocabulary bags are carried verbatim.** The keys inside
-  `diagnostics` and `vendorSpecific` are kind 5 and keep their source spelling, so a
-  kind-2 object may contain a snake_case bag by design. That boundary is the
-  one exception, and it is what makes the anchoring to LwM2M and omlox real.
+  Where the unit is not conventional for the quantity, the declaration is what
+  carries it: `txPowerRef` with `x-unit: dBm`. A quantity with no unit takes a
+  name that says so: `pathLossExponent`, since the `n` was a symbol.
 
-**3. Internal contracts.** Between this stack's own processes, never seen by an
-API consumer: the engine's `GET /position/{positioning_id}`, the adapter
-contract `GET /measurement/{positioning_id}`, the adapter registry, and each
-service's `GET /contract`. Names here are implementation labels. They can change
-without touching the profile, and no external standard reaches them.
-
-**4. Data at rest and operator documents.** The Asset Identity Map, the
-blueprint, the vendor schema document, the env contracts. These are
-configuration, not APIs. A key rename here is a data migration of ConfigMaps and
-volumes, not an API change, and is planned as such. Two of them carry a second
-kind as well, because the same shape is also a request or response body: the
-asset map is the body of `GET/PUT /assets` (kind 2), the blueprint of the
-engine's `GET/PUT /blueprint` (kind 3). A change to either is both an API change
-and a migration.
-
-**5. Vocabularies anchored to a foreign standard.** The keys inside
-`diagnostics`: `battery` from OMA LwM2M object 3/0/9, `last_seen` from the omlox
-`timestamp_generated`, `accuracy` from omlox, `moving` derived from the omlox
-speed, plus the `vendorSpecific` bag. Their names come from the standard they are
-anchored to, which is the entire argument for having a core vocabulary. They are
-not this project's to normalise. See
-[profile-extensions.md](profile-extensions.md#core-vocabulary).
+**One surface crosses over gradually.** `POST /ingest/wifi-scan` takes its
+identifier as `positioningId` and still accepts the superseded `device_id`. Its
+client is the scanner running on edge hardware, outside the images this
+repository builds and outside a deploy window, so it cannot be moved in step
+with the services. A scan that uses the old name is served, and the response
+carries a `warning` naming the replacement. The adapter already knows which
+device sent the scan, so it reports the fact per device on `GET /devices` as
+`supersededIngestField`, and logs it once per device rather than once per scan.
+The old name is removed once no device reports it.
 
 ## The contracts
 
 Take each `<path>` and prefix it with a base above.
 
-| Contract | `<path>` | Kind | What |
+| Contract | `<path>` | Governed by | What |
 |----------|----------|------|------|
-| CAMARA base - retrieval | `services/camara-gateway/spec/location-retrieval.yaml` | 1 | Pinned upstream OpenAPI (do not edit) |
-| CAMARA base - verification | `services/camara-gateway/spec/location-verification.yaml` | 1 | Pinned upstream OpenAPI |
-| Profile overlay - retrieval | `spec/private-profile/overlay-retrieval.yaml` | 1 | OpenAPI Overlay delta (assetId, source/altitude) |
-| Profile overlay - verification | `spec/private-profile/overlay-verification.yaml` | 1 | OpenAPI Overlay delta |
-| **Profiled spec - retrieval** | `spec/private-profile/generated/location-retrieval.profiled.yaml` | 1 | Base + overlay applied; **the pinnable self-contained contract** |
-| **Profiled spec - verification** | `spec/private-profile/generated/location-verification.profiled.yaml` | 1 | Base + overlay applied |
-| Streaming (AsyncAPI) | `spec/private-profile/asyncapi-stream.yaml` | 2 | `/positions/stream` channel + message |
-| Asset map schema | `schema/asset.schema.json` | 2 + 4 | Asset Identity Map entries (`GET/PUT /assets`); an asset binds ≥1 positioning capability, fused |
-| Blueprint schema | `schema/layout.schema.json` | 3 + 4 | Venue geometry (`layout.json`) |
-| Hop-log schema | `schema/hop-log.schema.json` | 3 | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
-| Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | 2 | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
-| Device diagnostics schema | `schema/device-diagnostics.schema.json` | 2 + 5 | Diagnostics payload (motion, link quality, accuracy provenance) |
-| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | 2 | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
+| CAMARA base - retrieval | `services/camara-gateway/spec/location-retrieval.yaml` | CAMARA | Pinned upstream OpenAPI (do not edit) |
+| CAMARA base - verification | `services/camara-gateway/spec/location-verification.yaml` | CAMARA | Pinned upstream OpenAPI |
+| Profile overlay - retrieval | `spec/private-profile/overlay-retrieval.yaml` | CAMARA | OpenAPI Overlay delta (assetId, source/altitude) |
+| Profile overlay - verification | `spec/private-profile/overlay-verification.yaml` | CAMARA | OpenAPI Overlay delta |
+| **Profiled spec - retrieval** | `spec/private-profile/generated/location-retrieval.profiled.yaml` | CAMARA | Base + overlay applied; **the pinnable self-contained contract** |
+| **Profiled spec - verification** | `spec/private-profile/generated/location-verification.profiled.yaml` | CAMARA | Base + overlay applied |
+| Streaming (AsyncAPI) | `spec/private-profile/asyncapi-stream.yaml` | this project | `/positions/stream` channel + message |
+| Asset map schema | `schema/asset.schema.json` | this project + operator data | Asset Identity Map entries (`GET/PUT /assets`); an asset binds ≥1 positioning capability, fused |
+| Blueprint schema | `schema/layout.schema.json` | operator data | Venue geometry (`layout.json`) |
+| Hop-log schema | `schema/hop-log.schema.json` | this project | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
+| Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
+| Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
+| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
 contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The

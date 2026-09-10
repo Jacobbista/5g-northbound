@@ -53,7 +53,7 @@ its own core.
 | Core field | Standard | Type / unit |
 |------------|----------|-------------|
 | `battery` | OMA LwM2M `3/0/9` | number, percent 0-100 |
-| `last_seen` | omlox `timestamp_generated` | number, epoch seconds |
+| `lastSeen` | omlox `timestamp_generated` | number, epoch seconds |
 | `accuracy` | omlox `accuracy` | number, metres |
 | `moving` | derived | boolean |
 
@@ -80,10 +80,10 @@ onboarding path, where the vendor `name` binds to the asset and anchor `label`.
 ```mermaid
 flowchart LR
   V[("vendor per-device record<br/>battery, motion, temp, rssi, ...")] --> M["vendor-adapter mapper<br/>route each mapped key"]
-  M -->|"names a core field"| C["core<br/>(coerced to the standard unit)<br/>battery · last_seen · accuracy · moving"]
+  M -->|"names a core field"| C["core<br/>(coerced to the standard unit)<br/>battery · lastSeen · accuracy · moving"]
   M -->|"any other key"| X["vendorSpecific<br/>(raw, non-authoritative)<br/>temperature · rssi · ..."]
   C --> ST["stream diagnostics sub-object<br/>(fast-changing: moving)"]
-  C --> OD["GET /device-diagnostics/v0/{assetId}<br/>(on demand: battery, last_seen)"]
+  C --> OD["GET /device-diagnostics/v0/{assetId}<br/>(on demand: battery, lastSeen)"]
   X --> OD
   ST --> APP["location-app detail panel<br/>+ KELT dashboard"]
   OD --> APP

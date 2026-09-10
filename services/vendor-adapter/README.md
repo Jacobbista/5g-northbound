@@ -17,7 +17,7 @@ This is the generic path used for any vendor RTLS cloud whose own output is alre
 | `GET  /contract/schema`             | JSON Schema of `Schema`          | Unauthenticated. Shape of `PUT /schema` / the ConfigMap document. Not the loaded instance |
 | `GET  /schema`                      | schema JSON                      | `404` when no schema is loaded yet                                    |
 | `PUT  /schema`                      | `{"status":"ok","vendor":"…"}`   | Replace + persist the schema. Clears the in-process cache             |
-| `GET  /measurement/{device_id}`     | `Measurement`                    | Engine contract. `404` if no schema, vendor 404, or vendor unreachable |
+| `GET  /measurement/{positioningId}`     | `Measurement`                    | Engine contract. `404` if no schema, vendor 404, or vendor unreachable |
 
 Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 
@@ -27,7 +27,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 {
   "vendor": "wittra",
   "baseUrl": { "env": "WITTRA_BASE_URL" },
-  "path": "/v1/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
+  "path": "/v1/organizations/{org_id}/projects/{project_id}/devices/{positioningId}",
   "pathVars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
     "project_id": { "env": "WITTRA_PROJECT_ID" }
@@ -55,7 +55,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 |------------------|---------------------------------------------------------------------------------------------------------------|
 | `vendor`         | Surfaces in `Measurement.source` so the engine can route on it                                                |
 | `baseUrl`       | Name of the environment variable carrying the vendor's API root. The document names the variable, the operator supplies the value - this image is generic and holds no vendor URL |
-| `path`           | Path template. `{device_id}` plus every key in `pathVars`                                                    |
+| `path`           | Path template. `{positioningId}` plus every key in `pathVars`                                                    |
 | `pathVars`      | Each var pulls its value from the env var named in its `env` field                                            |
 | `auth.scheme`    | `none` / `basic` / `bearer` / `header`. Credentials never live in the schema - only the env-var names         |
 | `cacheTtl`    | TTL of the in-process response cache. Engine polls at ~1 Hz; vendors usually do not want that fast            |
@@ -90,7 +90,7 @@ curl http://localhost:8092/health
 # {"status":"ok","schema_loaded":true,"vendor":"wittra"}
 
 curl http://localhost:8092/measurement/wittra-tag-01 | jq .
-# {"source":"wittra","frame":"wgs84","latitude":45.06…,"longitude":7.65…,"accuracy_m":5.0, …}
+# {"source":"wittra","frame":"wgs84","latitude":45.06…,"longitude":7.65…,"accuracy":5.0, …}
 ```
 
 Replace the example schema at runtime to experiment without restarting the pod:
@@ -104,7 +104,7 @@ curl -X PUT http://localhost:8092/schema \
 ## What this image does NOT do
 
 - **`mqtt` / `webhook` transports.** The engine-facing contract is always pull (`GET /measurement/{id}`); the source-side transport is a schema dimension (`transport:`). The `mqtt` transport subscribes to the vendor broker, caches the latest fix, and serves it from cache; `webhook` receives pushes. Both are the same image, selected by the schema, and are not yet implemented. Only `rest` (pull-through) ships today.
-- **Vendor SDKs / proprietary code.** This image is generic on purpose. Anything that needs an SDK or NDA-bound code ships as a separate private image implementing the same `GET /measurement/{device_id}` contract.
+- **Vendor SDKs / proprietary code.** This image is generic on purpose. Anything that needs an SDK or NDA-bound code ships as a separate private image implementing the same `GET /measurement/{positioningId}` contract.
 - **OAuth refresh, signed requests, paginated cursors.** Vendors that need these get a thin per-vendor image.
 
 ## See also

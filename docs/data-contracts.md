@@ -215,14 +215,14 @@ Exposes the *measured* RF (from the calibration tool, persisted in the bindings)
 ```json
 {
   "adapters": [
-    { "name": "wifi",   "base_url": "http://wifi-adapter:8080",   "fail_count": 0, "in_cooldown": false, "cooldown_seconds_remaining": 0.0 },
-    { "name": "wittra", "base_url": "https://api.wittra.example.com", "fail_count": 5, "in_cooldown": true,  "cooldown_seconds_remaining": 23.5 }
+    { "name": "wifi",   "baseUrl": "http://wifi-adapter:8080",   "failCount": 0, "inCooldown": false, "cooldownSecondsRemaining": 0.0 },
+    { "name": "wittra", "baseUrl": "https://api.wittra.example.com", "failCount": 5, "inCooldown": true,  "cooldownSecondsRemaining": 23.5 }
   ]
 }
 ```
 
-- `fail_count` resets to 0 on the next successful adapter response.
-- `in_cooldown=true` means the engine is **not** issuing HTTP requests to that adapter right now; `cooldown_seconds_remaining` is how long the cooldown still has to run. See [`adapters.md`](adapters.md#http-contract) for the cooldown policy.
+- `failCount` resets to 0 on the next successful adapter response.
+- `inCooldown=true` means the engine is **not** issuing HTTP requests to that adapter right now; `cooldownSecondsRemaining` is how long the cooldown still has to run. See [`adapters.md`](adapters.md#http-contract) for the cooldown policy.
 - Empty list (`{"adapters": []}`) when the engine is unreachable or has no adapters configured, not a 502/503.
 
 ### Live positions WebSocket
@@ -275,11 +275,11 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 
 ```json
 {
-  "device_id":  "wifi-asset-01",
+  "positioningId": "wifi-asset-01",
   "latitude":   45.064581,
   "longitude":  7.659408,
-  "altitude_m": 240.4,
-  "accuracy_m": 0.3,
+  "altitude": 240.4,
+  "accuracy": 0.3,
   "timestamp":  "2024-01-01T12:00:00Z",
   "sources":    ["wifi"],
   "strategy":   "weighted_avg",
@@ -287,7 +287,7 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 }
 ```
 
-The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude_m` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
+The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)`.
 
 **Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the source named by the capability it is resolving, so steady-state routing is single-adapter; fan-out is the no-source fallback. See [adapter-registry.md](adapter-registry.md).
 
@@ -322,7 +322,7 @@ When `POSITIONING_ENGINE_URL` is **unset** the gateway falls back to a built-in 
 curl http://localhost:8081/adapters
 ```
 
-`strategy` names the primary fusion algorithm that produced the result; see [`fusion-strategies.md`](fusion-strategies.md). `fusions` is `null` unless the engine is configured with `FUSION_COMPARE`, in which case it maps each comparison strategy name to its own `{latitude, longitude, accuracy_m, sources}`: used by the demo to render multiple tracks side by side, ignored by the CAMARA gateway.
+`strategy` names the primary fusion algorithm that produced the result; see [`fusion-strategies.md`](fusion-strategies.md). `fusions` is `null` unless the engine is configured with `FUSION_COMPARE`, in which case it maps each comparison strategy name to its own `{latitude, longitude, accuracy, sources}`: used by the demo to render multiple tracks side by side, ignored by the CAMARA gateway.
 
 ## Adapter contract
 
@@ -336,14 +336,14 @@ GET /measurement/{device_id}  → 200 OK
   "x":          11.5,
   "y":          0.0,
   "z":          10.3,
-  "accuracy_m": 6.6,
+  "accuracy": 6.6,
   "confidence": 0.85,
   "timestamp":  1700000000.0,
-  "last_seen":  1700000042.0
+  "lastSeen":  1700000042.0
 }
 ```
 
-`last_seen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
+`lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
 
 `{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the floor-plan-local frame (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using the georeference before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 
@@ -392,7 +392,7 @@ Loaded at engine startup from `/app/config/floor-plan.json` (mounted in producti
     "latitude":    45.064312,
     "longitude":   7.659154,
     "azimuth_deg": 0.0,
-    "altitude_m":  240.0
+    "altitude":  240.0
   },
   "floors": [
     {
@@ -415,7 +415,7 @@ Loaded at engine startup from `/app/config/floor-plan.json` (mounted in producti
 | `latitude`    | yes      | Latitude of the floor-plan origin (lower-left corner of the room)          |
 | `longitude`   | yes      | Longitude of the floor-plan origin                                          |
 | `azimuth_deg` | no (0)   | Bearing of the local +z axis (the SVG "up") clockwise from true north. 0 means the room is north-aligned; 30 means the room is rotated 30° east of north |
-| `altitude_m`  | no       | Altitude of the origin above sea level. Added to the local vertical to produce `altitude_m` on the fix |
+| `altitude`  | no       | Altitude of the origin above sea level. Added to the local vertical to produce `altitude` on the fix |
 
 `gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available. The full georeference model (datums, tile drift, N-point calibration) is in [`georeferencing.md`](georeferencing.md).
 
@@ -448,7 +448,7 @@ The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys p
       "latitude":    45.064312,
       "longitude":   7.659154,
       "azimuth_deg": 0.0,
-      "altitude_m":  240.0,
+      "altitude":  240.0,
       "width_m":     13.0,
       "height_m":    32.0
     }
@@ -472,7 +472,7 @@ The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys p
   /* Legacy v1 mirror, derived from floor_plans[0] + rooms[0]. */
   "room_w":     13.0,
   "room_h":     32.0,
-  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154, "azimuth_deg": 0.0, "altitude_m": 240.0 },
+  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154, "azimuth_deg": 0.0, "altitude": 240.0 },
   "aps":        [ … same as rooms[0].anchors … ],
   "walls":      []
 }

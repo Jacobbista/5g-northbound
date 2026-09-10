@@ -81,6 +81,52 @@ registered the engine produces no measurements; deploy at least one, and the
 [`synthetic-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/)
 is the shortest path in development.
 
+### Data flow: one number, from the vendor to the consumer
+
+The request flow below shows which service calls which. This shows what happens
+to a value along the way, which is the part that decides how a field is named
+and where a name is allowed to change.
+
+```mermaid
+flowchart TD
+  V["vendor cloud<br/>latest.data.location.value.accuracy"]
+  D["vendor schema document<br/>mapping.accuracy: { path: … }"]
+  A["vendor-adapter<br/>GET /measurement/{positioningId}<br/>accuracy · frame · timestamp"]
+  E["positioning-engine<br/>projects to the local frame · fuses<br/>GET /position/{positioningId}"]
+  G["camara-gateway<br/>fuses the asset's capabilities"]
+  C1["CAMARA Location<br/>area.radius"]
+  C2["stream event<br/>accuracy"]
+
+  V -- "read by the path the operator wrote" --> D
+  D -- "the document names the field, the vendor names the path" --> A
+  A -- "one adapter contract, whatever the vendor speaks" --> E
+  E -- "one engine contract, whatever the technology" --> G
+  G --> C1
+  G --> C2
+```
+
+Three things travel differently, and the difference is the whole design.
+
+**The value** is read once and never re-derived. The operator writes the vendor's
+own path in the schema document; nothing downstream knows that path exists.
+
+**The name** changes exactly twice, at the two boundaries where a different
+authority takes over. The vendor's key becomes this project's `accuracy` when the
+adapter maps it, and `accuracy` becomes CAMARA's `area.radius` when the gateway
+answers a retrieval. It does not change at the adapter-to-engine or
+engine-to-gateway hop: those are this project's own surfaces and they carry one
+convention, so the gateway forwards rather than translates.
+
+**The unit** never travels in the name. It is metres from the vendor onward,
+declared in `x-unit` on every schema that describes the field, and CAMARA
+documents `radius` in prose the same way.
+
+What is *added* along the way is the part a single hop cannot know. The engine
+adds the coordinate frame, because only it holds the venue georeference. The
+gateway adds the asset identity and the tenant, because only it holds the Asset
+Identity Map. Neither can be done earlier, which is why the pipeline has these
+services and not fewer.
+
 ### Request flow: one CAMARA call, end to end
 
 ```mermaid
