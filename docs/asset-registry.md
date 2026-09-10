@@ -21,7 +21,7 @@ the id that source knows it by. A single-capability asset is positioned by one
 technology; a multi-capability asset carries several (a robot with a WiFi radio
 and a UWB tag), and the engine fuses their fixes into one. The same physical
 thing is a different id to each source, so each capability names its own
-`positioning_id`.
+`positioningId`.
 
 ## Structure
 
@@ -30,7 +30,7 @@ The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-no
 
 | Field          | Req | Type / values                                        | Meaning |
 |----------------|-----|------------------------------------------------------|---------|
-| `asset_id`     | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
+| `assetId`     | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
 | `kind`         | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
 | `org`          | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
 | `capabilities` | ✅  | array, ≥1 `capability`                                | The ways the asset is positioned. Several entries fuse into one fix |
@@ -42,33 +42,33 @@ A `capability`:
 | Field            | Req | Type / values                                        | Meaning |
 |------------------|-----|------------------------------------------------------|---------|
 | `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `synthetic`    | Positioning modality / adapter, surfaced as profile `source` |
-| `positioning_id` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | The id this source routes on (the engine polls the `source` adapter with it) |
+| `positioningId` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | The id this source routes on (the engine polls the `source` adapter with it) |
 
-The whole document is `{ "version": 3, "assets": [ … ] }`. Copy
+The whole document is `{ "version": 4, "assets": [ … ] }`. Copy
 [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json)
 as your starting point:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "assets": [
     {
-      "asset_id": "pkg-4471",
+      "assetId": "pkg-4471",
       "kind": "pallet",
       "org": "acme",
       "capabilities": [
-        { "source": "wittra", "positioning_id": "wittra-tag-01" }
+        { "source": "wittra", "positioningId": "wittra-tag-01" }
       ],
       "label": "Wittra tag 01",
       "metadata": { "floor": 0, "note": "Timber bundle" }
     },
     {
-      "asset_id": "robot-2",
+      "assetId": "robot-2",
       "kind": "forklift",
       "org": "acme",
       "capabilities": [
-        { "source": "wifi", "positioning_id": "puppypi-01" },
-        { "source": "wittra", "positioning_id": "wittra-tag-07" }
+        { "source": "wifi", "positioningId": "puppypi-01" },
+        { "source": "wittra", "positioningId": "wittra-tag-07" }
       ],
       "label": "Mobile robot 2"
     }
@@ -78,7 +78,7 @@ as your starting point:
 
 ## How an asset resolves to a position
 
-`asset_id` is what a CAMARA consumer asks for; everything after it is internal.
+`assetId` is what a CAMARA consumer asks for; everything after it is internal.
 The gateway resolves the asset to its capabilities, asks the engine for each one,
 and fuses the results into a single fix.
 
@@ -94,12 +94,12 @@ flowchart LR
     G --> F["one fused CAMARA fix"]
 ```
 
-Each capability's `positioning_id` joins to an adapter through the engine's
+Each capability's `positioningId` joins to an adapter through the engine's
 [adapter registry / routing](adapter-registry.md); `source` names which modality
 answers. The gateway calls the engine once per capability, weights each fix by its
 accuracy, and reconciles them into one: a sharper source dominates, a source with
 no current fix drops out, so an asset stays located as its coverage changes. The
-engine stays capability-agnostic (it routes a single `positioning_id`); the
+engine stays capability-agnostic (it routes a single `positioningId`); the
 cross-capability fusion is the gateway's. A single-capability asset is the same
 path with one capability. Full chain down to a vendor REST API:
 [integrating a vendor REST API](integrating-a-vendor-rest-api.md).
@@ -152,7 +152,7 @@ flowchart LR
     G --> K["KELT Assets tab<br/>one-click onboard → PUT /assets"]
 ```
 
-The candidate `id` becomes a capability's `positioning_id` (a new asset with one
+The candidate `id` becomes a capability's `positioningId` (a new asset with one
 capability, or an added capability on an asset that already exists); the operator
 adds `org`, `kind`, and a `label` at onboarding. Two flavours of discovery, from
 the `origin` field:
@@ -176,11 +176,11 @@ Onboarding a sensor as an asset is wrong, so each candidate carries:
 
 - **`role`** - `asset` vs `infrastructure`. The management UI separates
   infrastructure into its own non-onboardable section.
-- **`source_class`** - the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
+- **`sourceClass`** - the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
   `cellular`/`other`), surfaced as a badge and a hint for the asset's kind.
 
 Classification is **schema-declared per vendor**, never guessed - a source that
-doesn't classify leaves `role`/`source_class` off and every candidate stays
+doesn't classify leaves `role`/`sourceClass` off and every candidate stays
 onboardable. wifi only ever reports `role: asset` (its APs live in the bindings,
 not the device list); `synthetic-adapter` reports both tracked tags (asset) and
 fixed anchors (infrastructure), like an on-premise RTLS. For a vendor, the

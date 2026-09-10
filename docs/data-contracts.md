@@ -26,7 +26,7 @@ This is the **private-asset profile** of the CAMARA `device` object: the tracked
 
 `networkAccessIdentifier` (NAI) is accepted as an alias for `assetId` so off-the-shelf CAMARA clients that only emit NAI still work; it is treated as the asset id verbatim. `phoneNumber`, `ipv4Address`, and `ipv6Address` are **not** part of this profile, a private venue does not address assets by MSISDN or IP. See [the private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) for the rationale.
 
-The gateway resolves `assetId` to a positioning source and tenant via the [Asset Identity Map](#asset-identity-map).
+The gateway resolves `assetId` to the asset's capabilities and tenant via the [Asset Identity Map](#asset-identity-map). Each capability names a `source` and the `positioningId` that source knows the asset by; the gateway asks the engine once per capability and fuses the answers.
 
 Errors use the CAMARA envelope `{status, code, message}`. API-specific codes are
 namespaced with the API name, per Commonalities; generic codes are bare. Every
@@ -127,12 +127,18 @@ These endpoints live on the same gateway service but are **not part of CAMARA De
 
 ```json
 {
+  "version": 4,
   "assets": [
-    { "asset_id": "tool-880", "positioning_id": "wifi-asset-01", "source": "wifi",   "kind": "tool",     "org": "acme", "label": "Cordless drill 880" },
-    { "asset_id": "pkg-4471", "positioning_id": "wittra-tag-01", "source": "wittra", "kind": "pallet",   "org": "acme", "label": "Timber bundle 01" }
+    { "assetId": "tool-880", "kind": "tool", "org": "acme", "label": "Cordless drill 880",
+      "capabilities": [{ "source": "wifi", "positioningId": "wifi-asset-01" }] },
+    { "assetId": "robot-2", "kind": "forklift", "org": "acme", "label": "Mobile robot 2",
+      "capabilities": [{ "source": "wifi",   "positioningId": "wifi-asset-02" },
+                       { "source": "wittra", "positioningId": "wittra-tag-02" }] }
   ]
 }
 ```
+
+An asset binds one or more capabilities. A single-capability asset carries one entry; `robot-2` above is fused from two.
 
 The list is read from the [Asset Identity Map](#asset-identity-map) and filtered to the caller's `org`. Order matches the store. Empty list (`{"assets": []}`) when the tenant owns nothing, not a 404.
 
@@ -146,17 +152,17 @@ The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic
 
 ```json
 {
-  "asset_id":       "pkg-4471",
-  "positioning_id": "wittra-tag-01",
-  "source":         "wittra",
-  "kind":           "pallet",
-  "org":            "acme",
-  "label":          "Timber bundle 01",
+  "assetId":       "pkg-4471",
+  "positioningId": "wittra-tag-01",
+  "source":        "wittra",
+  "kind":          "pallet",
+  "org":           "acme",
+  "label":         "Timber bundle 01",
   "telemetry": {
     "latitude":         45.064547,
     "longitude":        7.659272,
-    "altitude_m":       240.4,
-    "accuracy_m":       1.5,
+    "altitude":         240.4,
+    "accuracy":         1.5,
     "lastLocationTime": "2026-06-03T14:36:17Z",
     "strategy":         "weighted_avg",
     "sources":          ["wittra"]
@@ -166,7 +172,8 @@ The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic
 
 - `telemetry` is `null` when the engine has no fix, the asset is **registered but offline**, not an error.
 - `assetId` not in the caller's tenant → `404 IDENTIFIER_NOT_FOUND` (a cross-tenant id is indistinguishable from a missing one).
-- Surfaces engine fields (`strategy`, `sources`, `altitude_m`) intentionally hidden by the CAMARA `Location` response. Field names match the engine's `EnginePosition` to make the boundary obvious.
+- `positioningId` and `source` are the **primary** capability's. A multi-capability asset shows the first; `telemetry` is fused across all of them.
+- Surfaces fields the CAMARA `Location` response hides: `strategy`, `sources`, `altitude`.
 
 ### Capabilities
 
@@ -174,9 +181,14 @@ The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic
 
 ```json
 {
-  "adapters":  [ { "name": "wifi", "kind": "wifi", "capabilities": { "modalities": ["wifi"], "fixed": false } } ],
-  "sources":   ["wifi", "wittra"],
-  "kinds":     ["tool", "pallet"]
+  "profile":         "camara-private-asset",
+  "kinds":           ["forklift", "pallet", "tool"],
+  "sources":         ["wifi", "wittra"],
+  "orgs":            ["acme"],
+  "streaming":       true,
+  "altitude":        true,
+  "accuracyClasses": ["metre", "sub-metre"],
+  "adapters":        [ { "name": "wifi", "kind": "adapter", "source": "wifi" } ]
 }
 ```
 
@@ -189,7 +201,7 @@ The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic
 ```json
 {
   "anchors": [
-    { "id": "AP07", "tx_power_ref_dbm": -39.0, "path_loss_n": 2.1, "calibrated": true }
+    { "id": "AP07", "txPowerRef": -39.0, "pathLossExponent": 2.1, "calibrated": true }
   ]
 }
 ```
@@ -221,23 +233,26 @@ Exposes the *measured* RF (from the calibration tool, persisted in the bindings)
 ws://<gateway>/positions/stream        with Sec-WebSocket-Protocol: bearer.jwt, <jwt>
 ```
 
-Browsers cannot set an `Authorization` header on a WebSocket handshake, so the JWT rides the `Sec-WebSocket-Protocol` header instead of the URL (a bearer token does not belong in a URL, RFC 6750 section 5.3): the client offers `["bearer.jwt", "<jwt>"]` and the gateway echoes `bearer.jwt` to accept. A non-browser client sets these subprotocols the same way (Python `websockets` `subprotocols=[...]`, Node `ws`, PowerShell `AddSubProtocol`). The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload after **enriching it from the asset map** (the engine broadcasts `positioning_id`; the gateway maps each to its asset and drops unregistered or cross-tenant entries). Each payload is a JSON array, one object per asset with at least a fix:
+Browsers cannot set an `Authorization` header on a WebSocket handshake, so the JWT rides the `Sec-WebSocket-Protocol` header instead of the URL (a bearer token does not belong in a URL, RFC 6750 section 5.3): the client offers `["bearer.jwt", "<jwt>"]` and the gateway echoes `bearer.jwt` to accept. A non-browser client sets these subprotocols the same way (Python `websockets` `subprotocols=[...]`, Node `ws`, PowerShell `AddSubProtocol`). The gateway validates the token against the same Keycloak realm and `camara-location-read` role as the REST endpoints, opens a single upstream connection to the engine's `/ws/positions`, and forwards every payload after **enriching it from the asset map** (the engine broadcasts its own positioning ids; the gateway maps each to its asset, translates the engine's field names into the profile's, and drops unregistered or cross-tenant entries). Each payload is a JSON array, one object per asset with at least a fix. `timestamp` is the fix time and freezes for a still asset that keeps reporting; `observedAt` is the broadcast tick and stays fresh while the source answers; `lastCommunicationTime` is when the device last communicated, the most recent across the fused sources, and is the only one of the three that ages when a device goes quiet:
 
 ```json
 [
   {
-    "asset_id":        "pkg-4471",
-    "positioning_id":  "wittra-tag-01",
-    "source":          "wittra",
-    "kind":            "pallet",
-    "org":             "acme",
-    "latitude":        45.064547,
-    "longitude":       7.659272,
-    "altitude_m":      240.4,
-    "accuracy_m":      1.5,
-    "timestamp":       "2026-06-10T07:36:01Z",
-    "sources":         ["wittra"],
-    "strategy":        "weighted_avg"
+    "assetId":               "pkg-4471",
+    "positioningId":         "wittra-tag-01",
+    "source":                "wittra",
+    "kind":                  "pallet",
+    "org":                   "acme",
+    "latitude":              45.064547,
+    "longitude":             7.659272,
+    "altitude":              240.4,
+    "accuracy":              1.5,
+    "timestamp":             "2026-06-10T07:36:01Z",
+    "observedAt":            "2026-06-10T07:36:04Z",
+    "lastCommunicationTime": "2026-06-10T07:35:58Z",
+    "sources":               ["wittra"],
+    "strategy":              "weighted_avg",
+    "diagnostics":           { "moving": false }
   }
 ]
 ```
@@ -272,7 +287,7 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 }
 ```
 
-The path id is the asset's `positioning_id` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude_m` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
+The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude_m` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy_m, 1)`.
 
 **Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the source named by the capability it is resolving, so steady-state routing is single-adapter; fan-out is the no-source fallback. See [adapter-registry.md](adapter-registry.md).
 
@@ -323,11 +338,14 @@ GET /measurement/{device_id}  → 200 OK
   "z":          10.3,
   "accuracy_m": 6.6,
   "confidence": 0.85,
-  "timestamp":  1700000000.0
+  "timestamp":  1700000000.0,
+  "last_seen":  1700000042.0
 }
 ```
 
-`{device_id}` here is the asset's `positioning_id`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the floor-plan-local frame (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using the georeference before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
+`last_seen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
+
+`{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the floor-plan-local frame (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using the georeference before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 
 ## Asset Identity Map
 
@@ -342,21 +360,26 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
 
 ```json
 {
-  "asset_id":       "pkg-4471",
-  "positioning_id": "wittra-tag-01",
-  "source":         "wittra",
-  "kind":           "pallet",
-  "org":            "acme",
-  "label":          "Timber bundle 01"
+  "version": 4,
+  "assets": [
+    {
+      "assetId": "pkg-4471",
+      "kind":    "pallet",
+      "org":     "acme",
+      "label":   "Timber bundle 01",
+      "capabilities": [{ "source": "wittra", "positioningId": "wittra-tag-01" }]
+    }
+  ]
 }
 ```
 
-- `asset_id`: the business identifier the consumer sends in `device.assetId`. **Not** a phone number.
-- `positioning_id`: the internal id the engine fuses on. For a vendor adapter it **must equal the vendor-native device id** (substituted verbatim into the vendor path). See [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix).
-- `source`: **must equal the adapter's `ADAPTER_NAME`**, it is the routing key (see [Engine northbound contract](#engine-northbound-contract)).
+- `assetId`: the business identifier the consumer sends in `device.assetId`. **Not** a phone number.
+- `capabilities[].positioningId`: the internal id the engine fuses on. For a vendor adapter it **must equal the vendor-native device id** (substituted verbatim into the vendor path). See [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix).
+- `capabilities[].source`: **must equal the adapter's `ADAPTER_NAME`**, it is the routing key (see [Engine northbound contract](#engine-northbound-contract)).
 - `kind`: asset class (`tool` / `pallet` / `forklift` / `uwb-tag` / …), descriptive.
+- `metadata`: free-form per-asset extras (`floor`, `bay`, …). Carried through untouched. See [asset-registry.md](asset-registry.md).
 - `org`: tenant; the gateway gates consumers by it.
-- `label`: human-readable name surfaced by the demo. Optional; defaults to `asset_id`.
+- `label`: human-readable name surfaced by the demo. Optional; defaults to `assetId`.
 
 ## Floor plan
 

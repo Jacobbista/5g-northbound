@@ -38,11 +38,15 @@ pinned tag).
 Diagnostics fields are split into a normative core and a vendor bag. A consumer
 codes against the core once and reads the same names for every vendor.
 
-A field is core only when an external standard already names it, so the profile
-adopts that name and unit rather than inventing one, and a consumer of ours
-renders it. Anything a schema maps that is not core is routed into an `x_vendor`
-sub-object, raw and non-authoritative. A vendor field either maps to a core name
-or lands in `x_vendor` whole; there is no case in between. This mirrors the
+A field is core only when an external standard already **defines** it, so the
+profile adopts that definition and unit rather than inventing one, and a
+consumer of ours renders it. The profile gives the field its own name and
+records the source in the vocabulary's `standard` entry: LwM2M identifies
+battery level by the numeric resource 3/0/9 and defines no JSON field name, so
+`battery` is ours, anchored to their definition. Anything a schema maps that is
+not core is routed into a `vendorSpecific` sub-object, non-authoritative and
+not comparable across vendors. A vendor field either maps to a core name or
+lands in `vendorSpecific` whole; there is no case in between. This mirrors the
 free-form `properties` bag the omlox RTLS standard uses for everything outside
 its own core.
 
@@ -55,7 +59,7 @@ its own core.
 
 This table is the human view of a machine-readable contract: the gateway serves
 the normative vocabulary at `GET /contracts/diagnostics-vocabulary.json` (field
-names, units, adopted standards, default delivery tier, and the `x_vendor` rule).
+names, units, adopted standards, default delivery tier, and the `vendorSpecific` rule).
 The vendor-adapter imports the same artifact to route mapped fields, so a
 consumer wiring a vendor reads the targets from the contract rather than from
 prose. The artifact is the single source of truth; the adapter never hardcodes
@@ -65,9 +69,9 @@ the vocabulary.
 MOVING_SPEED_THRESHOLD_MPS`, a normative constant of `0.15` m/s fixed once here,
 not a per-vendor knob. A vendor that exposes its own moving/stationary state maps
 it to `moving` directly instead. A vendor exposing neither omits `moving`; an
-absent core field stays core and never becomes an `x_vendor` entry.
+absent core field stays core and never becomes an `vendorSpecific` entry.
 
-A field lives in `x_vendor` until it recurs across vendors and a consumer needs
+A field lives in `vendorSpecific` until it recurs across vendors and a consumer needs
 it, at which point promoting it into the core is a deliberate revision of this
 vocabulary. The core stays small and grows by evidence, the way CAMARA absorbs
 proven extensions. Identity (`name`) is not a diagnostics field: it flows on the
@@ -77,7 +81,7 @@ onboarding path, where the vendor `name` binds to the asset and anchor `label`.
 flowchart LR
   V[("vendor per-device record<br/>battery, motion, temp, rssi, ...")] --> M["vendor-adapter mapper<br/>route each mapped key"]
   M -->|"names a core field"| C["core<br/>(coerced to the standard unit)<br/>battery · last_seen · accuracy · moving"]
-  M -->|"any other key"| X["x_vendor<br/>(raw, non-authoritative)<br/>temperature · rssi · ..."]
+  M -->|"any other key"| X["vendorSpecific<br/>(raw, non-authoritative)<br/>temperature · rssi · ..."]
   C --> ST["stream diagnostics sub-object<br/>(fast-changing: moving)"]
   C --> OD["GET /device-diagnostics/v0/{assetId}<br/>(on demand: battery, last_seen)"]
   X --> OD

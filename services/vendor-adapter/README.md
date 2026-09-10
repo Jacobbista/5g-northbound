@@ -26,9 +26,9 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 ```json
 {
   "vendor": "wittra",
-  "base_url": { "env": "WITTRA_BASE_URL" },
+  "baseUrl": { "env": "WITTRA_BASE_URL" },
   "path": "/v1/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
-  "path_vars": {
+  "pathVars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
     "project_id": { "env": "WITTRA_PROJECT_ID" }
   },
@@ -37,13 +37,13 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
     "username": { "env": "WITTRA_ORG_ID" },
     "password": { "env": "WITTRA_API_KEY" }
   },
-  "cache_ttl_s": 5.0,
-  "request_timeout_s": 5.0,
+  "cacheTtl": 5.0,
+  "requestTimeout": 5.0,
   "mapping": {
     "frame":      { "const": "wgs84" },
     "latitude":   { "path": "payload.location.latitude" },
     "longitude":  { "path": "payload.location.longitude" },
-    "accuracy_m": { "const": 5.0 },
+    "accuracy": { "const": 5.0 },
     "confidence": { "path": "payload.location.accuracy", "default": 0.5 },
     "y":          { "path": "payload.location.height", "default": 0.0 },
     "timestamp":  { "path": "timestamp", "format": "iso8601" }
@@ -54,12 +54,12 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 | Section          | Purpose                                                                                                       |
 |------------------|---------------------------------------------------------------------------------------------------------------|
 | `vendor`         | Surfaces in `Measurement.source` so the engine can route on it                                                |
-| `base_url`       | Name of the environment variable carrying the vendor's API root. The document names the variable, the operator supplies the value - this image is generic and holds no vendor URL |
-| `path`           | Path template. `{device_id}` plus every key in `path_vars`                                                    |
-| `path_vars`      | Each var pulls its value from the env var named in its `env` field                                            |
+| `baseUrl`       | Name of the environment variable carrying the vendor's API root. The document names the variable, the operator supplies the value - this image is generic and holds no vendor URL |
+| `path`           | Path template. `{device_id}` plus every key in `pathVars`                                                    |
+| `pathVars`      | Each var pulls its value from the env var named in its `env` field                                            |
 | `auth.scheme`    | `none` / `basic` / `bearer` / `header`. Credentials never live in the schema - only the env-var names         |
-| `cache_ttl_s`    | TTL of the in-process response cache. Engine polls at ~1 Hz; vendors usually do not want that fast            |
-| `request_timeout_s` | httpx timeout when calling the vendor                                                                      |
+| `cacheTtl`    | TTL of the in-process response cache. Engine polls at ~1 Hz; vendors usually do not want that fast            |
+| `requestTimeout` | httpx timeout when calling the vendor                                                                      |
 | `mapping`        | One spec per `Measurement` field. Each spec is either `{ "const": value }` or `{ "path": "dotted.path", "default": …, "transform": …, "format": "iso8601" }` |
 
 `transform.type = "linear"` (`scale * x + offset`) is the only transform supported today. `format = "iso8601"` converts an ISO timestamp string to a Unix epoch float. List indices in paths use digits (`a.b.0.c`).

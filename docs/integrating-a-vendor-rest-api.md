@@ -84,13 +84,13 @@ The two contracts an operator must get right (see step 5):
    # -> { "deviceId": "...", "deviceType": "beacon", "fixedLocation": {...}, "name": "...", ... }
    ```
 
-   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`asset_when`, `source_class_rules`) at them, then validates against the schema contract before saving.
+   `?raw=1` returns the vendor payload verbatim. The dashboard's guided builder renders these fields and lets the operator point `mapping` (which path is the id, the lat, the type) and `classify` (`assetWhen`, `sourceClassRules`) at them, then validates against the schema contract before saving.
 
    The dashboard reads three contracts, from two pods:
 
    - vendor-adapter `GET /contract/schema`: the form of the vendor document (paths, auth, `mapping`, `discover`, `diagnostics`).
    - vendor-adapter `GET /discover?raw=1`: a live vendor record to point paths at.
-   - gateway `GET /contracts/device-diagnostics.schema.json`: the core mapping **targets** (`battery`, `last_seen`, `accuracy`, `moving`). Any other mapping key is `x_vendor`.
+   - gateway `GET /contracts/device-diagnostics.schema.json`: the core mapping **targets** (`battery`, `lastSeen`, `accuracy`, `moving`). Any other mapping key is `vendorSpecific`.
 
    It then `PUT /schema` (preview) or writes the ConfigMap (production). The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json), also published at [`/examples/wittra-schema.json`](https://jacobbista.github.io/5g-northbound/examples/wittra-schema.json), remains a worked **reference**, not a config to ship as-is.
 
@@ -133,9 +133,9 @@ The two contracts an operator must get right (see step 5):
 ```json
 {
   "vendor": "wittra",
-  "base_url": { "env": "WITTRA_BASE_URL" },
+  "baseUrl": { "env": "WITTRA_BASE_URL" },
   "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
-  "path_vars": {
+  "pathVars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
     "project_id": { "env": "WITTRA_PROJECT_ID" }
   },
@@ -144,38 +144,38 @@ The two contracts an operator must get right (see step 5):
     "username": { "env": "WITTRA_ORG_ID" },
     "password": { "env": "WITTRA_API_KEY" }
   },
-  "cache_ttl_s": 5.0,
-  "request_timeout_s": 5.0,
+  "cacheTtl": 5.0,
+  "requestTimeout": 5.0,
   "mapping": {
     "frame":      { "const": "wgs84" },
     "latitude":   { "path": "latest.data.location.value.latitude" },
     "longitude":  { "path": "latest.data.location.value.longitude" },
-    "accuracy_m": { "path": "latest.data.location.value.accuracy", "default": 5.0 },
+    "accuracy": { "path": "latest.data.location.value.accuracy", "default": 5.0 },
     "confidence": { "const": 0.5 },
     "y":          { "path": "latest.data.location.value.height", "default": 0.0 },
     "timestamp":  { "path": "latest.data.location.timestamp", "format": "iso8601" },
-    "last_seen":  { "path": "lastSeen", "format": "iso8601" }
+    "lastSeen":   { "path": "lastSeen", "format": "iso8601" }
   },
   "discover": {
     "path": "/v4/organizations/{org_id}/projects/{project_id}/devices",
-    "list_path": "data",
-    "path_vars": {
+    "listPath": "data",
+    "pathVars": {
       "org_id":     { "env": "WITTRA_ORG_ID" },
       "project_id": { "env": "WITTRA_PROJECT_ID" }
     },
     "pagination": {
       "type": "page",
-      "page_param": "page",
-      "size_param": "size",
-      "page_size": 100,
-      "total_path": "total"
+      "pageParam": "page",
+      "sizeParam": "size",
+      "pageSize": 100,
+      "totalPath": "total"
     },
     "mapping": {
-      "vendor_device_id": { "path": "id" },
+      "vendorDeviceId": { "path": "id" },
       "label":            { "path": "name" },
       "latitude":         { "path": "location.value.latitude" },
       "longitude":        { "path": "location.value.longitude" },
-      "height_m":         { "path": "location.value.height", "default": 0 }
+      "height":         { "path": "location.value.height", "default": 0 }
     }
   }
 }
@@ -184,13 +184,13 @@ The two contracts an operator must get right (see step 5):
 - **Prefer the vendor's current-fix endpoint.** Point `path` at the resource that returns the device's current state (`GET /devices/{id}` for Wittra), whose `latest.data.location.value.*` carries the live WGS84 fix at full precision. A time-series/history endpoint may round coordinates for storage, so reading a "latest" element off it inherits that quantization; use history for audit or replay, not the live fix.
 - **Array responses + "most recent" via path index.** When a vendor exposes only a time-series array, dotted paths support list indices including negatives: `-1.location.value.latitude` reads the last element (the latest fix when the array is ascending by time), `0.` the first if the vendor returns newest-first. No code change - the index is a mapper feature.
 - **Credentials never live in the schema.** Only `{ "env": "VAR_NAME" }` references. The schema can be committed to a public repo or pasted into a UI without leaking anything.
-- **`mapping.accuracy_m`** pulls from `latest.data.location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
+- **`mapping.accuracy`** pulls from `latest.data.location.value.accuracy` in v4 (radius in metres), falling back to a 5.0 const when the vendor omits it. Older v1 Wittra responses used `payload.location.accuracy` as a `[0, 1]` score; if you point the schema at a v1 cloud, map that field to `confidence` instead.
 - **`format: "iso8601"`** parses the timestamp string to a Unix epoch float so the engine can reason about staleness.
-- **`mapping.last_seen`** is when the *device* last communicated with the vendor, and it is what liveness is derived from. Map it whenever the vendor exposes such a field (Wittra: top-level `lastSeen`). It is not the fix time: a still asset freezes `timestamp` while it keeps reporting, so `timestamp` cannot separate a quiet device from a live one, and the engine's `observed_at` cannot either (it is fresh on every broadcast tick for as long as the vendor answers). The adapter carries it on the fast path, the engine broadcasts it as `last_seen`, and a consumer compares its age against the device's own observed cadence - vendors often report adaptively, sparse while still and frequent while moving. Omit the mapping when the vendor has no such field; consumers then have no liveness signal and must say so rather than assume the device is live.
-- **`cache_ttl_s`** keeps us off the vendor's rate limit: the engine polls at ~1 Hz, the adapter caches each response for the TTL.
-- **`diagnostics`** (optional) surfaces vendor fidelity as a profile extension, never mixed into the CAMARA payload. `stream` fields ride the current-fix record onto the position stream; `on_demand` entries are extra fetches served by `GET /diagnostics/{id}` (link quality, accuracy provenance). See [profile-extensions.md](profile-extensions.md).
+- **`mapping.lastSeen`** is when the *device* last communicated with the vendor, and it is what liveness is derived from. Map it whenever the vendor exposes such a field (Wittra: top-level `lastSeen`). It is not the fix time: a still asset freezes `timestamp` while it keeps reporting, so `timestamp` cannot separate a quiet device from a live one, and the stream's `observedAt` cannot either (it is fresh on every broadcast tick for as long as the vendor answers). The adapter carries it on the fast path, the gateway publishes it as `lastCommunicationTime`, and a consumer compares its age against the device's own observed cadence - vendors often report adaptively, sparse while still and frequent while moving. Omit the mapping when the vendor has no such field; consumers then have no liveness signal and must say so rather than assume the device is live.
+- **`cacheTtl`** keeps us off the vendor's rate limit: the engine polls at ~1 Hz, the adapter caches each response for the TTL.
+- **`diagnostics`** (optional) surfaces vendor fidelity as a profile extension, never mixed into the CAMARA payload. `stream` fields ride the current-fix record onto the position stream; `onDemand` entries are extra fetches served by `GET /diagnostics/{id}` (link quality, accuracy provenance). See [profile-extensions.md](profile-extensions.md).
 
-  Mapping keys are routed by the [core vocabulary](profile-extensions.md#core-vocabulary): a key that names a core field (`battery`, `last_seen`, `accuracy`, `moving`) surfaces at the top of the payload, coerced to the core unit through a `transform`; any other key surfaces under an `x_vendor` sub-object, raw. `PUT /schema` returns `x_vendor_keys` listing every key it routed there, so a typo of a core name is visible. Map `battery` to a percent 0-100 value (add a `linear` transform with `scale` when the vendor reports 0-1). Populate `moving` either by mapping the omlox-standard `speed` (the adapter derives `moving = speed > 0.15` m/s) or by mapping a vendor's own moving/stationary state to `moving` with a `bool` transform (`{ "type": "bool", "truthy": ["MOVING"] }`).
+  Mapping keys are routed by the [core vocabulary](profile-extensions.md#core-vocabulary): a key that names a core field (`battery`, `lastSeen`, `accuracy`, `moving`) surfaces at the top of the payload, coerced to the core unit through a `transform`; any other key surfaces under a `vendorSpecific` sub-object, carried as authored. `PUT /schema` returns `vendorSpecificKeys` listing every key it routed there, so a typo of a core name is visible. Map `battery` to a percent 0-100 value (add a `linear` transform with `scale` when the vendor reports 0-1). Populate `moving` either by mapping the omlox-standard `speed` (the adapter derives `moving = speed > 0.15` m/s) or by mapping a vendor's own moving/stationary state to `moving` with a `bool` transform (`{ "type": "bool", "truthy": ["MOVING"] }`).
 
 ### Optional `discover` block (vendor sync in the placement editor)
 
@@ -199,14 +199,14 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 | Field                | Meaning                                                                                                            |
 |----------------------|--------------------------------------------------------------------------------------------------------------------|
 | `path`               | List endpoint. Same `{var}` substitution as the top-level `path`.                                                  |
-| `list_path`          | JSON dotted path to the array inside the response body. Empty (`""`) means the body itself is the array.           |
-| `path_vars`          | Per-variable `{env: NAME}` resolution, same shape as the top-level.                                                |
-| `pagination.type`    | `"none"` (one GET) or `"page"` (1-indexed page+size query params, walk until accumulated count reaches `total_path`). |
-| `mapping`            | Per-entry field map. `vendor_device_id` is required; `label`, `latitude`, `longitude`, `height_m`, `device_type` are optional.  |
-| `filter`             | The editor's anchor-only include rule (`require_path`). Applied to the editor sync only; asset onboarding reads the list **unfiltered**.  |
-| `classify`           | Role + `source_class` classification for asset onboarding (below). Optional; omit to leave candidates unclassified.  |
+| `listPath`          | JSON dotted path to the array inside the response body. Empty (`""`) means the body itself is the array.           |
+| `pathVars`          | Per-variable `{env: NAME}` resolution, same shape as the top-level.                                                |
+| `pagination.type`    | `"none"` (one GET) or `"page"` (1-indexed page+size query params, walk until accumulated count reaches `totalPath`). |
+| `mapping`            | Per-entry field map. `vendorDeviceId` is required; `label`, `latitude`, `longitude`, `height`, `deviceType` are optional.  |
+| `filter`             | The editor's anchor-only include rule (`requirePath`). Applied to the editor sync only; asset onboarding reads the list **unfiltered**.  |
+| `classify`           | Role + `sourceClass` classification for asset onboarding (below). Optional; omit to leave candidates unclassified.  |
 
-Vendors that expose no positions omit `latitude`, `longitude` and `height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
+Vendors that expose no positions omit `latitude`, `longitude` and `height`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
 The full HTTP surface is `GET /discover` on the vendor-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
 
@@ -215,31 +215,31 @@ The full HTTP surface is `GET /discover` on the vendor-adapter, proxied by the p
 The same list also feeds **asset onboarding** through `GET /devices` (aggregated by the engine, served un-onboarded at the gateway's `/assets/discoverable` - see [asset registry](asset-registry.md#discovering-devices-to-onboard)). Two things differ from the editor sync:
 
 1. **Onboarding reads the list unfiltered.** The editor's `filter` keeps only anchors; onboarding wants the *tags* that filter drops, so `/devices` bypasses it.
-2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `source_class` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
+2. **Each candidate is classified** on two axes (from the private-asset paper): `role` (`asset` vs `infrastructure`) and `sourceClass` (the positioning technology). Onboarding must not treat a fixed sensor as a trackable asset.
 
-Classification is a set of **predicates** the schema author writes against the vendor's own fields. The rule is honesty: **classify only what the vendor record actually states, never a guess.** Vendors differ in how they expose type - some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` - match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` - match with `require_path`). Both forms use the same predicate shape; the adapter stays vendor-agnostic and asserts nothing on its own - it applies the operator's schema. The Wittra example classifies role only:
+Classification is a set of **predicates** the schema author writes against the vendor's own fields. The rule is honesty: **classify only what the vendor record actually states, never a guess.** Vendors differ in how they expose type - some give a clean string (Wittra's `deviceType` is `beacon` / `tag` / `meshrouter` / `gateway` - match with `path` + `equals`), others encode it only structurally, as a sub-object's presence (a MIOTY node has a `miotyConfig`, a border router has a `borderrouter` - match with `requirePath`). Both forms use the same predicate shape; the adapter stays vendor-agnostic and asserts nothing on its own - it applies the operator's schema. The Wittra example classifies role only:
 
 ```json
 "discover": {
   "mapping": {
-    "vendor_device_id": { "path": "deviceId" },
+    "vendorDeviceId": { "path": "deviceId" },
     "label":            { "path": "name", "default": null },
-    "device_type":      { "path": "deviceType" }
+    "deviceType":       { "path": "deviceType" }
   },
   "classify": {
-    "asset_when": { "path": "deviceType", "equals": "tag" }
+    "assetWhen": { "path": "deviceType", "equals": "tag" }
   }
 }
 ```
 
 **Role - declare exactly one of two predicates; the choice sets the default for an *unknown* device:**
 
-- **`asset_when`** - match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable - the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them - key off `deviceType`, not location).
-- **`infrastructure_when`** - match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
+- **`assetWhen`** - match → `asset`, else `infrastructure`. Positively names the trackable type; an unknown future `deviceType` defaults to **infrastructure** and is **not** auto-onboarded. Prefer this when the vendor list is mostly fixed gear and only a small named type is trackable - the safe default. Wittra: only `deviceType == tag` is an asset; `beacon` / `meshrouter` / `gateway` are all infrastructure (note `meshrouter` and `gateway` carry **no** `fixedLocation`, so a "has a position" heuristic would wrongly onboard them - key off `deviceType`, not location).
+- **`infrastructureWhen`** - match → `infrastructure`, else `asset`. The inverse: an unknown device defaults to `asset` (onboardable). Use when the trackable set is open-ended and infra is the small named set.
 
-**`source_class`** (the positioning technology) - first matching `source_class_rules` predicate wins its `value`, `source_class_default` applies otherwise; recommended values `uwb` / `ble` / `wifi` / `gnss` / `cellular` / `mioty` / `other`. It is **optional and operator-authored - only add it when the vendor record carries a real per-unit signal.** The Wittra example deliberately omits it: `GET /devices` exposes `deviceType` (the role) but not the radio, and a UWB `beacon` and a non-UWB one are byte-identical there - Wittra's UWB module lives in `Config.tof` on a separate endpoint (`GET /devices/configs`). Asserting `source_class` from the device list alone would be a guess, so the schema leaves it out; a deployment that needs per-unit precision maps the field that genuinely encodes it (a structural rule like `{ "when": { "require_path": "miotyConfig" }, "value": "mioty" }`, or the `Config.tof` join) rather than a blanket default.
+**`sourceClass`** (the positioning technology) - first matching `sourceClassRules` predicate wins its `value`, `sourceClassDefault` applies otherwise; recommended values `uwb` / `ble` / `wifi` / `gnss` / `cellular` / `mioty` / `other`. It is **optional and operator-authored - only add it when the vendor record carries a real per-unit signal.** The Wittra example omits it: `GET /devices` exposes `deviceType` (the role) but not the radio, and a UWB `beacon` and a non-UWB one are byte-identical there - Wittra's UWB module lives in `Config.tof` on a separate endpoint (`GET /devices/configs`). Asserting `sourceClass` from the device list alone would be a guess, so the schema leaves it out; a deployment that needs per-unit precision maps the field that genuinely encodes it (a structural rule like `{ "when": { "requirePath": "miotyConfig" }, "value": "mioty" }`, or the `Config.tof` join) rather than a blanket default.
 
-A **predicate** matches when `require_path` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `require_path` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `source_class` (everything stays onboardable).
+A **predicate** matches when `requirePath` resolves to a non-null value *and* (optionally) `path` equals `equals`. Set only `requirePath` for a presence test, `path` + `equals` for a value test. Omit `classify` entirely and candidates carry no `role` / `sourceClass` (everything stays onboardable).
 
 ## Local dev: end-to-end with `mock-vendor`
 

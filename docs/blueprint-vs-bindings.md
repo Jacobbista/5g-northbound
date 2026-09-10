@@ -56,7 +56,7 @@ flowchart TD
 | Read-client   | wifi-adapter   | `GET /blueprint` from the engine at boot (retry + degraded), joins anchors to BSSIDs |
 | Read-client   | location-app   | `GET /blueprint` **via the gateway proxy** - the demo is a MEC app and must not call the engine directly (AGENTS.md) |
 | Proxy         | camara-gateway     | Read-only `GET /blueprint` proxy so the demo reaches it through its single allowed backend |
-| Not a consumer| synthetic-adapter   | Synthetic walker; uses `WIDTH_M`/`DEPTH_M` env, no real geometry |
+| Optional reader| synthetic-adapter  | Walks inside `WIDTH_M`/`DEPTH_M`; with `LAYOUT_PATH` set it loads the blueprint's walls and openings and respects them |
 | Not a consumer| vendor-adapter       | Vendor cloud returns positioned WGS84 fixes; pass-through. (The editor's `↻ sync vendor` imports those at authoring time only) |
 
 Write authorisation is the **placement-editor's front-door gate**
@@ -231,8 +231,8 @@ PVC: wifi-adapter-bindings (RWO, ~5 MB) ── mounted ONLY by wifi-adapter
 | positioning-engine  | RW (authority)   | persists + serves it; `BLUEPRINT_PATH=/app/data/blueprint.json` |
 | placement-editor    | none             | `GET/PUT` over HTTP, `POSITIONING_ENGINE_URL`       |
 | wifi-adapter    | none             | `GET /blueprint` from the engine, `POSITIONING_ENGINE_URL` |
-| location-app    | none             | `GET /blueprint` via the gateway proxy (`CAMARA_API_BASE`) |
-| synthetic-adapter    | none             | env dimensions only                                |
+| location-app    | none             | `GET /blueprint` via the gateway proxy (`VITE_CAMARA_API_BASE`) |
+| synthetic-adapter    | none             | env dimensions, optionally `LAYOUT_PATH`           |
 
 Only the engine and wifi-adapter carry a PVC. The engine's blueprint PVC
 must be writable by its non-root `app` user (uid 1001) - `fsGroup: 1001`:

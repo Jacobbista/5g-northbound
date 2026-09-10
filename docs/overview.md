@@ -71,25 +71,25 @@ chose. It is what a CAMARA client asks about, and the only identifier that
 crosses the northbound boundary.
 
 **capability** - one way of locating that asset. A capability names a
-**source** and the **positioning_id** that source knows the thing by. An asset
+**source** and the **positioningId** that source knows the thing by. An asset
 declares at least one and may declare several.
 
 **source** - the positioning technology behind a capability (`wifi`, `wittra`,
 `synthetic`). It is also the name the serving adapter registers under, which is
 what makes routing a name match rather than a lookup table.
 
-**positioning_id** - the identifier internal to that source. It never leaves
+**positioningId** - the identifier internal to that source. It never leaves
 the internal plane: the gateway resolves it and does not return it.
 
 **adapter** - the service that speaks one source's language and answers
 `GET /measurement/{positioning_id}`.
 
 So the resolution chain is `assetId` → capabilities → for each, `(source,
-positioning_id)` → the adapter registered under that source → a fix. The
+positioningId)` → the adapter registered under that source → a fix. The
 gateway walks every capability an asset declares and fuses what comes back, so
 a two-capability asset yields one CAMARA `Location` with a smaller radius than
 either source alone. The engine never sees the asset: it is asked for a
-`positioning_id` and told which source to route to, which is why adding an
+`positioningId` and told which source to route to, which is why adding an
 asset never touches it.
 
 ## Key concepts
@@ -99,7 +99,7 @@ asset never touches it.
 | **Adapter** | A positioning source behind one HTTP contract | [adapters.md](adapters.md) |
 | **Adapter registry** | Adapters self-register with the engine; routing matches a capability's `source` to an adapter's registered name | [adapter-registry.md](adapter-registry.md) |
 | **Blueprint vs bindings** | Portable venue geometry (committable) vs per-venue secrets like BSSIDs (never committed) | [blueprint-vs-bindings.md](blueprint-vs-bindings.md) |
-| **Identity chain** | `assetId` → capability → `positioning_id` → adapter → vendor fix | [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix) |
+| **Identity chain** | `assetId` → capability → `positioningId` → adapter → vendor fix | [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix) |
 | **Coordinate frames** | Room-local (editor) vs floor-plan north-up (engine) vs WGS84 (gateway) | [architecture.md](architecture.md) |
 
 ## Where to go next

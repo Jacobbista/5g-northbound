@@ -1,6 +1,6 @@
 # Writing a Positioning Adapter
 
-A *positioning adapter* is any service that produces a position estimate for a device and exposes it over a small HTTP contract. The positioning engine fuses one or more adapters listed in `ADAPTER_URLS` (a comma-separated list of `name=url` entries, evaluated at startup); it never assumes anything else about a source. To add a new technology (UWB anchors, BLE beacons, a vendor RTLS, a GPS receiver), you implement this contract in a separate service and add its URL to the engine's configuration. No engine, gateway, or demo code changes.
+A *positioning adapter* is any service that produces a position estimate for a device and exposes it over a small HTTP contract. The positioning engine fuses one or more adapters listed in `ADAPTER_URLS` (a comma-separated list of `name=url` entries, evaluated at startup); it never assumes anything else about a source. For a vendor that speaks REST, adding a technology means writing a schema document and loading it into the generic `vendor-adapter`; no service is written and no code changes. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md). Implementing this contract in a separate service is the path for what a schema cannot express: a proprietary SDK, a binary or push transport, an on-device computation. Either way, no engine, gateway, or demo code changes.
 
 This repository ships two open adapter implementations + one schema-driven translator as reference:
 
@@ -55,7 +55,7 @@ Returns the latest position estimate for the device. Two coordinate frames are s
 
 ```json
 {
-  "source":      "wittra-uwb",
+  "source":      "wittra",
   "frame":       "wgs84",
   "latitude":    45.064412,
   "longitude":   7.659254,
@@ -71,9 +71,10 @@ Returns the latest position estimate for the device. Two coordinate frames are s
 | `frame`                | `"local"`/`"wgs84"` | Defaults to `"local"` when omitted. The engine projects WGS84 replies into the local frame using the floor plan's `gps_origin` before fusion |
 | `x`, `y`, `z`          | float, metres    | Used when `frame = local`. Right-handed local frame: `x` = east, `y` = vertical (height), `z` = north. Origin is the floor-plan lower-left corner |
 | `latitude`, `longitude`| float, degrees   | Used when `frame = wgs84`. Absolute position. The adapter does not need to know the room's GPS origin; the engine does |
-| `accuracy_m`           | float, metres    | One-sigma error radius. Used as `1 / variance` weight in fusion (smaller is better) |
+| `accuracy_m`           | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy_m`, and combines the accuracies in quadrature |
 | `confidence`           | float, 0.0–1.0   | Adapter's self-reported reliability. Used as a multiplicative weight in fusion |
 | `timestamp`            | float, optional  | Unix epoch seconds when the underlying measurement was taken. Omit for "now". The engine uses this to decide staleness |
+| `last_seen`            | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
 
 Pick `local` for adapters that compute their own position from observations gathered inside the room (RSSI, UWB anchors). Pick `wgs84` for adapters whose backend is map-anchored and already reports global coordinates, typically commercial RTLS platforms whose operator places anchors on a real-world map. The engine treats the two paths uniformly downstream.
 
@@ -106,7 +107,7 @@ GET /devices  ->  { "origin": "inventory" | "observed",
                                    "last_seen"?: <epoch>, "position"?: {…} } ] }
 ```
 
-`origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud - bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested - a human claims + names it). `id` is the value the engine routes on, so it becomes the asset's `positioning_id`. Return an empty list rather than erroring when there is nothing to enumerate.
+`origin` says what the list *is*: `inventory` when the source keeps a stable, pre-named registry (a vendor cloud - bulk-onboardable), `observed` when ids appear only by activity (wifi sees an id once a scan tagged with it is ingested - a human claims + names it). `id` is the value the engine routes on, so it becomes a capability's `positioningId`. Return an empty list rather than erroring when there is nothing to enumerate.
 
 `role` and `source_class` are the two classification axes from the [private-asset paper](https://github.com/Jacobbista/5g-northbound):
 
@@ -117,7 +118,7 @@ wifi only ever surfaces `role: asset` (its infrastructure - the APs - lives in t
 
 ## Lifecycle
 
-1. **Startup.** Adapter loads its configuration (AP map, anchor positions, vendor credentials, …) from environment variables and/or mounted files. It does *not* register with the engine, the engine pulls from a static URL list.
+1. **Startup.** Adapter loads its configuration (AP map, anchor positions, vendor credentials, …) from environment variables and/or mounted files, then registers with the engine (`POST /adapters` plus a heartbeat). `ADAPTER_URLS` is a cold-start seed only. See [adapter-registry.md](adapter-registry.md).
 2. **Data ingestion.** Adapter receives raw observations through whatever mechanism is appropriate for the technology: HTTP push from edge devices, MQTT subscription, vendor SDK, polling. This is entirely the adapter's concern; the engine never sees raw observations.
 3. **Position computation.** Adapter converts raw observations into a position estimate in its local frame. It may smooth, fuse multiple antennas, drop outliers, all internal.
 4. **Caching.** Adapter keeps the latest position per device. `GET /measurement/{id}` is a cache lookup. The engine polls at its own cadence (default ~1 Hz); the adapter does not push.
