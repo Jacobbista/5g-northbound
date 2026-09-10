@@ -54,8 +54,8 @@ def _enrich(raw: str, org: str | None = None) -> str:
     inverse-variance model as the pull path). Items with no registered asset are
     dropped - the private-asset surface never exposes a raw positioning id with
     no asset behind it. When `org` is set (tenant-scoped token), assets outside
-    that org are dropped. `device_id` is kept so existing consumers that key on
-    it still work. Non-JSON / unexpected shapes pass through unchanged."""
+    that org are dropped. Engine field names are translated into the profile's at the
+    emit point, so no internal name reaches a consumer. Non-JSON / unexpected shapes pass through unchanged."""
     from ..fusion import fuse_fixes
 
     try:
@@ -64,7 +64,7 @@ def _enrich(raw: str, org: str | None = None) -> str:
         return raw
     if not isinstance(items, list):
         return raw
-    by_pid = {cap.positioning_id: a for a in list_assets() for cap in a.capabilities}
+    by_pid = {cap.positioningId: a for a in list_assets() for cap in a.capabilities}
     groups: dict[str, dict] = {}
     for it in items:
         if not isinstance(it, dict):
@@ -72,7 +72,7 @@ def _enrich(raw: str, org: str | None = None) -> str:
         asset = by_pid.get(it.get("device_id"))
         if asset is None or (org and asset.org != org):
             continue
-        groups.setdefault(asset.asset_id, {"asset": asset, "items": []})["items"].append(it)
+        groups.setdefault(asset.assetId, {"asset": asset, "items": []})["items"].append(it)
 
     out = []
     for group in groups.values():
@@ -95,17 +95,37 @@ def _enrich(raw: str, org: str | None = None) -> str:
                 base["timestamp"] = fused["timestamp"]
             if fused.get("observed_at") is not None:
                 base["observed_at"] = fused["observed_at"]
-        base.update({
-            # One stable key per asset: its primary capability's positioning id,
-            # the same id a consumer joins the asset by. A fused entry keeps it
-            # even though several capabilities contributed.
-            "device_id": asset.primary.positioning_id,
-            "assetId": asset.asset_id,
+            # Most recent across the fused sources, per the AsyncAPI. ISO-8601
+            # UTC strings order as strings. `diagnostics` stays with the most
+            # accurate entry: it is one source's telemetry.
+            seen = [it.get("last_seen") for it in entries if it.get("last_seen")]
+            if seen:
+                base["last_seen"] = max(seen)
+        # Engine names in, profile names out.
+        item = {
+            "assetId": asset.assetId,
+            # The primary capability's positioning id: one stable join key per
+            # asset, kept even when several capabilities contributed.
+            "positioningId": asset.primary.positioningId,
             "source": asset.source,
             "kind": asset.kind,
             "org": asset.org,
-        })
-        out.append(base)
+            "latitude": base.get("latitude"),
+            "longitude": base.get("longitude"),
+            "accuracy": base.get("accuracy_m"),
+            "timestamp": base.get("timestamp"),
+            "sources": base.get("sources") or [],
+        }
+        for engine_name, profile_name in (
+            ("altitude_m", "altitude"),
+            ("observed_at", "observedAt"),
+            ("last_seen", "lastCommunicationTime"),
+            ("strategy", "strategy"),
+            ("diagnostics", "diagnostics"),
+        ):
+            if base.get(engine_name) is not None:
+                item[profile_name] = base[engine_name]
+        out.append(item)
     return json.dumps(out)
 
 

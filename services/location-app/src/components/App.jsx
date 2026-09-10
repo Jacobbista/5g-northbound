@@ -112,16 +112,16 @@ function adaptStreamItem(item) {
     lastLocationTime: item.timestamp,
     // The broadcast tick. Kept for latency/debugging only: it is fresh on
     // every tick, so it can never reveal a device that stopped reporting.
-    observedAt: item.observed_at || item.timestamp,
+    observedAt: item.observedAt || item.timestamp,
     // When the DEVICE last communicated with its source. This is the liveness
     // clock: unlike the fix time it does not freeze for a still asset, and
-    // unlike observed_at it ages when the device goes quiet. Absent for a
+    // unlike observedAt it ages when the device goes quiet. Absent for a
     // source that exposes no such signal.
-    lastSeen: item.last_seen || null,
+    lastSeen: item.lastCommunicationTime || null,
     area: {
       areaType: "CIRCLE",
       center: { latitude: item.latitude, longitude: item.longitude },
-      radius: item.accuracy_m,
+      radius: item.accuracy,
     },
     sources: item.sources || [],
     strategy: item.strategy,
@@ -524,7 +524,7 @@ const sceneWrap = {
   WebkitUserSelect: "none",
 };
 
-function deviceState({ position, deviceId }) {
+export function deviceState({ position, deviceId }) {
   // Called only for a SELECTED device; deselected rows show "hidden" upstream.
   // One function, used by the sidebar row AND the detail pill, so the two can
   // never disagree about the same asset.
@@ -539,8 +539,9 @@ function deviceState({ position, deviceId }) {
     if (state !== "live") return state;
     return imprecise ? "imprecise" : "live";
   }
-  // Sources with no last-communication signal keep the previous heuristic.
-  const liveAt = position?.observedAt || position?.lastLocationTime;
+  // No last-communication signal here. observedAt is the broadcast tick and
+  // stays fresh while the source answers, so the fix age is the signal left.
+  const liveAt = position?.lastLocationTime;
   if (!liveAt) return "offline";
   const ageMs = Date.now() - new Date(liveAt).getTime();
   if (ageMs > STALE_MS) return "stale";
