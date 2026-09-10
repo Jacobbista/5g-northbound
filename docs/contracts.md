@@ -59,7 +59,17 @@ Take each `<path>` and prefix it with a base above.
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
 contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The
-env contract is also served live, as JSON, at each service's `GET /contract`.
+env contract is served live, as JSON, at each service's `GET /contract`, and that
+endpoint is the authoritative one: the committed YAML is its build-time source.
+
+On the vendor-adapter the response has two halves. The variables the binary
+itself reads come from the YAML. The variables the VENDOR needs are named by the
+active schema, so they are derived from it at request time - this image is
+generic and holds no vendor's names. The same response carries `configured`,
+`vendor` and `schema_source` (`none` / `mounted` / `runtime`), so a caller can
+tell an unbound instance from a bound one, and `mapping.unmapped`, which lists
+the mapping fields this binary supports that the loaded document does not map.
+
 The vendor-adapter additionally serves `GET /contract/schema` (JSON Schema of
 the operator-authored vendor document). That is adapter config, not a profile
 contract: it is not listed in the table above and is not baked into the gateway

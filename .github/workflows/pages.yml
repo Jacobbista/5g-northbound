@@ -38,6 +38,10 @@ jobs:
       # them from the Pages CDN (github.io) - no raw.githubusercontent anonymous
       # rate limit. Paths mirror the repo, so docs/contracts.md URLs resolve.
       - run: cp -r schema spec site/
+      # The worked vendor schema, readable without cloning. Not normative: the
+      # gateway's GET /contracts publishes the normative profile artifacts, and
+      # a live adapter publishes its own grammar at GET /contract/schema.
+      - run: mkdir -p site/examples && cp services/vendor-adapter/examples/wittra-schema.json site/examples/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

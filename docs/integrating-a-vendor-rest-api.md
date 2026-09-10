@@ -92,7 +92,7 @@ The two contracts an operator must get right (see step 5):
    - vendor-adapter `GET /discover?raw=1` — live vendor record to point paths at.
    - gateway `GET /contracts/device-diagnostics.schema.json` — core mapping **targets** (`battery`, `last_seen`, `accuracy`, `moving`). Any other mapping key is `x_vendor`.
 
-   It then `PUT /schema` (preview) or writes the ConfigMap (production). The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json) remains a worked **reference**, not a config to ship as-is.
+   It then `PUT /schema` (preview) or writes the ConfigMap (production). The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json), also published at [`/examples/wittra-schema.json`](https://jacobbista.github.io/5g-northbound/examples/wittra-schema.json), remains a worked **reference**, not a config to ship as-is.
 
 4. **Persist the schema as a ConfigMap + rollout - this is the production path.** The schema is durable cluster config, versioned like any other ConfigMap:
 
@@ -133,8 +133,7 @@ The two contracts an operator must get right (see step 5):
 ```json
 {
   "vendor": "wittra",
-  "default_base_url": "https://api.wittra.se",
-  "base_url_env": "WITTRA_BASE_URL",
+  "base_url": { "env": "WITTRA_BASE_URL" },
   "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
   "path_vars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },

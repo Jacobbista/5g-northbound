@@ -95,6 +95,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 - The engine-gateway contract (`GET /position/{device_id}` → `EnginePosition`, in WGS84) is geometry-agnostic on the gateway side. The engine owns coordinate conversion; the gateway does not project or rotate.
 - Do not add `gps_origin` to the production `floor-plan.json` ConfigMap until a real GPS reference for the lab has been measured. The engine degrades gracefully (`latitude: 0, longitude: 0` with a warning) when it is absent.
 - `location-app` is a MEC application - it talks to the CAMARA gateway only. It must not call the engine, Keycloak admin APIs, or any internal cluster service.
+- Consumers read live surfaces. Where a fact exists both as a committed file and as an endpoint on a running instance, the endpoint is authoritative and the file is a build-time source or a human-readable mirror: `GET /contract` over `env.contract.yaml`, the gateway's `GET /contracts` over the Pages mirror, the engine's `GET /adapters` over `adapter.contract.yaml`. A question a consumer cannot answer from a live surface is an endpoint to add here.
 - Vendor SDKs, NDA material, and proprietary RTLS code do not enter this repository. They ship as private adapter images implementing the public HTTP contract.
 
 ## Local development quick reference

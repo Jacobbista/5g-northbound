@@ -26,8 +26,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 ```json
 {
   "vendor": "wittra",
-  "default_base_url": "https://api.wittra.se",
-  "base_url_env": "WITTRA_BASE_URL",
+  "base_url": { "env": "WITTRA_BASE_URL" },
   "path": "/v1/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
   "path_vars": {
     "org_id":     { "env": "WITTRA_ORG_ID" },
@@ -55,7 +54,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 | Section          | Purpose                                                                                                       |
 |------------------|---------------------------------------------------------------------------------------------------------------|
 | `vendor`         | Surfaces in `Measurement.source` so the engine can route on it                                                |
-| `default_base_url` | Used when `base_url_env` is unset. `base_url_env` lets the testbed point at a staging cloud without editing the schema |
+| `base_url`       | Name of the environment variable carrying the vendor's API root. The document names the variable, the operator supplies the value - this image is generic and holds no vendor URL |
 | `path`           | Path template. `{device_id}` plus every key in `path_vars`                                                    |
 | `path_vars`      | Each var pulls its value from the env var named in its `env` field                                            |
 | `auth.scheme`    | `none` / `basic` / `bearer` / `header`. Credentials never live in the schema - only the env-var names         |
