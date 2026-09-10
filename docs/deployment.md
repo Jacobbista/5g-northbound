@@ -18,6 +18,36 @@ exactly what it touched and image versions can differ between services:
 | `ghcr.io/jacobbista/5g-northbound/vendor-adapter:<tag>`              | [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/)            | 8080         |
 | `ghcr.io/jacobbista/5g-northbound/synthetic-adapter:<tag>`          | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/)    | 8080         |
 
+The architecture diagram groups these by role, which is the right axis for
+understanding the system and the wrong one for deploying it. Grouped instead by
+where an image comes from and who may run it:
+
+```mermaid
+flowchart TD
+  subgraph pub["Published to GHCR from this repository"]
+    direction LR
+    GW[camara-gateway] ~~~ ENG[positioning-engine]
+    WIFI[wifi-adapter] ~~~ VEND[vendor-adapter]
+    SYN[synthetic-adapter] ~~~ APP[location-app]
+    EDIT[placement-editor]
+  end
+
+  subgraph demo["Built from source by make demo, never published"]
+    MOCK[mock-vendor]
+  end
+
+  subgraph priv["Published from a separate private repository"]
+    PRIV["vendor adapter carrying an NDA SDK"]
+  end
+
+  pub --> KELT[["kelt: Ansible renders the manifests<br/>and pins each image version"]]
+  priv --> KELT
+```
+
+Vendor SDKs and NDA material never enter this repository. Such an adapter ships
+as a private image that implements the same public HTTP contract, so the
+cluster composes it exactly like a published one.
+
 `synthetic-adapter` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-vendor` is **not** published: it is a local schema-driven vendor cloud double used only by `make demo` (compose builds it from source); in the testbed `vendor-adapter` points at the real vendor cloud.
 
 Each rebuilt image publishes two references: the semver tag (`0.11.0`) and `latest`.
@@ -141,7 +171,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | Variable                | Default                              | Notes |
 |-------------------------|--------------------------------------|-------|
 | `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-adapter:8080,synthetic=http://synthetic-adapter:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
-| `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the asset's `source` (adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
+| `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the source the gateway passes for the capability being resolved (the adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
 | `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
 | `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
 | `BLUEPRINT_PATH`        | `/app/data/blueprint.json`           | The engine's own writable copy of the venue blueprint; it is the blueprint authority and serves it at `GET/PUT /blueprint`. Needs a PVC, not a ConfigMap |

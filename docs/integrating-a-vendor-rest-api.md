@@ -88,9 +88,9 @@ The two contracts an operator must get right (see step 5):
 
    The dashboard reads three contracts, from two pods:
 
-   - vendor-adapter `GET /contract/schema` — form of the vendor document (paths, auth, `mapping`, `discover`, `diagnostics`).
-   - vendor-adapter `GET /discover?raw=1` — live vendor record to point paths at.
-   - gateway `GET /contracts/device-diagnostics.schema.json` — core mapping **targets** (`battery`, `last_seen`, `accuracy`, `moving`). Any other mapping key is `x_vendor`.
+   - vendor-adapter `GET /contract/schema`: the form of the vendor document (paths, auth, `mapping`, `discover`, `diagnostics`).
+   - vendor-adapter `GET /discover?raw=1`: a live vendor record to point paths at.
+   - gateway `GET /contracts/device-diagnostics.schema.json`: the core mapping **targets** (`battery`, `last_seen`, `accuracy`, `moving`). Any other mapping key is `x_vendor`.
 
    It then `PUT /schema` (preview) or writes the ConfigMap (production). The committed [`examples/wittra-schema.json`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/examples/wittra-schema.json), also published at [`/examples/wittra-schema.json`](https://jacobbista.github.io/5g-northbound/examples/wittra-schema.json), remains a worked **reference**, not a config to ship as-is.
 
@@ -107,7 +107,7 @@ The two contracts an operator must get right (see step 5):
 
    `PUT /schema` exists for **dev / preview only** - a hot-patch to try a schema against a running pod without a rollout. On a ConfigMap (read-only) mount it applies live but returns `persisted:false` + a `warning`, and the **ConfigMap re-wins on the next restart**. Do not use it as the production write path; land the real change in the ConfigMap. (The read-only-mount footgun is shared with the wifi bindings and the asset map - see [blueprint vs bindings](blueprint-vs-bindings.md#deploying-to-kubernetes). The editor's Export/Import of a whole schema/bindings set is a **testbed-to-testbed** transfer, not part of normal operation.)
 
-5. **Routing is capability-driven - no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by the asset's `source`: the gateway passes `?source=<source>`, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **`asset.source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
+5. **Routing is capability-driven - no manual wiring.** The adapter self-registers with the engine (`POST /adapters` + heartbeat; see [adapter-registry.md](adapter-registry.md)), so `ADAPTER_URLS` is only a cold-start seed. The engine routes by source: the gateway passes `?source=<source>` for the capability it is resolving, and the engine polls the adapter whose `ADAPTER_NAME` equals it. So the only contract is **the capability's `source` == the adapter's `ADAPTER_NAME`** (both `wittra` here). `DEVICE_MAP` (engine env, `positioning_id=adapter` CSV) is an optional cold-start override and is normally unset.
 
 6. **Register the asset.** PUT an entry into the gateway's Asset Identity Map (`GET/PUT /assets`; fixture `dev/assets.json`). The fields that matter:
 
@@ -206,7 +206,7 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 | `filter`             | The editor's anchor-only include rule (`require_path`). Applied to the editor sync only; asset onboarding reads the list **unfiltered**.  |
 | `classify`           | Role + `source_class` classification for asset onboarding (below). Optional; omit to leave candidates unclassified.  |
 
-Vendors with no positions exposed simply omit `latitude`/`longitude`/`height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
+Vendors that expose no positions omit `latitude`, `longitude` and `height_m`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
 The full HTTP surface is `GET /discover` on the vendor-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
 

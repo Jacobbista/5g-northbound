@@ -91,7 +91,7 @@ The engine persists the registry on the same writable volume as the blueprint
 ## Routing: which adapter serves a device
 
 Capability-driven, no manual map needed. When the gateway asks for a position it
-passes the asset's `source` (`GET /position/{positioning_id}?source=<source>`),
+passes the source named by the capability it is resolving (`GET /position/{positioning_id}?source=<source>`),
 and the engine polls the adapter whose **`ADAPTER_NAME` equals that source**. So
 the one convention is `asset.source` == `ADAPTER_NAME` (e.g. both `wittra`).
 

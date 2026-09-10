@@ -4,57 +4,82 @@ The 5G Northbound stack exposes device location to third-party applications over
 
 ## System overview
 
+The stack is split along one line, and every other decision follows from it.
+**Northbound** is the side that faces applications: it speaks CAMARA, owns
+identity, and decides what a tenant is allowed to see. **Southbound** is the
+side that faces sensing hardware: it speaks whatever a vendor speaks and
+translates. The two never blur. A southbound component conforms to contracts it
+does not define; a northbound component defines contracts it then has to keep.
+
+That is why a new positioning technology costs one new adapter and nothing else.
+The engine and the gateway have no vendor knowledge to update, because none was
+ever placed in them.
+
 ```mermaid
 flowchart LR
-  subgraph client["Client side"]
-    BR(["Browser"])
-    EDGE(["Edge devices<br/>(Pi WiFi scanner, …)"])
+  subgraph consumers["Consumers"]
+    APP(["location-app<br/>CAMARA client"])
+    EDITOR(["placement-editor<br/>operator UI"])
   end
 
-  subgraph public["Public images, this repository"]
-    DEMO["location-app<br/>React + Three.js · CAMARA consumer"]
-    EDIT["placement-editor<br/>operator UI · authors the blueprint"]
-    GW["camara-gateway<br/>FastAPI · JWT · device map"]
-    ENG["positioning-engine<br/>thin fusion · WGS84"]
+  subgraph northbound["Northbound · defines the contracts"]
+    GW["camara-gateway<br/>CAMARA REST · JWT · assets · tenant scope"]
+    ENG["positioning-engine<br/>fusion · coordinate frames · blueprint authority"]
+  end
+
+  subgraph southbound["Southbound · conforms to them"]
     WIFI["wifi-adapter<br/>RSSI multilateration"]
-    MOCK["synthetic-adapter<br/>waypoint walker"]
-    REST["vendor-adapter<br/>schema-driven REST translator"]
-    MWIT["mock-vendor<br/>demo-only vendor cloud fake"]
+    VENDOR["vendor-adapter<br/>schema-driven REST translator"]
+    SYNTH["synthetic-adapter<br/>waypoint walker · demo + reference"]
+    PRIV["private adapter<br/>proprietary SDK · separate repo"]
   end
 
-  subgraph private["Private images (separate repos)"]
-    VENDOR["private adapter<br/>e.g. proprietary SDK / NDA"]
+  subgraph external["Outside the trust domain"]
+    CLOUD[("vendor cloud<br/>e.g. api.wittra.se")]
+    EDGEDEV(["edge devices<br/>Pi WiFi scanner"])
   end
 
-  subgraph vendor_cloud["Vendor clouds (third-party)"]
-    WITTRA[("Wittra cloud<br/>api.wittra.se")]
-  end
+  KC[("Keycloak<br/>OIDC + JWKS")]
 
-  subgraph identity["Identity"]
-    KC[("Keycloak<br/>OIDC + JWKS")]
-  end
-
-  BR -- "PKCE login" --> KC
-  BR -- "CAMARA REST<br/>(Bearer JWT)" --> DEMO
-  DEMO -- "POST /location-retrieval/v0.5/retrieve" --> GW
+  APP -- "CAMARA REST · Bearer JWT" --> GW
+  APP -- "WS /positions/stream" --> GW
+  APP -- "PKCE login" --> KC
   GW -- "JWKS validate" --> KC
-  GW -- "GET /position/{id}?source=" --> ENG
-  GW -. "GET /blueprint (proxy)" .-> ENG
-  ENG -- "GET /measurement/{id}<br/>self-registered" --> WIFI
-  ENG -- "GET /measurement/{id}<br/>self-registered" --> MOCK
-  ENG -- "GET /measurement/{id}<br/>self-registered" --> REST
-  ENG -- "GET /measurement/{id}<br/>self-registered" --> VENDOR
-  REST -- "GET /…/devices/{id}<br/>(per schema · current-fix)" --> WITTRA
-  REST -. "demo only" .-> MWIT
-  EDGE -- "POST /ingest/wifi-scan<br/>(5G data network)" --> WIFI
+  EDITOR -- "PUT /blueprint" --> ENG
 
-  EDIT -- "PUT /blueprint<br/>(engine = authority)" --> ENG
-  GW -. "blueprint proxy" .-> DEMO
+  GW -- "GET /position/{positioning_id}?source=" --> ENG
+  ENG -- "GET /measurement/{positioning_id}" --> WIFI
+  ENG -- "GET /measurement/{positioning_id}" --> VENDOR
+  ENG -- "GET /measurement/{positioning_id}" --> SYNTH
+  ENG -- "GET /measurement/{positioning_id}" --> PRIV
+
+  VENDOR -- "vendor REST, per the loaded schema" --> CLOUD
+  EDGEDEV -- "POST /ingest/wifi-scan<br/>over the 5G data network" --> WIFI
 ```
 
-`location-app` is the **end-user / CAMARA consumer**. `placement-editor` is the **operator-facing** sibling that authors the blueprint. It writes over HTTP to the positioning-engine, the blueprint authority (`PUT /blueprint`); consumers read the blueprint back from the engine through the gateway proxy. The editor and the demo never talk directly, and nothing mounts a shared file: the blueprint is network-distributed (see [blueprint vs bindings](blueprint-vs-bindings.md)).
+Read the middle band as the contract surface. Above it, one identifier crosses:
+the `assetId`. Below it, one contract repeats: `GET /measurement/{positioning_id}`.
+Everything a vendor does differently is absorbed in the bottom band, and the
+`vendor-adapter` absorbs a whole class of them without new code, because the
+translation is a document an operator loads rather than a branch in the image.
 
-The tracked entities are **assets** (tools, tags, pallets, forklifts), each with a business `assetId` the gateway resolves to a `positioning_id` and a `source` via the Asset Identity Map. Each positioning *technology* is its own pod speaking a single HTTP contract; adapters self-register with the engine (`ADAPTER_URLS` is only a cold-start seed). The engine routes a request to the adapter whose `ADAPTER_NAME` equals the asset's `source`, falling back to the optional `DEVICE_MAP` pin and then to fan-out-and-fuse across all adapters. With no adapters configured the engine produces no measurements. Deploy at least one (the [`synthetic-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) reference is the simplest path for development).
+`location-app` is the end-user consumer and never leaves the northbound
+boundary: it talks to the gateway and to nothing else. `placement-editor` is its
+operator-facing sibling and writes the venue geometry to the engine, which is
+the blueprint authority. The two UIs never talk to each other, and nothing
+mounts a shared file; the blueprint travels over HTTP (see
+[blueprint vs bindings](blueprint-vs-bindings.md)).
+
+The tracked entities are **assets**, each declaring one or more
+**capabilities**; a capability pairs a `source` with the `positioning_id` that
+source uses. The gateway resolves an `assetId` to those capabilities, asks the
+engine once per capability, and fuses the answers. The engine is asset-agnostic:
+it receives a `positioning_id` and a `source`, routes to the adapter registered
+under that name, and knows nothing about who owns the thing. Adapters
+self-register, so `ADAPTER_URLS` is only a cold-start seed. With no adapters
+registered the engine produces no measurements; deploy at least one, and the
+[`synthetic-adapter`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/)
+is the shortest path in development.
 
 ### Request flow: one CAMARA call, end to end
 
@@ -137,12 +162,13 @@ The token rides the `Sec-WebSocket-Protocol` header, not the URL (see
 
 | Service              | Role                                                                  | Repository path                          |
 |----------------------|-----------------------------------------------------------------------|------------------------------------------|
-| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; Asset Identity Map authority (`assetId` → `positioning_id` + `source`) and per-tenant authorization | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/) |
+| `camara-gateway`     | CAMARA Location Retrieval v0.5 and Location Verification v3 endpoints; JWT validation against Keycloak; Asset Identity Map authority (`assetId` → capabilities) and per-tenant authorization; fuses an asset's capabilities into one `Location` | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/) |
 | `positioning-engine` | Fuses measurements from configured adapters; runs the selected fusion strategy; converts local coordinates to WGS84; serves the northbound contract consumed by the gateway | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/) |
 | `wifi-adapter`   | Reference positioning adapter: WiFi RSSI multilateration over a fixed AP map; receives scans on the 5G data network                            | [`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/) |
-| `synthetic-adapter`   | Reference positioning adapter: synthetic random walk inside the floor bounds. Produces continuous motion without a real measurement source, used by the local demo and as a generic adapter template | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) |
+| `vendor-adapter`     | Generic translator from a vendor REST positioning cloud onto the adapter contract. One pod per vendor, bound to it by a schema document an operator loads at runtime rather than by code; it declares the variables that document needs at `GET /contract` and its own grammar at `GET /contract/schema`. See [integrating a vendor REST API](integrating-a-vendor-rest-api.md) | [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/) |
+| `synthetic-adapter`   | Reference positioning adapter: a waypoint walker that respects the blueprint's walls and openings when one is available, and rectangles inside the configured bounds when it is not. Produces continuous motion without a real measurement source; the local demo uses it and a new adapter copies it | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/) |
 | `location-app`   | Browser MEC application. Authenticates with `keycloak-js` (PKCE) and presents the Bearer JWT to the CAMARA gateway (`/assets` for discovery, `/assets/{assetId}/details` per asset) and the live positions WebSocket, rendering them on a 3D floor plan. Read-only consumer; never mutates server state. See [Authentication](authentication.md) | [`services/location-app/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/location-app/) |
-| `placement-editor`   | Operator-facing service, reads/writes the floor-plan / AP layout JSON via `GET/PUT /api/layout`. Runs alongside (not inside) the demo and is the artefact pulled by the testbed dashboard. Gated by an `oauth2-proxy` sidecar (BFF pattern), so the app carries no auth code. See [Authentication](authentication.md) | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) |
+| `placement-editor`   | Operator-facing service for authoring the venue. Serves the editing UI and proxies the blueprint at `GET/PUT /api/layout`; the engine remains the authority and holds the stored copy. Runs alongside (not inside) the demo and is the artefact pulled by the testbed dashboard. Gated by an `oauth2-proxy` sidecar (BFF pattern), so the app carries no auth code. See [Authentication](authentication.md) | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/) |
 
 Edge clients (for example, the Raspberry Pi WiFi scanner; see [`edge/wifi-scanner/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/edge/wifi-scanner/README.md) for the deploy flow) are not deployed by Kubernetes. They run on the device and reach the cluster over the 5G data network.
 

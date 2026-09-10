@@ -7,7 +7,8 @@ same self-validating spirit as the env contracts:
   1. each adapter's compose ADAPTER_CAPABILITIES matches its
      adapter.contract.yaml `capabilities` (closes the "value in compose,
      source in contract" loop - no silent drift);
-  2. every asset's `source` in dev/assets.json is advertised by some adapter;
+  2. every source named by an asset's capabilities in dev/assets.json is
+     advertised by some adapter;
   3. every asset's `kind` is advertised by some adapter;
   4. dev/assets.json conforms to schema/asset.schema.json (best-effort: only
      when jsonschema is importable).
@@ -97,14 +98,23 @@ def main() -> int:
     print("· asset coverage (assets.json vs advertised capabilities)")
     amap = json.loads(ASSETS.read_text())
     for a in amap.get("assets", []):
-        if a["source"] not in advertised_sources:
-            errors.append(f"asset {a['asset_id']}: source '{a['source']}' not advertised by any adapter")
-            print(f"  {BAD} {a['asset_id']}: source '{a['source']}' unserved")
+        # Schema v3: an asset binds one or more capabilities, each naming the
+        # source that tracks it. Every one of them must be served, since the
+        # engine polls them all and fuses the results.
+        sources = [c.get("source") for c in a.get("capabilities", [])]
+        unserved = [s for s in sources if s not in advertised_sources]
+        if not sources:
+            errors.append(f"asset {a['asset_id']}: no capabilities declared")
+            print(f"  {BAD} {a['asset_id']}: no capabilities")
+        elif unserved:
+            for s in unserved:
+                errors.append(f"asset {a['asset_id']}: source '{s}' not advertised by any adapter")
+                print(f"  {BAD} {a['asset_id']}: source '{s}' unserved")
         elif a["kind"] not in advertised_kinds:
             errors.append(f"asset {a['asset_id']}: kind '{a['kind']}' not advertised by any adapter")
             print(f"  {BAD} {a['asset_id']}: kind '{a['kind']}' unadvertised")
         else:
-            print(f"  {OK} {a['asset_id']}: {a['kind']} via {a['source']}")
+            print(f"  {OK} {a['asset_id']}: {a['kind']} via {', '.join(sources)}")
 
     # Schema conformance (best-effort).
     print("· schema (assets.json vs schema/asset.schema.json)")

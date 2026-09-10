@@ -121,7 +121,7 @@ services:
       ADAPTER_NAME: "wittra"
       ADAPTER_KIND: "vendor"
       ADAPTER_BASE_URL: "http://vendor-adapter:8080"
-      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true}'
+      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true,"diagnostics":true}'
     depends_on:
       mock-vendor:
         condition: service_healthy

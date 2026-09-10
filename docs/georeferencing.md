@@ -25,7 +25,7 @@ This is the same pattern professional surveying uses. Stockholm has ST74
 that engineering work happens in flat, undistorted metres. Sweden nationally
 uses SWEREF 99 with twelve local projection zones for the same reason. A
 local engineering frame with a documented tie to a global datum is not a
-hack - it is the textbook approach. Ours is simply small enough (one
+hack - it is the textbook approach. Ours is small enough (one
 building) that an equirectangular approximation replaces a formal projection;
 at room scale the error of that approximation is sub-millimetre.
 

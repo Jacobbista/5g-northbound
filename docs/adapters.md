@@ -18,7 +18,7 @@ This repository ships two open adapter implementations + one schema-driven trans
 | **5G**    | *no adapter yet* | The placement editor + 3D scene render `technology: "fiveg"` anchors (visual only). No measurement source is wired. Devices configured to use a `fiveg` adapter would return `404 NOT_FOUND` from the engine, safe but useless. Write an adapter implementing the contract above when a 5G positioning source becomes available. |
 | **GNSS**  | *no adapter yet* | Same as 5G. Indoor GNSS is generally too coarse to be useful, so this is intentionally deferred. Outdoor / hybrid deployments would need a dedicated adapter. |
 
-The 5G / GNSS gap is **safe by construction**: the engine never assumes an adapter for a technology exists. If a device is routed (via `DEVICE_MAP`) to a non-configured adapter, the engine simply returns no fix. The demo shows the device as `offline`. Nothing crashes, no half-baked positions enter the fusion pipeline.
+The 5G / GNSS gap is **safe by construction**: the engine never assumes an adapter for a technology exists. If a device is routed (via `DEVICE_MAP`) to a non-configured adapter, the engine returns no fix. The demo shows the device as `offline`. Nothing crashes, no half-baked positions enter the fusion pipeline.
 
 ## HTTP contract
 

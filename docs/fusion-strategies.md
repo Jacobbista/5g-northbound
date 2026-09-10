@@ -1,37 +1,35 @@
 # Fusion Strategies
 
-The positioning engine fuses measurements from one or more adapters into a single position estimate. The fusion strategy, the function `(measurements: list[Measurement]) -> EnginePosition`: is a plugin point separate from the adapter list. The same set of adapters can be evaluated under different strategies to compare accuracy, smoothness, robustness to outliers, or behaviour under partial coverage.
+The positioning engine fuses the measurements it collects for one device into a single position estimate. Fusion is a plugin point kept deliberately separate from the adapter list, so the same set of adapters can be replayed under different strategies and compared on accuracy, smoothness, robustness to outliers, or behaviour when coverage is partial.
 
-This document records candidate strategies for implementation and experimentation. The first is the current baseline; the others are open work items. For the `Measurement` input shape and the adapter contract, see [`adapters.md`](adapters.md) and [`data-contracts.md`](data-contracts.md).
+**One strategy is implemented: `weighted_avg`.** It is the only entry in `STRATEGIES` (`services/positioning-engine/app/fusion/registry.py`), and naming any other value for `FUSION_STRATEGY` or `FUSION_COMPARE` raises `unknown fusion strategy` at startup. The rest of this catalogue is design work: each entry records the shape a candidate would take and the conditions under which it would beat the baseline, so that implementing one is a matter of writing the class rather than re-deciding the approach. For the `Measurement` input shape and the adapter contract, see [`adapters.md`](adapters.md) and [`data-contracts.md`](data-contracts.md).
 
 ## Selection
 
-The engine reads `FUSION_STRATEGY` at startup (default `weighted_avg`). Optionally, `FUSION_COMPARE` (comma-separated strategy names) enables multi-strategy output for side-by-side comparison in the demo, the primary strategy is returned at the top level, the others appear under `fusions{}` for visualisation. `FUSION_COMPARE` is off by default; it is a research and demo feature, not a production one.
+The engine reads `FUSION_STRATEGY` at startup, defaulting to `weighted_avg`. `FUSION_COMPARE` takes a comma-separated list of additional strategies to run over the same measurements: the primary strategy's output stays at the top level and each comparison strategy appears under `fusions{}`, which lets the demo draw several tracks at once. It is a research feature and stays empty in production.
+
+Both variables are validated at startup against the registry, so a name that is not implemented stops the engine rather than silently falling back. With only the baseline registered today, the only value either accepts is `weighted_avg`.
 
 ```
-FUSION_STRATEGY=weighted_avg          # production
-FUSION_COMPARE=kalman,outlier_reject  # demo: render extra tracks
+FUSION_STRATEGY=weighted_avg   # the implemented baseline
+FUSION_COMPARE=               # empty until a second strategy lands
 ```
 
 ```mermaid
 flowchart LR
-  subgraph poll[per-device poll]
+  subgraph poll["one device, one poll cycle"]
     M1[(wifi M)]
-    M2[(uwb  M)]
+    M2[(uwb M)]
     M3[(synthetic M)]
   end
   M1 --> PRI[primary strategy<br/>FUSION_STRATEGY]
   M2 --> PRI
   M3 --> PRI
-  M1 -.-> C1[compare 1]
+  M1 -.-> C1["compare strategy<br/>(only when FUSION_COMPARE is set)"]
   M2 -.-> C1
   M3 -.-> C1
-  M1 -.-> C2[compare 2]
-  M2 -.-> C2
-  M3 -.-> C2
   PRI --> TOP([EnginePosition top-level<br/>lat/lon, accuracy, sources])
-  C1 -.-> EXT["fusions { 'kalman': … }"]
-  C2 -.-> EXT["fusions { 'outlier_reject': … }"]
+  C1 -.-> EXT["fusions { name: output }"]
   TOP --> RESP([northbound response])
   EXT -.-> RESP
 ```
@@ -40,7 +38,7 @@ flowchart LR
 
 ### 1. Weighted average (`weighted_avg`), baseline
 
-Current production strategy. For each measurement assign `w = confidence / accuracy_m` and compute the weighted mean over all `Measurement.{x, y, z}`. Output `accuracy_m` is the weighted RMS of input accuracies.
+The implemented strategy. Each measurement gets a weight `w = confidence / accuracy_m`, and the output is the weighted mean of `Measurement.{x, y, z}`. Output accuracy combines the inputs in quadrature, `1 / sqrt(Σ 1/accuracy_m²)`, which is the inverse-variance result: fusing two 3 m sources yields about 2.1 m, and a source contributes in proportion to how much it narrows the estimate. Adding a poor source can therefore only improve the reported radius, which is the property that makes a multi-capability asset worth declaring.
 
 - **Strengths:** stateless, O(N) per fusion cycle, robust to one bad adapter when several others agree.
 - **Weaknesses:** no temporal smoothing: output jitters at the noise floor of the worst weighted source. One catastrophically wrong measurement with high confidence drags the result.
@@ -54,7 +52,7 @@ Maintain per-device state `(x, z, vx, vz)` with a constant-velocity process mode
 - **Weaknesses:** introduces lag at direction changes; tuning of process noise `Q` and measurement noise `R` is per-deployment; assumes Gaussian errors.
 - **When to prefer:** moving assets (people, vehicles, mobile robots) where temporal continuity matters more than raw accuracy.
 
-**Implementation note:** the `wifi-adapter` service already runs a per-device Kalman filter internally over WiFi-only measurements. Lifting that pattern up to the engine, across heterogeneous adapters, with adapter-supplied `accuracy_m` driving `R`: is the obvious next step.
+**Implementation note.** The `wifi-adapter` already runs a per-device Kalman filter internally, over WiFi measurements alone. Lifting that pattern to the engine, across heterogeneous adapters and with adapter-supplied `accuracy_m` driving `R`, is the obvious next step and the reason this entry is first in the queue.
 
 ### 3. Outlier-rejected weighted average (`outlier_reject`)
 
@@ -66,7 +64,7 @@ Before averaging, drop measurements whose distance from the median (or geometric
 
 ### 4. Confidence gating (`gated`)
 
-Pick the single highest-`confidence × (1/accuracy_m)` measurement. Optionally fall through to a configured fallback chain (`gated_chain="wittra-uwb,wifi-adapter,fiveg"`), first source whose measurement is non-null wins, no fusion.
+Pick the single measurement with the highest `confidence x (1/accuracy_m)`. Optionally fall through a configured chain of source names instead (`gated_chain="wittra,wifi,synthetic"`), where the first source with a non-null measurement wins and no fusion happens. The chain names sources, the same values a capability carries and an adapter registers under.
 
 - **Strengths:** trivial to reason about for operators. No "averaged into nowhere" surprises when one adapter is clearly better in a zone.
 - **Weaknesses:** wastes information from other adapters; introduces step discontinuities when handoff between sources occurs.
@@ -74,40 +72,56 @@ Pick the single highest-`confidence × (1/accuracy_m)` measurement. Optionally f
 
 ## Roadmap candidates (future)
 
-- **Particle filter**: handles multi-modal distributions (e.g, multi-floor ambiguity). Heavier CPU.
+- **Particle filter**: handles multi-modal distributions, such as multi-floor ambiguity. Heavier CPU.
 - **Bayesian sequential update**: prior from cheap continuous source (WiFi), update from sporadic high-accuracy source (Wittra) when available.
 - **ML regressor**: input vector of all `Measurement` features, output `(lat, lon)`. Trained on Wittra ground truth where coverage overlaps; predicts in WiFi-only zones. Training pipeline and dataset live outside this repository.
 
 ## Testing
 
-Each strategy under `services/positioning-engine/app/fusion/` has a unit test exercising:
+`services/positioning-engine/tests/test_fusion.py` covers the baseline. A strategy added later is expected to carry the same four cases, which is what makes two strategies comparable:
 
-1. **Single adapter**: output equals input (modulo frame conversion).
-2. **Two consistent adapters**: output between the two, accuracy improves.
-3. **One outlier among three**: `outlier_reject` and `gated` drop it; `weighted_avg` is dragged.
-4. **All adapters drop**: `kalman` keeps predicting; stateless strategies return `None`.
+1. **Single measurement**: output equals input, modulo frame conversion.
+2. **Two consistent measurements**: output lands between them and the reported accuracy improves on both.
+3. **One outlier among three**: `outlier_reject` and `gated` would drop it, while `weighted_avg` is dragged toward it. This case is the argument for implementing the other two.
+4. **Every source drops out**: a stateful strategy such as `kalman` keeps predicting, a stateless one returns `None`.
 
-Integration tests with the `synthetic-adapter` adapter generating a known trajectory let strategies be compared on RMSE against ground truth.
+Comparing strategies on RMSE against ground truth needs a known trajectory, which the `synthetic-adapter` can generate; that harness is not built yet.
 
 ## Implementation shape
+
+A strategy is any class satisfying this protocol, which the engine instantiates
+once at startup and reuses for every request. State that a stateful strategy
+needs, a per-device Kalman dictionary for instance, lives on the instance and
+not in shared engine state.
 
 ```python
 # services/positioning-engine/app/fusion/base.py
 class FusionStrategy(Protocol):
-    name: ClassVar[str]
+    """Combines N adapter measurements (all in the local frame) into one position."""
+
+    name: str
+
     def fuse(
         self,
+        device_id: str,
         measurements: list[Measurement],
         floor_plan: FloorPlan,
-        prev: EnginePosition | None = None,  # for stateful strategies
-    ) -> EnginePosition | None: ...
+    ) -> Optional[FusedPosition]: ...
+```
 
+`device_id` is passed so a stateful strategy can key its history without the
+engine holding that state on its behalf. Registration is one line:
+
+```python
+# services/positioning-engine/app/fusion/registry.py
 STRATEGIES: dict[str, type[FusionStrategy]] = {
-    "weighted_avg":   WeightedAvgFusion,
-    "kalman":         KalmanFusion,
-    "outlier_reject": OutlierRejectFusion,
-    "gated":          GatedFusion,
+    "weighted_avg": WeightedAvgFusion,
 }
 ```
 
-The engine instantiates the selected strategy (and any in `FUSION_COMPARE`) at startup and routes every position request through them. State (the Kalman per-device dict, for example) lives on the strategy instance, not in shared engine state.
+`FusedPosition` carries `x, y, z, accuracy_m, sources` and an optional
+`timestamp`. Two fields on it are attached after fusion rather than computed by
+a strategy: `last_seen`, the most recent device last-communication across the
+fused sources, which drives liveness downstream, and `diagnostics`, the vendor
+fidelity carried from a single routed source. A new strategy neither reads nor
+sets them.
