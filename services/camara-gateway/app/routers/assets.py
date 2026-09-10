@@ -57,10 +57,10 @@ class DiscoverableDevice(BaseModel):
     source: str
     origin: Optional[str] = None
     role: Optional[str] = None
-    source_class: Optional[str] = None
-    device_type: Optional[str] = None
+    sourceClass: Optional[str] = None
+    deviceType: Optional[str] = None
     label: Optional[str] = None
-    last_seen: Optional[float] = None
+    lastSeen: Optional[float] = None
 
 
 class DiscoverableResponse(BaseModel):
@@ -75,7 +75,7 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
     instead of hand-typing every asset. Already-mapped positioning_ids are
     subtracted. Candidates are unclaimed (no org) until onboarded."""
     devices = await get_engine_devices() or []
-    mapped = {cap.positioning_id for a in list_assets() for cap in a.capabilities}
+    mapped = {cap.positioningId for a in list_assets() for cap in a.capabilities}
     seen: set[str] = set()
     candidates: list[DiscoverableDevice] = []
     for d in devices:
@@ -89,10 +89,10 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
                 source=d.get("source", ""),
                 origin=d.get("origin"),
                 role=d.get("role"),
-                source_class=d.get("source_class"),
-                device_type=d.get("device_type"),
+                sourceClass=d.get("source_class"),
+                deviceType=d.get("device_type"),
                 label=d.get("label"),
-                last_seen=d.get("last_seen"),
+                lastSeen=d.get("last_seen"),
             )
         )
     return DiscoverableResponse(candidates=candidates)
@@ -101,7 +101,7 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
 class AssetTelemetry(BaseModel):
     latitude: float
     longitude: float
-    accuracy_m: float
+    accuracy: float
     altitude: Optional[float] = None
     lastLocationTime: str
     strategy: str
@@ -109,8 +109,8 @@ class AssetTelemetry(BaseModel):
 
 
 class AssetDetailsResponse(BaseModel):
-    asset_id: str
-    positioning_id: str
+    assetId: str
+    positioningId: str
     kind: str
     source: str
     org: str
@@ -138,18 +138,18 @@ async def asset_details(
         telemetry = AssetTelemetry(
             latitude=details.latitude,
             longitude=details.longitude,
-            accuracy_m=details.radius_m,
+            accuracy=details.radius_m,
             altitude=details.altitude_m,
             lastLocationTime=_rfc3339(details.last_location_time),
             strategy=details.strategy,
             sources=details.sources,
         )
     return AssetDetailsResponse(
-        asset_id=asset.asset_id,
-        positioning_id=asset.positioning_id,
+        assetId=asset.assetId,
+        positioningId=asset.positioning_id,
         kind=asset.kind,
         source=asset.source,
         org=asset.org,
-        label=asset.label or asset.asset_id,
+        label=asset.label or asset.assetId,
         telemetry=telemetry,
     )

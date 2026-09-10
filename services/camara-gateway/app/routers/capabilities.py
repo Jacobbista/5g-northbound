@@ -31,7 +31,7 @@ class Capabilities(BaseModel):
     orgs: list[str]
     streaming: bool
     altitude: bool
-    accuracy_classes: list[str]
+    accuracyClasses: list[str]
     adapters: list[AdapterCapability]
 
 
@@ -75,6 +75,6 @@ async def capabilities(claims: dict = Depends(require_location_role)) -> Capabil
         orgs=sorted({a.org for a in assets}),
         streaming=streaming,
         altitude=altitude,
-        accuracy_classes=sorted(accuracy),
+        accuracyClasses=sorted(accuracy),
         adapters=adapter_caps,
     )

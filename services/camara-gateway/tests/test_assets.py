@@ -19,28 +19,28 @@ async def test_get_assets_lists_seeded_map(client, auth_headers):
     resp = await client.get(ASSETS, headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["version"] == 3
-    ids = {a["asset_id"] for a in body["assets"]}
+    assert body["version"] == 4
+    ids = {a["assetId"] for a in body["assets"]}
     assert ids == {"tool-880", "forklift-7", "pkg-4471"}
-    by_id = {a["asset_id"]: a for a in body["assets"]}
-    assert by_id["pkg-4471"]["capabilities"][0]["positioning_id"] == "wittra-tag-01"
+    by_id = {a["assetId"]: a for a in body["assets"]}
+    assert by_id["pkg-4471"]["capabilities"][0]["positioningId"] == "wittra-tag-01"
     assert by_id["pkg-4471"]["org"] == "acme"
     assert "simulated" not in by_id["forklift-7"]
 
 
 async def test_put_assets_replaces_map(client, auth_headers):
     new_map = {
-        "version": 3,
+        "version": 4,
         "assets": [
-            {"asset_id": "drill-1", "kind": "tool", "org": "atlas", "label": "Drill 1",
-             "capabilities": [{"source": "wifi", "positioning_id": "wifi-asset-01"}]},
+            {"assetId": "drill-1", "kind": "tool", "org": "atlas", "label": "Drill 1",
+             "capabilities": [{"source": "wifi", "positioningId": "wifi-asset-01"}]},
         ],
     }
     put = await client.put(ASSETS, json=new_map, headers=auth_headers)
     assert put.status_code == 200
 
     got = await client.get(ASSETS, headers=auth_headers)
-    ids = {a["asset_id"] for a in got.json()["assets"]}
+    ids = {a["assetId"] for a in got.json()["assets"]}
     assert ids == {"drill-1"}
 
 
@@ -65,7 +65,7 @@ async def test_details_joins_engine_telemetry(client, respx_mock, auth_headers, 
     resp = await client.get(f"{ASSETS}/pkg-4471/details", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["asset_id"] == "pkg-4471"
+    assert body["assetId"] == "pkg-4471"
     assert body["kind"] == "pallet"
     assert body["telemetry"]["sources"] == ["wittra"]
     assert body["telemetry"]["altitude"] == 1.2
@@ -76,10 +76,10 @@ async def test_details_fuses_multi_capability(client, respx_mock, auth_headers, 
     from app.config import get_settings
     get_settings.cache_clear()
 
-    amap = {"version": 3, "assets": [
-        {"asset_id": "robot-9", "kind": "forklift", "org": "acme",
-         "capabilities": [{"source": "wifi", "positioning_id": "wifi-9"},
-                          {"source": "wittra", "positioning_id": "uwb-9"}]}]}
+    amap = {"version": 4, "assets": [
+        {"assetId": "robot-9", "kind": "forklift", "org": "acme",
+         "capabilities": [{"source": "wifi", "positioningId": "wifi-9"},
+                          {"source": "wittra", "positioningId": "uwb-9"}]}]}
     assert (await client.put("/assets", json=amap, headers=auth_headers)).status_code == 200
 
     respx_mock.get("http://engine.test/position/wifi-9?source=wifi").mock(

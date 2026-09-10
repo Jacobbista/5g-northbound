@@ -40,11 +40,11 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
     assert cands["wifi-new"]["origin"] == "observed"
     assert cands["wifi-new"]["source"] == "wifi"
     assert cands["wifi-new"]["role"] == "asset"
-    assert cands["wifi-new"]["source_class"] == "wifi"
+    assert cands["wifi-new"]["sourceClass"] == "wifi"
     assert cands["D002"]["label"] == "Tag 2"
-    # role + source_class pass through so KELT separates infrastructure + badges tech.
+    # role + sourceClass pass through so KELT separates infrastructure + badges tech.
     assert cands["D002"]["role"] == "infrastructure"
-    assert cands["D002"]["source_class"] == "uwb"
+    assert cands["D002"]["sourceClass"] == "uwb"
 
 
 async def test_discoverable_empty_when_engine_absent(client, auth_headers, monkeypatch):

@@ -192,8 +192,10 @@ async def calibration_params(request: Request):
     for r in cfg.routers:
         calibrated = r.tx_power is not None
         out[r.id] = {
-            "tx_power_ref_dbm": r.tx_power if calibrated else cfg.tx_power,
-            "path_loss_n": r.path_loss_n if calibrated else cfg.path_loss_n,
+            # Profile-facing names: the gateway proxies this verbatim as
+            # /anchors/calibration. The bindings file keeps its own.
+            "txPowerRef": r.tx_power if calibrated else cfg.tx_power,
+            "pathLossExponent": r.path_loss_n if calibrated else cfg.path_loss_n,
             "calibrated": calibrated,
         }
     return {"params": out}

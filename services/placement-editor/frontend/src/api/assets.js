@@ -23,11 +23,11 @@ export async function putAssetMap(map) {
 }
 
 // Additive merge: read the current map, append/replace the given assets keyed
-// by asset_id (existing entries for other ids are preserved), write it back.
+// by assetId (existing entries for other ids are preserved), write it back.
 // The safe write path - PUT replaces the whole map, so onboarding must merge.
 export async function upsertAssets(assets) {
   const map = await getAssetMap();
-  const byId = new Map((map.assets || []).map((a) => [a.asset_id, a]));
-  for (const a of assets) byId.set(a.asset_id, { ...byId.get(a.asset_id), ...a });
+  const byId = new Map((map.assets || []).map((a) => [a.assetId, a]));
+  for (const a of assets) byId.set(a.assetId, { ...byId.get(a.assetId), ...a });
   return putAssetMap({ version: map.version || 2, assets: [...byId.values()] });
 }

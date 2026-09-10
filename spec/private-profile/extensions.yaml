@@ -122,7 +122,7 @@ components:
       properties:
         id:
           type: string
-          description: The source's device id; becomes a capability's positioning_id on onboarding.
+          description: The source's device id; becomes a capability's positioningId on onboarding.
         source:
           type: string
         origin:
@@ -133,24 +133,24 @@ components:
           type: string
           description: "`asset` vs `infrastructure`; infrastructure is not onboardable."
           nullable: true
-        source_class:
+        sourceClass:
           type: string
           nullable: true
-        device_type:
+        deviceType:
           type: string
           nullable: true
         label:
           type: string
           nullable: true
-        last_seen:
+        lastSeen:
           type: number
           nullable: true
     AssetDetails:
       type: object
-      required: [asset_id, positioning_id, kind, source, org, label]
+      required: [assetId, positioningId, kind, source, org, label]
       properties:
-        asset_id: { type: string }
-        positioning_id:
+        assetId: { type: string }
+        positioningId:
           type: string
           description: The primary capability's positioning id.
         kind: { type: string }
@@ -164,11 +164,11 @@ components:
           nullable: true
     AssetTelemetry:
       type: object
-      required: [latitude, longitude, accuracy_m, lastLocationTime, strategy, sources]
+      required: [latitude, longitude, accuracy, lastLocationTime, strategy, sources]
       properties:
         latitude: { type: number, format: double }
         longitude: { type: number, format: double }
-        accuracy_m: { type: number, format: double }
+        accuracy: { type: number, format: double }
         altitude:
           type: number
           format: double
@@ -189,6 +189,6 @@ components:
           additionalProperties:
             type: object
             properties:
-              tx_power_ref_dbm: { type: number }
-              path_loss_n: { type: number }
+              txPowerRef: { type: number }
+              pathLossExponent: { type: number }
               calibrated: { type: boolean }

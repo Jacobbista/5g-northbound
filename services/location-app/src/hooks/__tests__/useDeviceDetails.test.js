@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDeviceDetails } from "../useDeviceDetails";
 
 const MOCK_DETAILS = {
-  asset_id: "pkg-4471",
-  positioning_id: "wittra-tag-01",
+  assetId: "pkg-4471",
+  positioningId: "wittra-tag-01",
   kind: "pallet",
   source: "wittra",
   org: "acme",
@@ -12,7 +12,7 @@ const MOCK_DETAILS = {
   telemetry: {
     latitude: 45.064,
     longitude: 7.659,
-    accuracy_m: 2.4,
+    accuracy: 2.4,
     altitude: 1.2,
     lastLocationTime: "2026-06-03T12:00:00Z",
     strategy: "weighted_avg",

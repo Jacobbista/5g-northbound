@@ -247,7 +247,7 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
     for cap in capabilities:
         try:
             positions.append(
-                await get_position(cap.positioning_id, cap.source, max_age, error_ns)
+                await get_position(cap.positioningId, cap.source, max_age, error_ns)
             )
         except CamaraError as exc:
             last_error = exc  # no-fix / max-age / unreachable: try the next
@@ -315,7 +315,7 @@ async def get_fused_details(capabilities) -> PositionDetails | None:
 
     collected: list[tuple] = []
     for cap in capabilities:
-        d = await get_position_details(cap.positioning_id, cap.source)
+        d = await get_position_details(cap.positioningId, cap.source)
         if d is not None:
             collected.append((cap, d))
     if not collected:

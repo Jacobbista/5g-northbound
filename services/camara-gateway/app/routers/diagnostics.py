@@ -50,4 +50,4 @@ async def device_diagnostics(asset_id: str, claims: dict = Depends(require_locat
         raise HTTPException(404, detail="no diagnostics")
     if r.status_code != 200:
         raise HTTPException(404, detail="no diagnostics")
-    return {"assetId": asset.asset_id, "source": asset.source, "diagnostics": r.json().get("diagnostics", {})}
+    return {"assetId": asset.assetId, "source": asset.source, "diagnostics": r.json().get("diagnostics", {})}

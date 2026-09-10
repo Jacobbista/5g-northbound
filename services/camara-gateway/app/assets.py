@@ -2,7 +2,7 @@
 
 An asset is a thing (UWB tag, tool, pallet, forklift), NOT a cellular
 subscriber - it has no MSISDN/IMSI/NAI. The map resolves a CAMARA
-`device.assetId` to a positioning id (engine routing) + tenant `org` +
+`device.assetId` to its capabilities (engine routing) + tenant `org` +
 `kind`/`source` metadata. No subscriber lookup ever happens.
 
 Network-authority, mirroring the engine's blueprint store: the map is
@@ -23,7 +23,7 @@ from .config import get_settings
 
 log = logging.getLogger(__name__)
 
-ASSET_SCHEMA_VERSION = 3
+ASSET_SCHEMA_VERSION = 4
 
 
 class Capability(BaseModel):
@@ -31,12 +31,12 @@ class Capability(BaseModel):
     asset by. The same physical thing is a different id to each source."""
     model_config = ConfigDict(extra="ignore")
     source: str
-    positioning_id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    positioningId: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 class Asset(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    asset_id: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    assetId: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     kind: str
     org: str = Field(pattern=r"^[a-z0-9-]{1,64}$")
     capabilities: list[Capability] = Field(min_length=1)
@@ -56,7 +56,7 @@ class Asset(BaseModel):
 
     @property
     def positioning_id(self) -> str:
-        return self.capabilities[0].positioning_id
+        return self.capabilities[0].positioningId
 
 
 class AssetMap(BaseModel):
@@ -119,4 +119,4 @@ def list_assets() -> list[Asset]:
 
 
 def asset_by_id(asset_id: str) -> Asset | None:
-    return next((a for a in list_assets() if a.asset_id == asset_id), None)
+    return next((a for a in list_assets() if a.assetId == asset_id), None)

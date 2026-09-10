@@ -66,16 +66,16 @@ components:
     PositionEvent:
       type: object
       required:
-        - asset_id
+        - assetId
         - latitude
         - longitude
         - timestamp
       properties:
-        asset_id:
+        assetId:
           type: string
           description: CAMARA asset identifier (private-asset profile).
           example: pkg-4471
-        positioning_id:
+        positioningId:
           type: string
           description: Internal/vendor-native id the engine fuses on.
           example: wittra-tag-01
@@ -95,11 +95,11 @@ components:
         longitude:
           type: number
           format: double
-        altitude_m:
+        altitude:
           type: number
           format: double
           nullable: true
-        accuracy_m:
+        accuracy:
           type: number
           format: double
         timestamp:
@@ -109,22 +109,22 @@ components:
             The estimate time (lastLocationTime), not the send time. This is the
             fix time and freezes while a stationary asset keeps reporting the
             same fix - use it for position age, not for liveness.
-        observed_at:
+        observedAt:
           type: string
           format: date-time
           description: >-
             The broadcast tick on which this item was sent. It is fresh on every
             tick for as long as the source keeps answering, so it cannot reveal a
             device that has stopped reporting. Use it for transport latency and
-            debugging, never for liveness - see `last_seen`.
-        last_seen:
+            debugging, never for liveness - see `lastCommunicationTime`.
+        lastCommunicationTime:
           type: string
           format: date-time
           description: >-
             When the DEVICE last communicated with its source; the most recent
             across the fused sources. This is the liveness clock: unlike
             `timestamp` it does not freeze for a still asset that keeps
-            reporting, and unlike `observed_at` it ages when the device goes
+            reporting, and unlike `observedAt` it ages when the device goes
             quiet. Absent when no contributing source exposes such a signal, in
             which case a consumer has no liveness signal and should say so
             rather than assume the device is live. Cadence is vendor-specific and
@@ -149,14 +149,14 @@ components:
             carried from the routed source; grouped under this named container,
             never mixed into the CAMARA fields above. Core vocabulary fields
             (here, moving) use standard names; vendor-specific extras sit under
-            x_vendor, raw. See docs/profile-extensions.md#core-vocabulary.
+            vendorSpecific, raw. See docs/profile-extensions.md#core-vocabulary.
             Present only when the source reports it.
           properties:
             moving:
               type: boolean
               description: Derived from the omlox-standard speed, or a vendor state.
               example: false
-            x_vendor:
+            vendorSpecific:
               type: object
               description: Vendor fields with no normalized meaning, passed raw.
               additionalProperties: true

@@ -12,15 +12,17 @@ afterEach(() => {
 });
 
 function assetMap(assets) {
-  return { ok: true, json: async () => ({ version: 2, assets }) };
+  return { ok: true, json: async () => ({ version: 4, assets }) };
 }
 
 describe("useDevices", () => {
   it("returns the asset map with palette colours assigned", async () => {
     fetch.mockResolvedValue(
       assetMap([
-        { asset_id: "tool-880", positioning_id: "a", kind: "tool", source: "wifi", org: "x", label: "A" },
-        { asset_id: "pkg-4471", positioning_id: "b", kind: "pallet", source: "wittra", org: "x", label: "B" },
+        { assetId: "tool-880", kind: "tool", org: "x", label: "A",
+          capabilities: [{ source: "wifi", positioningId: "a" }] },
+        { assetId: "pkg-4471", kind: "pallet", org: "x", label: "B",
+          capabilities: [{ source: "wittra", positioningId: "b" }] },
       ])
     );
 
@@ -39,9 +41,9 @@ describe("useDevices", () => {
     expect(result.current.devices[1].color).toMatch(/^#/);
   });
 
-  it("falls back to asset_id when label is missing", async () => {
+  it("falls back to assetId when label is missing", async () => {
     fetch.mockResolvedValue(
-      assetMap([{ asset_id: "asset-x", positioning_id: "p", kind: "tool", source: "wifi", org: "x" }])
+      assetMap([{ assetId: "asset-x", positioningId: "p", kind: "tool", source: "wifi", org: "x" }])
     );
 
     const { result } = renderHook(() => useDevices("tok"));
@@ -65,15 +67,15 @@ describe("useDevices", () => {
     expect(result.current.devices).toEqual([]);
   });
 
-  it("derives positioningId + source from capabilities[] (asset schema v3)", async () => {
+  it("derives positioningId + source from capabilities[] (asset schema v4)", async () => {
     fetch.mockResolvedValue(
       assetMap([
         {
-          asset_id: "forklift-7",
+          assetId: "forklift-7",
           kind: "forklift",
           org: "x",
           label: "Synthetic",
-          capabilities: [{ source: "synthetic", positioning_id: "synthetic-demo-01" }],
+          capabilities: [{ source: "synthetic", positioningId: "synthetic-demo-01" }],
         },
       ])
     );
@@ -88,8 +90,8 @@ describe("useDevices", () => {
   it("propagates source from the gateway response (drives the synthetic badge)", async () => {
     fetch.mockResolvedValue(
       assetMap([
-        { asset_id: "real", positioning_id: "r", kind: "tool", source: "wifi", org: "x", label: "Real" },
-        { asset_id: "walker", positioning_id: "m", kind: "forklift", source: "synthetic", org: "x", label: "Walker" },
+        { assetId: "real", positioningId: "r", kind: "tool", source: "wifi", org: "x", label: "Real" },
+        { assetId: "walker", positioningId: "m", kind: "forklift", source: "synthetic", org: "x", label: "Walker" },
       ])
     );
     const { result } = renderHook(() => useDevices("tok"));

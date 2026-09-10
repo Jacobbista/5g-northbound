@@ -39,7 +39,7 @@ async def test_retrieve_no_org_sees_all(client, make_token):
 async def test_assets_list_filtered_by_org(client, make_token):
     # all seeded assets are acme -> a acme token sees all 3.
     same = await client.get(ASSETS, headers=_hdr(make_token, org="acme"))
-    assert {a["asset_id"] for a in same.json()["assets"]} == {"tool-880", "forklift-7", "pkg-4471"}
+    assert {a["assetId"] for a in same.json()["assets"]} == {"tool-880", "forklift-7", "pkg-4471"}
     # a different tenant sees none.
     other = await client.get(ASSETS, headers=_hdr(make_token, org="atlas"))
     assert other.json()["assets"] == []

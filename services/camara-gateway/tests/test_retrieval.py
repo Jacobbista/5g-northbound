@@ -20,10 +20,10 @@ async def test_retrieve_fuses_multi_capability(client, respx_mock, auth_headers,
     from app.config import get_settings
     get_settings.cache_clear()
 
-    amap = {"version": 3, "assets": [
-        {"asset_id": "robot-9", "kind": "forklift", "org": "acme",
-         "capabilities": [{"source": "wifi", "positioning_id": "wifi-9"},
-                          {"source": "wittra", "positioning_id": "uwb-9"}]}]}
+    amap = {"version": 4, "assets": [
+        {"assetId": "robot-9", "kind": "forklift", "org": "acme",
+         "capabilities": [{"source": "wifi", "positioningId": "wifi-9"},
+                          {"source": "wittra", "positioningId": "uwb-9"}]}]}
     put = await client.put("/assets", json=amap, headers=auth_headers)
     assert put.status_code == 200
 

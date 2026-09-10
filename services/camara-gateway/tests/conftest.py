@@ -64,17 +64,17 @@ def make_token(private_pem):
     return _make
 
 
-# Asset Identity Map used by the gateway tests. asset_id -> positioning_id,
-# matching the engine /position/{positioning_id} mocks in the suite.
+# Asset Identity Map used by the gateway tests. assetId -> positioningId,
+# matching the engine /position/{positioningId} mocks in the suite.
 _TEST_ASSETS = {
-    "version": 3,
+    "version": 4,
     "assets": [
-        {"asset_id": "tool-880", "kind": "tool", "org": "acme", "label": "WiFi asset 01",
-         "capabilities": [{"source": "wifi", "positioning_id": "wifi-asset-01"}]},
-        {"asset_id": "forklift-7", "kind": "forklift", "org": "acme", "label": "Synthetic demo 01",
-         "capabilities": [{"source": "synthetic", "positioning_id": "synthetic-demo-01"}]},
-        {"asset_id": "pkg-4471", "kind": "pallet", "org": "acme", "label": "Wittra tag 01",
-         "capabilities": [{"source": "wittra", "positioning_id": "wittra-tag-01"}]},
+        {"assetId": "tool-880", "kind": "tool", "org": "acme", "label": "WiFi asset 01",
+         "capabilities": [{"source": "wifi", "positioningId": "wifi-asset-01"}]},
+        {"assetId": "forklift-7", "kind": "forklift", "org": "acme", "label": "Synthetic demo 01",
+         "capabilities": [{"source": "synthetic", "positioningId": "synthetic-demo-01"}]},
+        {"assetId": "pkg-4471", "kind": "pallet", "org": "acme", "label": "Wittra tag 01",
+         "capabilities": [{"source": "wittra", "positioningId": "wittra-tag-01"}]},
     ],
 }
 

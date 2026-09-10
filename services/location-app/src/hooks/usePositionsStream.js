@@ -13,7 +13,7 @@ import { CAMARA_API_BASE } from "../config";
 //
 // Returns:
 //   {
-//     byDeviceId: { <device_id>: { latitude, longitude, accuracy_m, timestamp, sources, strategy } },
+//     byDeviceId: { <positioningId>: { latitude, longitude, accuracy, timestamp, sources, strategy } },
 //     connected: bool,
 //   }
 //
@@ -77,8 +77,8 @@ export function usePositionsStream(token, { paused = false } = {}) {
           setByDeviceId((prev) => {
             const next = { ...prev };
             for (const item of payload) {
-              if (!item?.device_id) continue;
-              next[item.device_id] = item;
+              if (!item?.positioningId) continue;
+              next[item.positioningId] = item;
             }
             return next;
           });

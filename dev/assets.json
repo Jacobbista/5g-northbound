@@ -1,46 +1,71 @@
 {
-  "version": 3,
+  "version": 4,
   "assets": [
     {
-      "asset_id": "tool-880",
+      "assetId": "tool-880",
       "kind": "tool",
       "org": "acme",
       "capabilities": [
-        { "source": "wifi", "positioning_id": "wifi-asset-01" }
+        {
+          "source": "wifi",
+          "positioningId": "wifi-asset-01"
+        }
       ],
       "label": "WiFi asset 01",
-      "metadata": { "floor": 0 }
+      "metadata": {
+        "floor": 0
+      }
     },
     {
-      "asset_id": "forklift-7",
+      "assetId": "forklift-7",
       "kind": "forklift",
       "org": "acme",
       "capabilities": [
-        { "source": "synthetic", "positioning_id": "synthetic-demo-01" }
+        {
+          "source": "synthetic",
+          "positioningId": "synthetic-demo-01"
+        }
       ],
       "label": "Synthetic demo 01",
-      "metadata": { "floor": 0 }
+      "metadata": {
+        "floor": 0
+      }
     },
     {
-      "asset_id": "pkg-4471",
+      "assetId": "pkg-4471",
       "kind": "pallet",
       "org": "acme",
       "capabilities": [
-        { "source": "wittra", "positioning_id": "wittra-tag-01" }
+        {
+          "source": "wittra",
+          "positioningId": "wittra-tag-01"
+        }
       ],
       "label": "Wittra tag 01",
-      "metadata": { "floor": 0, "note": "Timber bundle" }
+      "metadata": {
+        "floor": 0,
+        "note": "Timber bundle"
+      }
     },
     {
-      "asset_id": "robot-2",
+      "assetId": "robot-2",
       "kind": "forklift",
       "org": "acme",
       "capabilities": [
-        { "source": "wifi", "positioning_id": "wifi-asset-02" },
-        { "source": "wittra", "positioning_id": "wittra-tag-02" }
+        {
+          "source": "wifi",
+          "positioningId": "wifi-asset-02"
+        },
+        {
+          "source": "wittra",
+          "positioningId": "wittra-tag-02"
+        }
       ],
       "label": "Mobile robot 2",
-      "metadata": { "floor": 0, "note": "WiFi + UWB, fused" }
+      "metadata": {
+        "floor": 0,
+        "note": "WiFi + UWB, fused"
+      }
     }
   ]
 }

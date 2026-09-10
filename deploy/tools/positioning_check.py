@@ -104,17 +104,17 @@ def main() -> int:
         sources = [c.get("source") for c in a.get("capabilities", [])]
         unserved = [s for s in sources if s not in advertised_sources]
         if not sources:
-            errors.append(f"asset {a['asset_id']}: no capabilities declared")
-            print(f"  {BAD} {a['asset_id']}: no capabilities")
+            errors.append(f"asset {a['assetId']}: no capabilities declared")
+            print(f"  {BAD} {a['assetId']}: no capabilities")
         elif unserved:
             for s in unserved:
-                errors.append(f"asset {a['asset_id']}: source '{s}' not advertised by any adapter")
-                print(f"  {BAD} {a['asset_id']}: source '{s}' unserved")
+                errors.append(f"asset {a['assetId']}: source '{s}' not advertised by any adapter")
+                print(f"  {BAD} {a['assetId']}: source '{s}' unserved")
         elif a["kind"] not in advertised_kinds:
-            errors.append(f"asset {a['asset_id']}: kind '{a['kind']}' not advertised by any adapter")
-            print(f"  {BAD} {a['asset_id']}: kind '{a['kind']}' unadvertised")
+            errors.append(f"asset {a['assetId']}: kind '{a['kind']}' not advertised by any adapter")
+            print(f"  {BAD} {a['assetId']}: kind '{a['kind']}' unadvertised")
         else:
-            print(f"  {OK} {a['asset_id']}: {a['kind']} via {', '.join(sources)}")
+            print(f"  {OK} {a['assetId']}: {a['kind']} via {', '.join(sources)}")
 
     # Schema conformance (best-effort).
     print("· schema (assets.json vs schema/asset.schema.json)")
