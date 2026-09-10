@@ -1,8 +1,7 @@
 {
   "vendor": "wittra",
   "transport": "rest",
-  "default_base_url": "https://api.wittra.se",
-  "base_url_env": "WITTRA_BASE_URL",
+  "base_url": { "env": "WITTRA_BASE_URL" },
   "path": "/v4/organizations/{org_id}/projects/{project_id}/devices/{device_id}",
   "path_vars": {
     "org_id": {

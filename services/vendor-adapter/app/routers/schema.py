@@ -50,6 +50,7 @@ async def put_schema(payload: dict, request: Request):
     # is read-only (ConfigMap/subPath). Persistence is best-effort so a
     # read-only mount does not turn a valid PUT into a 500.
     request.app.state.store.schema = schema
+    request.app.state.store.schema_source = "runtime"
     request.app.state.store.cache_clear()
     persisted = save_schema(get_settings().schema_file, schema)
     log.info("schema replaced; vendor=%s persisted=%s", schema.vendor, persisted)

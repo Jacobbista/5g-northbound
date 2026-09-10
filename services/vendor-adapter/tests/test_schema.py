@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.schema import Schema
+from app.schema import EnvRef, Schema
 
 
 def test_example_wittra_schema_validates(wittra_schema):
@@ -28,7 +28,7 @@ def test_schema_rejects_extra_top_level_field(wittra_schema_dict):
 def test_field_spec_rejects_both_const_and_path():
     bad = {
         "vendor": "v",
-        "default_base_url": "http://x",
+        "base_url": {"env": "X_BASE_URL"},
         "path": "/{device_id}",
         "auth": {"scheme": "none"},
         "mapping": {
@@ -50,7 +50,7 @@ def test_mapping_omits_optional_y_and_confidence():
     # const-stuffing; they default to None (the mapper emits 0.0).
     s = Schema.model_validate({
         "vendor": "v",
-        "default_base_url": "http://x",
+        "base_url": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "none"},
         "mapping": {
@@ -68,7 +68,7 @@ def test_mapping_omits_optional_y_and_confidence():
 def test_schema_accepts_bearer_auth():
     s = Schema.model_validate({
         "vendor": "v",
-        "default_base_url": "http://x",
+        "base_url": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "bearer", "token": {"env": "VENDOR_TOKEN"}},
         "mapping": {
@@ -87,7 +87,7 @@ def test_schema_accepts_bearer_auth():
 def test_schema_accepts_header_auth():
     s = Schema.model_validate({
         "vendor": "v",
-        "default_base_url": "http://x",
+        "base_url": {"env": "X_BASE_URL"},
         "path": "/devices/{device_id}",
         "auth": {"scheme": "header", "header": "X-API-Key", "value": {"env": "VENDOR_KEY"}},
         "mapping": {
@@ -132,3 +132,23 @@ def test_diagnostics_absent_is_none(wittra_schema_dict):
 def test_example_schema_declares_diagnostics(wittra_schema):
     assert "motion" in wittra_schema.diagnostics.stream
     assert wittra_schema.diagnostics.on_demand[0].mapping["accuracy_kind"].const == "vendor-radius"
+
+
+def test_env_ref_accepts_a_posix_name():
+    assert EnvRef.model_validate({"env": "ACME_TOKEN"}).env == "ACME_TOKEN"
+
+
+@pytest.mark.parametrize("name", ["my token", "lower_case", "9LEADING", "WITH-DASH", ""])
+def test_env_ref_rejects_names_no_deployment_can_set(name):
+    with pytest.raises(ValidationError):
+        EnvRef.model_validate({"env": name})
+
+
+def test_schema_rejects_a_document_carrying_a_vendor_url(wittra_schema_dict):
+    # The image is generic: a schema may name the variable holding the vendor
+    # API root, never the root itself.
+    doc = dict(wittra_schema_dict)
+    doc.pop("base_url")
+    doc["default_base_url"] = "https://api.wittra.se"
+    with pytest.raises(ValidationError):
+        Schema.model_validate(doc)

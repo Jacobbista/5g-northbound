@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
         log.error("schema at %s failed to load: %s", settings.schema_file, exc)
     if loaded:
         app.state.store.schema = loaded
+        app.state.store.schema_source = "mounted"
         log.info("loaded schema for vendor=%s from %s", loaded.vendor, settings.schema_file)
     else:
         log.warning(

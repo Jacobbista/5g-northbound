@@ -1,8 +1,11 @@
 """Serves this service's environment contract as JSON.
 
-Reads the baked ``env.contract.yaml`` (schema only: variable names,
-descriptions, sensitivity, ``kind``, ``external_origin``) and returns it. It
-never returns runtime values or secrets - the YAML it reads contains none.
+The contract has two halves. The variables the binary itself reads come from
+the baked ``env.contract.yaml`` (schema only: names, descriptions,
+sensitivity, ``kind``, ``external_origin``). The variables the VENDOR needs are
+named by the active schema, not by this image, and are derived from it at
+request time - this service is generic and is bound to one vendor by the
+document an operator loads. Neither half returns runtime values or secrets.
 
 No auth and no dependency on business configuration, so a pod that is
 misconfigured (and therefore failing readiness) still answers here. That is
@@ -15,8 +18,9 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from ..envcontract import discover_mapping_coverage, mapping_coverage, vendor_env
 from ..schema import Schema
 
 router = APIRouter(tags=["contract"])
@@ -50,20 +54,34 @@ def _sanitize(entries: list) -> list:
 
 
 @router.get("/contract")
-def contract() -> dict:
+def contract(request: Request) -> dict:
     raw = _load()
-    return {
+    # Defensive: /contract answers on a pod that is failing readiness, which
+    # includes one whose lifespan has not populated the store.
+    store = getattr(request.app.state, "store", None)
+    schema = getattr(store, "schema", None)
+    body = {
         "service": raw.get("service"),
         "kind": raw.get("kind"),
         "external_origin": raw.get("external_origin"),
         "description": raw.get("description"),
+        # The binding. This image is generic; it announces a vendor's variables
+        # once an operator has given it that vendor's schema.
+        "configured": schema is not None,
+        "vendor": schema.vendor if schema is not None else None,
+        "schema_source": getattr(store, "schema_source", "none"),
         "schema": "/contract/schema",
+        "mapping": mapping_coverage(schema) if schema is not None else None,
         "env": {
-            "required": _sanitize(raw.get("required")),
+            "required": _sanitize(raw.get("required")) + vendor_env(schema),
             "recommended": _sanitize(raw.get("recommended")),
             "optional": _sanitize(raw.get("optional")),
         },
     }
+    discover = discover_mapping_coverage(schema) if schema is not None else None
+    if discover is not None:
+        body["discover_mapping"] = discover
+    return body
 
 
 @router.get("/contract/schema")

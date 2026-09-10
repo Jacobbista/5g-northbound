@@ -7,14 +7,16 @@ import respx
 from app.client import base_url, build_auth_headers, fetch
 
 
-def test_base_url_default(wittra_schema, monkeypatch):
-    monkeypatch.delenv("WITTRA_BASE_URL", raising=False)
-    assert base_url(wittra_schema) == "https://api.wittra.se"
-
-
-def test_base_url_env_override(wittra_schema, monkeypatch):
+def test_base_url_comes_from_the_environment(wittra_schema, monkeypatch):
     monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-vendor:8080/")
     assert base_url(wittra_schema) == "http://mock-vendor:8080"
+
+
+def test_base_url_is_none_when_the_operator_has_not_set_it(wittra_schema, monkeypatch):
+    # No fallback: the document names the variable, the operator supplies the
+    # value, and an unset variable is a misconfiguration the callers map to 503.
+    monkeypatch.delenv("WITTRA_BASE_URL", raising=False)
+    assert base_url(wittra_schema) is None
 
 
 def test_basic_auth_header(wittra_schema, monkeypatch):

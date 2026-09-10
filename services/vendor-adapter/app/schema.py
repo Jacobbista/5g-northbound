@@ -12,10 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class EnvRef(BaseModel):
-    """Pointer to an environment variable the operator must set on the pod."""
+    """Pointer to an environment variable the operator must set on the pod.
+
+    The name is constrained to what a shell, a ConfigMap and a Secret can all
+    carry. The constraint travels in `GET /contract/schema`, so a caller can
+    reject a bad name before `PUT /schema`.
+    """
 
     model_config = ConfigDict(extra="forbid")
-    env: str
+    env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
 
 
 # --- Auth schemes (discriminated by `scheme`) -------------------------------
@@ -309,8 +314,10 @@ class Schema(BaseModel):
     # vendor. Only `rest` (pull-through) is implemented; `mqtt` (subscribe +
     # cache) and `webhook` (push) are declared extension points.
     transport: Literal["rest", "mqtt", "webhook"] = "rest"
-    default_base_url: str
-    base_url_env: Optional[str] = None
+    # The vendor's API root. An EnvRef, never a literal: the image is generic
+    # and the URL is operator input, so the document names only the variable
+    # the operator fills.
+    base_url: EnvRef
     path: str
     path_vars: dict[str, EnvRef] = Field(default_factory=dict)
     auth: Auth

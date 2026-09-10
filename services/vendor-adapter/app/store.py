@@ -99,6 +99,10 @@ class State:
     """
 
     schema: Optional[Schema] = None
+    # Where the live schema came from. "mounted" is durable; "runtime" was
+    # applied by PUT /schema and is lost at restart when the schema volume is a
+    # read-only ConfigMap. Assigned at the two call sites, never inferred.
+    schema_source: str = "none"
     cache: dict[str, _CacheEntry] = field(default_factory=dict)
 
     def cache_get(self, device_id: str) -> Optional[Any]:

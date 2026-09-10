@@ -1,8 +1,16 @@
+import json
+from pathlib import Path
+
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.schema import Schema
 from app.store import State
+
+
+def _example() -> Schema:
+    path = Path(__file__).resolve().parents[1] / "examples" / "wittra-schema.json"
+    return Schema.model_validate(json.loads(path.read_text()))
 
 
 async def _get(path: str):
@@ -26,6 +34,8 @@ async def test_contract_served_without_auth():
 
 
 async def test_contract_exposes_required_names_only_no_values():
+    app.state.store = State()
+    app.state.store.schema = _example()
     r = await _get("/contract")
     body = r.json()
     all_names = [e["name"] for tier in body["env"].values() for e in tier]
@@ -50,7 +60,7 @@ async def test_schema_contract_served_without_auth_and_without_instance():
     body = r.json()
     assert body["type"] == "object"
     required = body.get("required") or []
-    for key in ("vendor", "default_base_url", "path", "auth", "mapping"):
+    for key in ("vendor", "base_url", "path", "auth", "mapping"):
         assert key in required
         assert key in body["properties"]
     assert "diagnostics" in body["properties"]
@@ -76,3 +86,68 @@ async def test_schema_contract_documents_mapping_fields():
     for field in ("frame", "latitude", "longitude", "accuracy_m", "confidence", "y", "timestamp"):
         assert mapping[field].get("description"), f"{field} lacks a description"
 
+
+
+async def test_an_unbound_instance_announces_no_vendor_variables():
+    app.state.store = State()
+    body = (await _get("/contract")).json()
+    assert body["configured"] is False
+    assert body["vendor"] is None
+    assert body["schema_source"] == "none"
+    assert body["env"]["required"] == []
+    assert body["mapping"] is None
+    assert "discover_mapping" not in body
+
+
+async def test_a_bound_instance_announces_its_own_variables():
+    app.state.store = State()
+    app.state.store.schema = _example()
+    app.state.store.schema_source = "mounted"
+    body = (await _get("/contract")).json()
+    assert body["configured"] is True
+    assert body["vendor"] == "wittra"
+    assert body["schema_source"] == "mounted"
+    names = [e["name"] for e in body["env"]["required"]]
+    assert names == [
+        "WITTRA_API_KEY",
+        "WITTRA_BASE_URL",
+        "WITTRA_ORG_ID",
+        "WITTRA_PROJECT_ID",
+    ]
+    key = [e for e in body["env"]["required"] if e["name"] == "WITTRA_API_KEY"]
+    assert key[0]["sensitive"] is True
+    assert body["mapping"]["supported"]
+    assert body["discover_mapping"]["supported"]
+
+
+async def test_no_wittra_name_reaches_a_differently_bound_instance(wittra_schema_dict):
+    # The regression this endpoint exists to close: a generic image must not
+    # ask an acme operator for Wittra credentials.
+    doc = dict(wittra_schema_dict)
+    doc["vendor"] = "acme"
+    doc["base_url"] = {"env": "ACME_BASE_URL"}
+    doc["path"] = "/api/{tenant}/device/{device_id}"
+    doc["path_vars"] = {"tenant": {"env": "ACME_TENANT"}}
+    doc["auth"] = {"scheme": "bearer", "token": {"env": "ACME_TOKEN"}}
+    doc.pop("discover", None)
+    doc.pop("diagnostics", None)
+    app.state.store = State()
+    app.state.store.schema = Schema.model_validate(doc)
+    app.state.store.schema_source = "runtime"
+    body = (await _get("/contract")).json()
+    assert body["vendor"] == "acme"
+    assert body["schema_source"] == "runtime"
+    assert [e["name"] for e in body["env"]["required"]] == [
+        "ACME_BASE_URL",
+        "ACME_TENANT",
+        "ACME_TOKEN",
+    ]
+    assert "WITTRA_" not in json.dumps(body)
+
+
+async def test_the_baked_contract_names_no_vendor():
+    # The image is generic. Vendor variables reach /contract only through a
+    # loaded schema, so the baked YAML declares none.
+    app.state.store = State()
+    body = (await _get("/contract")).json()
+    assert "WITTRA" not in json.dumps(body["env"])

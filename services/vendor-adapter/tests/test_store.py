@@ -84,3 +84,9 @@ def test_cache_clear_removes_entries():
     s.cache_clear()
     assert s.cache_get("d1") is None
     assert s.cache_get("d2") is None
+
+
+def test_a_fresh_store_has_no_schema_source():
+    # A pod boots unbound. The source is set where a schema is assigned, so an
+    # empty store cannot claim one.
+    assert State().schema_source == "none"

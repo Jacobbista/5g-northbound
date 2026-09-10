@@ -19,12 +19,18 @@ def _resolve_env(name: str) -> Optional[str]:
     return val
 
 
-def base_url(schema: Schema) -> str:
-    if schema.base_url_env:
-        override = _resolve_env(schema.base_url_env)
-        if override:
-            return override.rstrip("/")
-    return schema.default_base_url.rstrip("/")
+def base_url(schema: Schema) -> Optional[str]:
+    """The vendor API root, from the environment variable the schema names.
+
+    No fallback: the schema document carries the NAME of the variable, never a
+    vendor URL, so an unset variable is a misconfiguration like a missing path
+    var and the callers turn it into a 503.
+    """
+    val = _resolve_env(schema.base_url.env)
+    if val is None:
+        log.warning("missing required env var %s for base_url", schema.base_url.env)
+        return None
+    return val.rstrip("/")
 
 
 def _substitute_path_vars(schema: Schema, device_id: str) -> Optional[str]:
@@ -98,8 +104,11 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
     headers = build_auth_headers(schema)
     if headers is None:
         return None
+    root = base_url(schema)
+    if root is None:
+        return None
     headers.update(corr_headers())
-    url = f"{base_url(schema)}{path}"
+    url = f"{root}{path}"
     try:
         async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
             resp = await client.get(url, headers=headers)
@@ -137,8 +146,11 @@ async def fetch_path(schema: Schema, device_id: str, override_path: str, path_va
     headers = build_auth_headers(schema)
     if headers is None:
         return None
+    root = base_url(schema)
+    if root is None:
+        return None
     headers.update(corr_headers())
-    url = f"{base_url(schema)}{rendered}"
+    url = f"{root}{rendered}"
     try:
         async with httpx.AsyncClient(timeout=schema.request_timeout_s) as client:
             resp = await client.get(url, headers=headers)
@@ -196,12 +208,15 @@ async def fetch_discover_page(
     headers = build_auth_headers(schema)
     if headers is None:
         return None
+    root = base_url(schema)
+    if root is None:
+        return None
     params: dict[str, str] = {}
     pag = schema.discover.pagination
     if pag.type == "page" and page is not None:
         params[pag.page_param] = str(page)
         params[pag.size_param] = str(pag.page_size)
-    url = f"{base_url(schema)}{path}"
+    url = f"{root}{path}"
     debug = os.environ.get("VENDOR_ADAPTER_DEBUG", "0") not in ("", "0", "false", "False")
     if debug:
         log.info("discover: GET %s params=%s", url, params)

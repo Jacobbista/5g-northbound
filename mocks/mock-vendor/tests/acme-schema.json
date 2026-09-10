@@ -1,7 +1,7 @@
 {
   "vendor": "acme",
   "transport": "rest",
-  "default_base_url": "http://acme.test",
+  "base_url": { "env": "ACME_BASE_URL" },
   "path": "/api/{tenant}/device/{device_id}/pos",
   "path_vars": {
     "tenant": { "env": "ACME_TENANT" }
