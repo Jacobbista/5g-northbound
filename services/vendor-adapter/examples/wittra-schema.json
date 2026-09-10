@@ -129,10 +129,6 @@
           },
           "accuracy_kind": {
             "const": "vendor-radius"
-          },
-          "lastSeen": {
-            "path": "latest.data.location.timestamp",
-            "format": "iso8601"
           }
         }
       }
