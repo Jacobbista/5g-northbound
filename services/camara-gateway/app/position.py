@@ -193,9 +193,9 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
     return Position(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=d.get("accuracy_m", _MOCK_RADIUS_M),
+        radius_m=d.get("accuracy", _MOCK_RADIUS_M),
         last_location_time=datetime.fromisoformat(d["timestamp"]),
-        altitude_m=d.get("altitude_m"),
+        altitude_m=d.get("altitude"),
         vertical_accuracy_m=d.get("vertical_accuracy_m"),
     )
 
@@ -262,7 +262,7 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
         return positions[0]
     fused = fuse_fixes([
         {
-            "latitude": p.latitude, "longitude": p.longitude, "accuracy_m": p.radius_m,
+            "latitude": p.latitude, "longitude": p.longitude, "accuracy": p.radius_m,
             "altitude": p.altitude_m, "timestamp": p.last_location_time,
         }
         for p in positions
@@ -272,7 +272,7 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
     return Position(
         latitude=fused["latitude"],
         longitude=fused["longitude"],
-        radius_m=fused["accuracy_m"],
+        radius_m=fused["accuracy"],
         last_location_time=fused["timestamp"],
         altitude_m=fused.get("altitude"),
         vertical_accuracy_m=next(
@@ -299,11 +299,11 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
     return PositionDetails(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=d.get("accuracy_m", _MOCK_RADIUS_M),
+        radius_m=d.get("accuracy", _MOCK_RADIUS_M),
         last_location_time=datetime.fromisoformat(d["timestamp"]),
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),
-        altitude_m=d.get("altitude_m"),
+        altitude_m=d.get("altitude"),
     )
 
 
@@ -324,7 +324,7 @@ async def get_fused_details(capabilities) -> PositionDetails | None:
         return collected[0][1]
     fused = fuse_fixes([
         {
-            "latitude": d.latitude, "longitude": d.longitude, "accuracy_m": d.radius_m,
+            "latitude": d.latitude, "longitude": d.longitude, "accuracy": d.radius_m,
             "altitude": d.altitude_m, "timestamp": d.last_location_time,
             "sources": d.sources or [cap.source],
         }
@@ -335,7 +335,7 @@ async def get_fused_details(capabilities) -> PositionDetails | None:
     return PositionDetails(
         latitude=fused["latitude"],
         longitude=fused["longitude"],
-        radius_m=fused["accuracy_m"],
+        radius_m=fused["accuracy"],
         last_location_time=fused.get("timestamp") or collected[0][1].last_location_time,
         strategy="weighted_avg",
         sources=fused["sources"],

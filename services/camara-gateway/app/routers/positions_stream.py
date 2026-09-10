@@ -69,7 +69,7 @@ def _enrich(raw: str, org: str | None = None) -> str:
     for it in items:
         if not isinstance(it, dict):
             continue
-        asset = by_pid.get(it.get("device_id"))
+        asset = by_pid.get(it.get("positioningId"))
         if asset is None or (org and asset.org != org):
             continue
         groups.setdefault(asset.assetId, {"asset": asset, "items": []})["items"].append(it)
@@ -81,27 +81,27 @@ def _enrich(raw: str, org: str | None = None) -> str:
         if len(entries) == 1:
             base = dict(entries[0])
         else:
-            fused = fuse_fixes([{**it, "altitude": it.get("altitude_m")} for it in entries])
+            fused = fuse_fixes([{**it} for it in entries])
             if fused is None:
                 continue
-            base = dict(min(entries, key=lambda it: it.get("accuracy_m") or float("inf")))
+            base = dict(min(entries, key=lambda it: it.get("accuracy") or float("inf")))
             base["latitude"] = fused["latitude"]
             base["longitude"] = fused["longitude"]
-            base["accuracy_m"] = fused["accuracy_m"]
+            base["accuracy"] = fused["accuracy"]
             base["sources"] = fused["sources"]
             if fused.get("altitude") is not None:
-                base["altitude_m"] = fused["altitude"]
+                base["altitude"] = fused["altitude"]
             if fused.get("timestamp") is not None:
                 base["timestamp"] = fused["timestamp"]
-            if fused.get("observed_at") is not None:
-                base["observed_at"] = fused["observed_at"]
+            if fused.get("observedAt") is not None:
+                base["observedAt"] = fused["observedAt"]
             # Most recent across the fused sources, per the AsyncAPI. ISO-8601
             # UTC strings order as strings. `diagnostics` stays with the most
             # accurate entry: it is one source's telemetry.
-            seen = [it.get("last_seen") for it in entries if it.get("last_seen")]
+            seen = [it.get("lastCommunicationTime") for it in entries
+                    if it.get("lastCommunicationTime")]
             if seen:
-                base["last_seen"] = max(seen)
-        # Engine names in, profile names out.
+                base["lastCommunicationTime"] = max(seen)
         item = {
             "assetId": asset.assetId,
             # The primary capability's positioning id: one stable join key per
@@ -112,19 +112,14 @@ def _enrich(raw: str, org: str | None = None) -> str:
             "org": asset.org,
             "latitude": base.get("latitude"),
             "longitude": base.get("longitude"),
-            "accuracy": base.get("accuracy_m"),
+            "accuracy": base.get("accuracy"),
             "timestamp": base.get("timestamp"),
             "sources": base.get("sources") or [],
         }
-        for engine_name, profile_name in (
-            ("altitude_m", "altitude"),
-            ("observed_at", "observedAt"),
-            ("last_seen", "lastCommunicationTime"),
-            ("strategy", "strategy"),
-            ("diagnostics", "diagnostics"),
-        ):
-            if base.get(engine_name) is not None:
-                item[profile_name] = base[engine_name]
+        for name in ("altitude", "observedAt", "lastCommunicationTime",
+                     "strategy", "diagnostics"):
+            if base.get(name) is not None:
+                item[name] = base[name]
         out.append(item)
     return json.dumps(out)
 

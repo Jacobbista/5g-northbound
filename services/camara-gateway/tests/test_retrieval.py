@@ -29,12 +29,12 @@ async def test_retrieve_fuses_multi_capability(client, respx_mock, auth_headers,
 
     respx_mock.get("http://engine.test/position/wifi-9?source=wifi").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0,
-            "accuracy_m": 3.0, "timestamp": "2026-01-01T00:00:00+00:00"}))
+            "positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0,
+            "accuracy": 3.0, "timestamp": "2026-01-01T00:00:00+00:00"}))
     respx_mock.get("http://engine.test/position/uwb-9?source=wittra").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "uwb-9", "latitude": 1.0, "longitude": 1.0,
-            "accuracy_m": 0.5, "timestamp": "2026-01-01T00:00:05+00:00"}))
+            "positioningId": "uwb-9", "latitude": 1.0, "longitude": 1.0,
+            "accuracy": 0.5, "timestamp": "2026-01-01T00:00:05+00:00"}))
 
     r = await client.post(RETRIEVE, json={"device": {"assetId": "robot-9"}}, headers=auth_headers)
     assert r.status_code == 200
@@ -121,10 +121,10 @@ async def test_retrieve_503_when_engine_unreachable(
 
 def _engine_ok():
     return httpx.Response(200, json={
-        "device_id": "wifi-asset-01",
+        "positioningId": "wifi-asset-01",
         "latitude": 45.064312,
         "longitude": 7.659154,
-        "accuracy_m": 1.5,
+        "accuracy": 1.5,
         "timestamp": "2026-06-03T14:36:17+00:00",
         "sources": ["wifi"],
         "strategy": "weighted_avg",

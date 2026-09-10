@@ -36,7 +36,7 @@ export function useAdapterHealth(token, { paused = false } = {}) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         const enriched = (data.adapters || []).map((a) => {
-          const notLive = a.state ? a.state !== "live" : a.in_cooldown;
+          const notLive = a.state ? a.state !== "live" : a.inCooldown;
           const streak = notLive ? (streaksRef.current[a.name] || 0) + 1 : 0;
           streaksRef.current[a.name] = streak;
           return { ...a, severity: severityFor(streak) };

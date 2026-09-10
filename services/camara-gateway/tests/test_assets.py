@@ -52,11 +52,11 @@ async def test_details_joins_engine_telemetry(client, respx_mock, auth_headers, 
 
     respx_mock.get("http://engine.test/position/wittra-tag-01").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "wittra-tag-01",
+            "positioningId": "wittra-tag-01",
             "latitude": 45.064,
             "longitude": 7.659,
-            "accuracy_m": 0.85,
-            "altitude_m": 1.2,
+            "accuracy": 0.85,
+            "altitude": 1.2,
             "timestamp": "2026-06-03T12:00:00+00:00",
             "sources": ["wittra"],
             "strategy": "weighted_avg",
@@ -84,11 +84,11 @@ async def test_details_fuses_multi_capability(client, respx_mock, auth_headers, 
 
     respx_mock.get("http://engine.test/position/wifi-9?source=wifi").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy_m": 3.0,
+            "positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0,
             "timestamp": "2026-01-01T00:00:00+00:00", "sources": ["wifi"]}))
     respx_mock.get("http://engine.test/position/uwb-9?source=wittra").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy_m": 0.5,
+            "positioningId": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy": 0.5,
             "timestamp": "2026-01-01T00:00:05+00:00", "sources": ["wittra"]}))
 
     resp = await client.get(f"{ASSETS}/robot-9/details", headers=auth_headers)

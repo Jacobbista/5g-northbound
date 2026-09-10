@@ -128,7 +128,15 @@ export function VendorSyncPanel({
           local = { x: fp.x - baseX, y: (fpH - fp.y) - baseY };
         }
       }
-      return { ...d, local };
+      // /discover speaks the profile convention; the editor and the blueprint
+      // speak the anchor shape. Translate once, here.
+      return {
+        ...d,
+        vendor_device_id: d.vendorDeviceId,
+        height_m: d.height,
+        device_type: d.deviceType,
+        local,
+      };
     });
   }, [devices, floorPlan, room]);
 

@@ -65,8 +65,8 @@ async def test_verify_maxage_unfulfillable_422(
 
     respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
         return_value=httpx.Response(200, json={
-            "device_id": "wifi-asset-01", "latitude": 45.064312, "longitude": 7.659154,
-            "accuracy_m": 1.5, "timestamp": "2026-06-03T14:36:17+00:00",
+            "positioningId": "wifi-asset-01", "latitude": 45.064312, "longitude": 7.659154,
+            "accuracy": 1.5, "timestamp": "2026-06-03T14:36:17+00:00",
             "sources": ["wifi"], "strategy": "weighted_avg",
         })
     )

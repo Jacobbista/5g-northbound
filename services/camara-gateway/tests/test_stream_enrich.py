@@ -35,8 +35,8 @@ def _robot():
 def test_enrich_fuses_multi_capability_into_one_entry(monkeypatch):
     monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
     raw = json.dumps([
-        {"device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy_m": 3.0, "sources": ["wifi"]},
-        {"device_id": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy_m": 0.5, "sources": ["wittra"]},
+        {"positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0, "sources": ["wifi"]},
+        {"positioningId": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy": 0.5, "sources": ["wittra"]},
     ])
     out = json.loads(_enrich(raw))
     assert len(out) == 1  # two positioning ids, one asset entry
@@ -51,7 +51,7 @@ def test_enrich_one_capability_present_stays_located(monkeypatch):
     monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
     # Only the UWB capability reports this tick.
     raw = json.dumps([
-        {"device_id": "uwb-9", "latitude": 2.0, "longitude": 2.0, "accuracy_m": 0.5, "sources": ["wittra"]},
+        {"positioningId": "uwb-9", "latitude": 2.0, "longitude": 2.0, "accuracy": 0.5, "sources": ["wittra"]},
     ])
     out = json.loads(_enrich(raw))
     assert len(out) == 1
@@ -62,7 +62,7 @@ def test_enrich_one_capability_present_stays_located(monkeypatch):
 
 def test_enrich_drops_positioning_id_with_no_asset(monkeypatch):
     monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
-    raw = json.dumps([{"device_id": "stranger", "latitude": 5.0, "longitude": 5.0, "accuracy_m": 1.0}])
+    raw = json.dumps([{"positioningId": "stranger", "latitude": 5.0, "longitude": 5.0, "accuracy": 1.0}])
     assert json.loads(_enrich(raw)) == []
 
 
@@ -72,10 +72,10 @@ def test_fused_item_takes_the_most_recent_last_seen_across_sources(monkeypatch):
     # high-accuracy source hid a recent report from a coarser one.
     monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
     raw = json.dumps([
-        {"device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy_m": 3.0,
-         "sources": ["wifi"], "last_seen": "2026-01-01T00:10:00Z"},
-        {"device_id": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy_m": 0.5,
-         "sources": ["wittra"], "last_seen": "2026-01-01T00:01:00Z"},
+        {"positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0,
+         "sources": ["wifi"], "lastCommunicationTime": "2026-01-01T00:10:00Z"},
+        {"positioningId": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy": 0.5,
+         "sources": ["wittra"], "lastCommunicationTime": "2026-01-01T00:01:00Z"},
     ])
     out = json.loads(_enrich(raw))
     assert out[0]["lastCommunicationTime"] == "2026-01-01T00:10:00Z"
@@ -84,8 +84,8 @@ def test_fused_item_takes_the_most_recent_last_seen_across_sources(monkeypatch):
 def test_a_single_capability_entry_keeps_its_own_last_seen(monkeypatch):
     monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
     raw = json.dumps([
-        {"device_id": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy_m": 3.0,
-         "sources": ["wifi"], "last_seen": "2026-01-01T00:10:00Z"},
+        {"positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0,
+         "sources": ["wifi"], "lastCommunicationTime": "2026-01-01T00:10:00Z"},
     ])
     out = json.loads(_enrich(raw))
     assert out[0]["lastCommunicationTime"] == "2026-01-01T00:10:00Z"

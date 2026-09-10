@@ -470,8 +470,8 @@ function AdapterHealthBadge({ adapters }) {
       {open && (
         <div style={adapterDropdown}>
           {adapters.map((a) => {
-            const live = a.state ? a.state === "live" : !a.in_cooldown;
-            const state = a.state || (a.in_cooldown ? "unreachable" : "live");
+            const live = a.state ? a.state === "live" : !a.inCooldown;
+            const state = a.state || (a.inCooldown ? "unreachable" : "live");
             const sev = a.severity || (live ? "ok" : "error");
             const c = sev === "ok" ? "#5dffb0" : sev === "warn" ? "#ffb347" : "#ff6b78";
             return (

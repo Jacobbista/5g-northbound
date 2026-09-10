@@ -29,7 +29,7 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
                 {"id": "D002", "source": "wittra", "origin": "inventory", "label": "Tag 2",
                  "role": "infrastructure", "source_class": "uwb"},
                 {"id": "wifi-new", "source": "wifi", "origin": "observed",
-                 "last_seen": 12.0, "role": "asset", "source_class": "wifi"},
+                 "lastCommunicationTime": 12.0, "role": "asset", "source_class": "wifi"},
             ]
         })
     )

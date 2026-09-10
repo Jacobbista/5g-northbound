@@ -24,15 +24,15 @@ def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
         f for f in fixes
         if f.get("latitude") is not None
         and f.get("longitude") is not None
-        and isinstance(f.get("accuracy_m"), (int, float))
-        and f["accuracy_m"] > 0
+        and isinstance(f.get("accuracy"), (int, float))
+        and f["accuracy"] > 0
     ]
     if not usable:
         return None
     if len(usable) == 1:
         return _normalise(usable[0])
 
-    weights = [1.0 / (f["accuracy_m"] ** 2) for f in usable]
+    weights = [1.0 / (f["accuracy"] ** 2) for f in usable]
     wsum = sum(weights)
     lat = sum(w * f["latitude"] for w, f in zip(weights, usable)) / wsum
     lon = sum(w * f["longitude"] for w, f in zip(weights, usable)) / wsum
@@ -40,7 +40,7 @@ def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
 
     # Altitude and timestamps come from the sharpest fix (lowest accuracy_m);
     # not every source reports altitude, and the freshest position anchors time.
-    best = min(usable, key=lambda f: f["accuracy_m"])
+    best = min(usable, key=lambda f: f["accuracy"])
     sources: list[str] = []
     for f in usable:
         for s in _sources_of(f):
@@ -50,16 +50,16 @@ def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     out: dict[str, Any] = {
         "latitude": lat,
         "longitude": lon,
-        "accuracy_m": accuracy,
+        "accuracy": accuracy,
         "altitude": best.get("altitude"),
         "sources": sources,
     }
     ts = _latest(usable, "timestamp")
     if ts is not None:
         out["timestamp"] = ts
-    obs = _latest(usable, "observed_at")
+    obs = _latest(usable, "observedAt")
     if obs is not None:
-        out["observed_at"] = obs
+        out["observedAt"] = obs
     return out
 
 
