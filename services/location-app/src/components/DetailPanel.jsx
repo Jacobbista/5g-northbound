@@ -181,7 +181,7 @@ function fmtTime(iso) {
 function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
   // Diagnostics come from a per-device vendor GET, independent of a current
-  // position fix: an offline asset still reports battery / last_seen. Fetch
+  // position fix: an offline asset still reports battery / lastSeen. Fetch
   // regardless of liveness.
   const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId);
   const t = details?.telemetry;
@@ -292,7 +292,7 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
           )}
           <div style={statRow}>
             <span style={sLabel}>accuracy</span>
-            <span style={sVal}>±{t.accuracy_m.toFixed(2)} m</span>
+            <span style={sVal}>±{t.accuracy.toFixed(2)} m</span>
           </div>
 
           <div style={sectionTitle}>fusion</div>
@@ -321,8 +321,8 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
               {diag.moving != null && (
                 <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.moving ? "moving" : "stationary"}</span></div>
               )}
-              {diag.last_seen != null && (
-                <div style={statRow}><span style={sLabel}>last seen</span><span style={sVal}>{new Date(diag.last_seen * 1000).toLocaleTimeString()}</span></div>
+              {diag.lastSeen != null && (
+                <div style={statRow}><span style={sLabel}>last seen</span><span style={sVal}>{new Date(diag.lastSeen * 1000).toLocaleTimeString()}</span></div>
               )}
               {diag.accuracy != null && (
                 <div style={statRow}><span style={sLabel}>accuracy</span><span style={sVal}>±{Number(diag.accuracy).toFixed(2)} m</span></div>
@@ -338,10 +338,10 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
                 </div>
               )}
               {/* Everything the profile does not standardize: raw, collapsed. */}
-              {diag.x_vendor && Object.keys(diag.x_vendor).length > 0 && (
+              {diag.vendorSpecific && Object.keys(diag.vendorSpecific).length > 0 && (
                 <details style={{ marginTop: 4 }}>
                   <summary style={{ ...sLabel, cursor: "pointer" }}>vendor-specific</summary>
-                  {Object.entries(diag.x_vendor).map(([k, v]) => (
+                  {Object.entries(diag.vendorSpecific).map(([k, v]) => (
                     <div key={k} style={statRow}>
                       <span style={sLabel}>{k}</span>
                       <span style={sVal}>{Array.isArray(v) ? v.join(", ") : String(v)}</span>
@@ -442,11 +442,11 @@ function ApPanel({ ap, onClose, token, frame }) {
           <div style={sectionTitle}>rf model {rf.calibrated ? "· calibrated" : "· default"}</div>
           <div style={statRow}>
             <span style={sLabel}>tx@ref</span>
-            <span style={sVal}>{Number(rf.tx_power_ref_dbm).toFixed(1)} dBm</span>
+            <span style={sVal}>{Number(rf.txPowerRef).toFixed(1)} dBm</span>
           </div>
           <div style={{ ...statRow, paddingBottom: 14 }}>
             <span style={sLabel}>path-loss n</span>
-            <span style={sVal}>{Number(rf.path_loss_n).toFixed(2)}</span>
+            <span style={sVal}>{Number(rf.pathLossExponent).toFixed(2)}</span>
           </div>
         </>
       ) : (

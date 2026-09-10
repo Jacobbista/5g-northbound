@@ -4,29 +4,45 @@
   "title": "Device diagnostics (private-profile extension)",
   "description": "Response of GET /device-diagnostics/v0/{assetId}. A private-profile extension, not CAMARA Device Location.",
   "type": "object",
-  "required": ["assetId", "source", "diagnostics"],
+  "required": [
+    "assetId",
+    "source",
+    "diagnostics"
+  ],
   "properties": {
-    "assetId": { "type": "string" },
-    "source": { "type": "string" },
+    "assetId": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
     "diagnostics": {
       "type": "object",
-      "description": "Core vocabulary fields at the top; vendor-specific extras under x_vendor. See docs/profile-extensions.md.",
+      "description": "Core vocabulary fields at the top; everything else under vendorSpecific. See docs/profile-extensions.md.",
       "properties": {
-        "battery": { "type": "number", "minimum": 0, "maximum": 100, "description": "LwM2M 3/0/9, percent" },
-        "last_seen": { "type": "number", "description": "omlox timestamp_generated, epoch seconds" },
-        "accuracy": { "type": "number", "description": "omlox accuracy, metres" },
-        "moving": { "type": "boolean", "description": "derived from omlox speed" },
-        "x_vendor": {
-          "type": "object",
-          "description": "Vendor fields with no normalized meaning, passed through raw. Non-authoritative.",
-          "additionalProperties": true
+        "battery": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "LwM2M 3/0/9, percent"
         },
-        "motion": { "type": "string" },
-        "accuracy_value": { "type": "number" },
-        "accuracy_kind": { "type": "string" },
-        "rssi": { "type": "array", "items": { "type": "number" } },
-        "ping_pongs": { "type": "array", "items": { "type": "number" } },
-        "neighbors": { "type": "array", "items": { "type": "string" } }
+        "accuracy": {
+          "type": "number",
+          "description": "omlox accuracy, metres"
+        },
+        "moving": {
+          "type": "boolean",
+          "description": "derived from omlox speed"
+        },
+        "lastSeen": {
+          "type": "number",
+          "description": "omlox timestamp_generated, epoch seconds"
+        },
+        "vendorSpecific": {
+          "type": "object",
+          "description": "Values an integrator mapped that this profile does not define. Keys are chosen by whoever wrote the vendor schema, are not comparable across vendors, and are carried as authored. Non-authoritative.",
+          "additionalProperties": true
+        }
       },
       "additionalProperties": true
     }

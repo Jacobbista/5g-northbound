@@ -10,7 +10,7 @@ vi.mock("../../hooks/useAnchorCalibration", () => ({
 vi.mock("../../hooks/useDeviceDetails", () => ({
   useDeviceDetails: () => ({
     details: { telemetry: {
-      latitude: 59.4, longitude: 17.9, accuracy_m: 0.9, altitude: null,
+      latitude: 59.4, longitude: 17.9, accuracy: 0.9, altitude: null,
       strategy: "weighted_avg", sources: ["wittra"], lastLocationTime: "2026-08-26T10:00:00Z",
     }, kind: "uwb-tag", source: "wittra" },
     error: null, loading: false,
@@ -21,8 +21,8 @@ vi.mock("../../hooks/useDeviceDiagnostics", () => ({
   useDeviceDiagnostics: () => ({
     diagnostics: {
       battery: 84,
-      last_seen: 1700000000,
-      x_vendor: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
+      lastSeen: 1700000000,
+      vendorSpecific: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
     },
     loading: false, error: null,
   }),
@@ -31,7 +31,7 @@ vi.mock("../../hooks/useDeviceDiagnostics", () => ({
 const apSelection = (ap) => ({ kind: "ap", ap });
 
 describe("DetailPanel · device diagnostics vocabulary", () => {
-  it("renders core fields and collapses x_vendor", () => {
+  it("renders core fields and collapses vendorSpecific", () => {
     render(
       <DetailPanel
         selection={{ kind: "device", device: { assetId: "pkg-1", label: "pkg-1", color: "#5dffb0", source: "wittra" } }}

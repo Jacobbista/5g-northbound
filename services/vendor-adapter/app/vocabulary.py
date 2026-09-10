@@ -5,7 +5,7 @@ Single source of truth is the normative artifact
 (GET /contracts/diagnostics-vocabulary.json) and imported here so the adapter
 routes against the same names, units and threshold it publishes. A field is
 core only when this artifact names it (each entry cites the external standard
-it adopts); everything else a schema maps is routed to the `x_vendor` bag.
+it adopts); everything else a schema maps is routed to the `vendorSpecific` bag.
 
 The adapter is southbound: it conforms to the vocabulary, it does not define
 it. Hence the artifact, not this module, is authoritative.
@@ -56,19 +56,19 @@ _CORE: dict[str, dict] = _VOCAB["core"]
 
 # Name of the bag non-core fields are routed into. Declared by the artifact so
 # the routing key stays authoritative in one place.
-EXTENSION_BAG: str = _VOCAB["extension_bag"]
+EXTENSION_BAG: str = _VOCAB["extensionBag"]
 
 # Speed over which the derived `moving` flag reads True. Normative, one value.
-MOVING_SPEED_THRESHOLD_MPS: float = float(_CORE["moving"]["derivation"]["threshold_mps"])
+MOVING_SPEED_THRESHOLD_MPS: float = float(_CORE["moving"]["derivation"]["threshold"])
 
 # Core field -> its declared unit, type and default delivery tier. The keys are
 # the routing authority: a mapped field whose name is here is coerced to the
-# core unit, everything else lands in `x_vendor`.
+# core unit, everything else lands in `vendorSpecific`.
 CORE_DIAGNOSTICS: dict[str, dict] = {
     name: {
         "unit": spec.get("unit"),
         "type": spec["type"],
-        "tier_default": spec.get("tier_default"),
+        "tier_default": spec.get("tierDefault"),
     }
     for name, spec in _CORE.items()
 }

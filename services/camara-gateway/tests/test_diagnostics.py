@@ -60,13 +60,13 @@ def test_diagnostics_payload_matches_contract(respx_mock):
     jsonschema.validate(body, schema)
 
 
-def test_core_vocabulary_and_x_vendor_validate():
+def test_core_vocabulary_and_vendorSpecific_validate():
     import json, pathlib, jsonschema
     schema = json.loads(pathlib.Path(__file__).resolve().parents[3]
                         .joinpath("schema/device-diagnostics.schema.json").read_text())
     body = {"assetId": "a", "source": "wittra",
             "diagnostics": {"battery": 84, "last_seen": 1700000000, "moving": True,
-                            "x_vendor": {"temperature": 22.5}}}
+                            "vendorSpecific": {"temperature": 22.5}}}
     jsonschema.validate(body, schema)
 
 
