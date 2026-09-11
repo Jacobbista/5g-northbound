@@ -27,9 +27,9 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
                 # wittra-tag-01 is already onboarded in the seed map -> excluded
                 {"id": "wittra-tag-01", "source": "wittra", "origin": "inventory"},
                 {"id": "D002", "source": "wittra", "origin": "inventory", "label": "Tag 2",
-                 "role": "infrastructure", "source_class": "uwb"},
+                 "role": "infrastructure", "sourceClass": "uwb"},
                 {"id": "wifi-new", "source": "wifi", "origin": "observed",
-                 "lastCommunicationTime": 12.0, "role": "asset", "source_class": "wifi"},
+                 "lastSeen": 12.0, "role": "asset", "sourceClass": "wifi"},
             ]
         })
     )
@@ -41,6 +41,7 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
     assert cands["wifi-new"]["source"] == "wifi"
     assert cands["wifi-new"]["role"] == "asset"
     assert cands["wifi-new"]["sourceClass"] == "wifi"
+    assert cands["wifi-new"]["lastSeen"] == 12.0
     assert cands["D002"]["label"] == "Tag 2"
     # role + sourceClass pass through so KELT separates infrastructure + badges tech.
     assert cands["D002"]["role"] == "infrastructure"

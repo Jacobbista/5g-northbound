@@ -17,7 +17,7 @@ router = APIRouter(tags=["diagnostics"])
 
 
 async def _adapter_base_url(source: str) -> str | None:
-    """Ask the engine which adapter serves `source` and return its base_url."""
+    """Ask the engine which adapter serves `source` and return its baseUrl."""
     engine = get_settings().positioning_engine_url.rstrip("/")
     if not engine:
         return None
@@ -30,7 +30,7 @@ async def _adapter_base_url(source: str) -> str | None:
         return None
     for a in r.json().get("adapters", []):
         if a.get("name") == source:
-            return a.get("base_url")
+            return a.get("baseUrl")
     return None
 
 

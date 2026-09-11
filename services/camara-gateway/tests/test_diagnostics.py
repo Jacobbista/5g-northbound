@@ -12,7 +12,7 @@ def auth_headers(make_token):
 def _mock_engine_and_source(respx_mock):
     respx_mock.get("http://engine.test/adapters").mock(
         return_value=httpx.Response(200, json={"adapters": [
-            {"name": "wittra", "base_url": "http://wittra-adapter:8080",
+            {"name": "wittra", "baseUrl": "http://wittra-adapter:8080",
              "fail_count": 0, "in_cooldown": False, "cooldown_seconds_remaining": 0.0},
         ]})
     )

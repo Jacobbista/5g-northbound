@@ -17,7 +17,7 @@ router = APIRouter(prefix="/adapters", tags=["Adapter health (vendor extension)"
 @router.get("")
 async def adapter_status(_claims: dict = Depends(require_location_role)) -> dict[str, Any]:
     """Pass the engine's adapter registry snapshot through unchanged so the demo
-    sees every field (state, kind, registered_via, last_seen_s_ago, cooldown).
+    sees every field (state, kind, registeredVia, lastSeenSAgo, cooldown).
     The gateway does not reshape it - the engine owns the contract."""
     raw = await get_adapter_status()
     return {"adapters": raw or []}

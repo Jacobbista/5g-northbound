@@ -46,12 +46,12 @@ async def put_assets(
 
 
 class DiscoverableDevice(BaseModel):
-    # `id` is the source's device id; it becomes the asset's positioning_id on
+    # `id` is the source's device id; it becomes the asset's positioningId on
     # onboarding. `origin` = inventory (vendor, bulk-safe) | observed (wifi,
     # claim + label). `role` (paper vocab) = infrastructure (fixed sensor -
     # anchor/gateway, outside 3GPP trust, NOT onboardable) | asset (the tracked
-    # entity); absent when the source did not classify it. `source_class` = the
-    # positioning technology (uwb/ble/wifi/gnss/cellular/other). `device_type`
+    # entity); absent when the source did not classify it. `sourceClass` = the
+    # positioning technology (uwb/ble/wifi/gnss/cellular/other). `deviceType`
     # is the native vendor type. No `org` yet - assigned at onboard.
     id: str
     source: str
@@ -89,10 +89,10 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
                 source=d.get("source", ""),
                 origin=d.get("origin"),
                 role=d.get("role"),
-                sourceClass=d.get("source_class"),
-                deviceType=d.get("device_type"),
+                sourceClass=d.get("sourceClass"),
+                deviceType=d.get("deviceType"),
                 label=d.get("label"),
-                lastSeen=d.get("last_seen"),
+                lastSeen=d.get("lastSeen"),
             )
         )
     return DiscoverableResponse(candidates=candidates)
