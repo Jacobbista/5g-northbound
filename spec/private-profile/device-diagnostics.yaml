@@ -5,7 +5,7 @@ info:
   description: |
     A private-profile extension surface, NOT CAMARA Device Location. It exposes
     device diagnostics that the CAMARA Device Location payloads intentionally do
-    not carry. Core vocabulary fields (battery, last_seen, accuracy, moving)
+    not carry. Core vocabulary fields (battery, lastSeen, accuracy, moving)
     surface at the top of the payload with standard names and units; any
     vendor-specific extra surfaces under vendorSpecific, raw and non-authoritative.
     See docs/profile-extensions.md#core-vocabulary. The CAMARA retrieve/verify
