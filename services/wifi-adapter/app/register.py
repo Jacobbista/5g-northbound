@@ -70,7 +70,7 @@ def _cfg() -> dict:
     return {
         "engine_url": os.environ.get("POSITIONING_ENGINE_URL", "").rstrip("/"),
         "name": os.environ.get("ADAPTER_NAME", ""),
-        "baseUrl": os.environ.get("ADAPTER_BASE_URL", ""),
+        "base_url": os.environ.get("ADAPTER_BASE_URL", ""),
         "kind": os.environ.get("ADAPTER_KIND", "adapter"),
         "heartbeat_s": float(os.environ.get("ADAPTER_HEARTBEAT_S", "15")),
         "capabilities": _caps(),
