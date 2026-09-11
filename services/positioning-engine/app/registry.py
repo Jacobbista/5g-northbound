@@ -148,10 +148,17 @@ class AdapterRegistry:
             log.warning("registry: persisted file unreadable (%s); ignoring", exc)
             return 0
         for d in data:
-            via = d.get("registeredVia") or MANUAL
+            # A file written before 0.16.0 carries the superseded names. Read
+            # both so an upgrade restores its declared adapters instead of
+            # crashing the boot; the next persist() rewrites the file.
+            via = d.get("registeredVia") or d.get("registered_via") or MANUAL
             if via not in _PERSISTED_VIA:
                 continue
-            self.upsert(d["name"], d["baseUrl"], d.get("kind") or "adapter", via, d.get("capabilities"))
+            base_url = d.get("baseUrl") or d.get("base_url")
+            if not d.get("name") or not base_url:
+                log.warning("registry: skipping unreadable persisted entry %r", d)
+                continue
+            self.upsert(d["name"], base_url, d.get("kind") or "adapter", via, d.get("capabilities"))
         return len(self._entries)
 
     def is_empty(self) -> bool:

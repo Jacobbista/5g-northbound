@@ -41,6 +41,10 @@ intentional declarations - persisted on the engine's volume and never removed
 for lack of a heartbeat (they would not heartbeat). Their health comes from
 whether the engine's polls succeed.
 
+Every `POST /adapters` registers as `self`, including one an operator issues by
+hand: it is heartbeat-bound and TTL-evicted like any other. A declaration meant
+to outlive a silent source comes from `ADAPTER_URLS` today.
+
 ## Membership vs reachability are orthogonal
 
 Two independent health signals, both on `GET /adapters`:
@@ -86,7 +90,9 @@ optionally `ADAPTER_KIND`. With those set the adapter self-registers; unset, it
 runs standalone and the engine only knows it via an `ADAPTER_URLS` seed.
 
 The engine persists the registry on the same writable volume as the blueprint
-(`ADAPTER_REGISTRY_PATH`, default `/app/data/adapters.json`). No extra PVC.
+(`ADAPTER_REGISTRY_PATH`, default `/app/data/adapters.json`). No extra PVC. A
+file written before 0.16.0 carries the superseded `base_url` / `registered_via`
+names; the engine reads both and rewrites the file on the next change.
 
 ## Routing: which adapter serves a device
 
