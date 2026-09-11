@@ -80,6 +80,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 - `pytest` with `httpx.AsyncClient(ASGITransport)` for route tests; the app runs in-process. No test requires `docker compose` to be running, a live Kubernetes cluster, or any external HTTP endpoint.
 - Mock external HTTP with `respx` (already a dev dependency where needed).
 - CI runs each service's test suite independently in a matrix; a failure in one service does not block another's image build.
+- A contract that crosses a service boundary is pinned in `deploy/tools/test_wire_contracts.py`, which reads both ends and runs the producer where a rename can only fail at runtime. A per-service suite tests its own side against its own fixture, so it cannot see the other side move: rename a wire field and add the pin here.
 
 ## Frontend (location-app)
 
@@ -103,6 +104,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 ```bash
 make demo                          # full stack (wraps `docker compose -f deploy/compose/docker-compose.yml up --build`)
 pytest                             # per-service, from its folder under services/ or mocks/
+make test                          # every suite, including the cross-service contract pins
 npm test                           # in services/location-app/ or services/placement-editor/frontend/
 ```
 

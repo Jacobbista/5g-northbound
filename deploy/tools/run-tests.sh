@@ -14,6 +14,7 @@ suites=(
   "vendor-adapter|services/vendor-adapter|.venv/bin/pytest -q"
   "synthetic-adapter|services/synthetic-adapter|.venv/bin/pytest -q"
   "mock-vendor|mocks/mock-vendor|.venv/bin/pytest -q"
+  "cross-service contracts|.|services/positioning-engine/.venv/bin/pytest -q deploy/tools"
   "location-app (js)|.|npm --prefix services/location-app test"
   "placement-editor (js)|.|npm --prefix services/placement-editor/frontend test"
   "profiled spec fresh|.|python3 deploy/tools/check-profile-fresh.py"

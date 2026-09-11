@@ -38,6 +38,19 @@ jobs:
         working-directory: ${{ matrix.path }}
         run: pytest
 
+  test-contracts:
+    name: pytest (deploy/tools)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      # These tests read both ends of every contract that crosses a service
+      # boundary, so they belong to no single service and run from the root.
+      - run: pip install pytest httpx pyyaml
+      - run: pytest -q deploy/tools
+
   test-frontend:
     name: vitest (${{ matrix.path }})
     runs-on: ubuntu-latest
