@@ -118,3 +118,51 @@ async def test_details_telemetry_null_when_engine_unreachable(
     resp = await client.get(f"{ASSETS}/tool-880/details", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["telemetry"] is None
+
+
+async def test_put_assets_rejects_a_positioning_id_claimed_by_two_assets(client, auth_headers):
+    # Reproduces the KELT repro: wittra-tag-shared standalone AND as a
+    # capability of puppypi-01. The gateway's stream enrich groups engine
+    # broadcasts by positioningId -> asset; a collision means one asset never
+    # gets an entry and location-app shows it OFFLINE despite a live source.
+    dup_map = {
+        "version": 4,
+        "assets": [
+            {"assetId": "tag-standalone", "kind": "tool", "org": "acme",
+             "capabilities": [{"source": "wittra", "positioningId": "wittra-tag-shared"}]},
+            {"assetId": "puppypi-01", "kind": "robot", "org": "acme",
+             "capabilities": [
+                 {"source": "wifi", "positioningId": "puppypi-01"},
+                 {"source": "wittra", "positioningId": "wittra-tag-shared"},
+             ]},
+        ],
+    }
+    resp = await client.put(ASSETS, json=dup_map, headers=auth_headers)
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["code"] == "DUPLICATE_POSITIONING_ID"
+    assert "wittra-tag-shared" in body["message"]
+    assert "tag-standalone" in body["message"]
+    assert "puppypi-01" in body["message"]
+
+    # The rejected write must not have landed.
+    got = await client.get(ASSETS, headers=auth_headers)
+    ids = {a["assetId"] for a in got.json()["assets"]}
+    assert "puppypi-01" not in ids
+
+
+async def test_put_assets_allows_the_same_asset_with_distinct_positioning_ids(client, auth_headers):
+    # The legitimate multi-capability case (docs/asset-registry.md): one asset,
+    # several sources, each with its OWN positioningId. Must not be rejected.
+    ok_map = {
+        "version": 4,
+        "assets": [
+            {"assetId": "robot-2", "kind": "robot", "org": "acme",
+             "capabilities": [
+                 {"source": "wifi", "positioningId": "puppypi-02"},
+                 {"source": "wittra", "positioningId": "wittra-tag-09"},
+             ]},
+        ],
+    }
+    resp = await client.put(ASSETS, json=ok_map, headers=auth_headers)
+    assert resp.status_code == 200

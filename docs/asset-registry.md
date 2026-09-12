@@ -44,6 +44,16 @@ A `capability`:
 | `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `synthetic`    | Positioning modality / adapter, surfaced as profile `source` |
 | `positioningId` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | The id this source routes on (the engine polls the `source` adapter with it) |
 
+**A `positioningId` is unique across the whole map**, not just within one
+asset: the engine routes it to a single learned source, and the gateway's live
+stream groups broadcasts by `positioningId` to find the owning asset - one
+lookup, so it can resolve to only one asset. `PUT /assets` rejects a write
+where two assets (or two capabilities of the same asset) claim the same
+`positioningId`, with `422 DUPLICATE_POSITIONING_ID` naming both assetIds.
+This is checked only at write time, not on every read, so a map written before
+this check existed is not retroactively invalidated - fix it with a corrected
+`PUT /assets`.
+
 The whole document is `{ "version": 4, "assets": [ … ] }`. Copy
 [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json)
 as your starting point:

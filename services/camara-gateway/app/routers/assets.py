@@ -36,11 +36,32 @@ async def get_assets(claims: dict = Depends(require_location_role)) -> AssetMap:
     return amap
 
 
+def _reject_duplicate_positioning_ids(amap: AssetMap) -> None:
+    """The engine routes a `positioningId` to exactly one adapter-learned
+    source (docs/asset-registry.md); two assets claiming the same one starve
+    one of them on the stream (an internal lookup keyed by positioningId can
+    resolve to only one asset) and would blend one asset's telemetry into the
+    other's fusion. Reject at write time instead of letting it land - the
+    store is not re-validated on every read, so this is the only gate."""
+    seen: dict[str, str] = {}
+    for asset in amap.assets:
+        for cap in asset.capabilities:
+            prior = seen.get(cap.positioningId)
+            if prior is not None:
+                raise CamaraError(
+                    422, "DUPLICATE_POSITIONING_ID",
+                    f"positioningId '{cap.positioningId}' is claimed by both "
+                    f"'{prior}' and '{asset.assetId}'.",
+                )
+            seen[cap.positioningId] = asset.assetId
+
+
 @router.put("", response_model=AssetMap)
 async def put_assets(
     body: AssetMap,
     _claims: dict = Depends(require_location_role),
 ) -> AssetMap:
+    _reject_duplicate_positioning_ids(body)
     save_asset_map(body)
     return body
 
