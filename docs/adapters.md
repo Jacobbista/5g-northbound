@@ -149,6 +149,57 @@ sequenceDiagram
 
 The two paths are decoupled: the ingest side moves at whatever rate observations arrive (push, poll, SDK callback), the fusion side runs at the engine's poll cadence. The cache between them is the only contract the engine cares about, adapter implementers are free to pick whatever ingest mechanism fits their technology.
 
+## What an adapter declares about itself
+
+Alongside the HTTP contract, an adapter declares the positioning traits the
+engine and gateway reason about. The declaration has two layers: the
+`adapter.contract.yaml` baked into the image is the base, and
+`ADAPTER_CAPABILITIES` (JSON) overrides or extends it per deployment without a
+rebuild. `make positioning-check` asserts the two agree. The adapter sends the
+merged result to the engine on every heartbeat, and the gateway aggregates it
+into `GET /capabilities`.
+
+Traits that belong to the **image** go in the YAML: which endpoints the binary
+exposes (`devices`, `discover`, `diagnostics`), whether it pushes or is polled
+(`streaming`). Traits that belong to the **bound source** go in
+`ADAPTER_CAPABILITIES` at deploy time: `source`, `kinds`, `frame`, `z`,
+`accuracy_class`, `nominalAccuracy`. The vendor-adapter image is generic and
+holds no vendor's traits, for the same reason its `GET /contract` names no
+vendor's variables until a schema is loaded.
+
+### `accuracy_class` and `nominalAccuracy`
+
+`accuracy_class` is the band the source's technology nominally delivers, one of
+`sub-metre`, `metre`, `coarse`. The boundaries are defined in
+[`spec/private-profile/accuracy-class-vocabulary.json`](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/accuracy-class-vocabulary.json),
+served live at `GET /contracts/accuracy-class-vocabulary.json`. Two consumers
+read it. A quality-sensitive application reads the aggregate at
+`GET /capabilities` to weigh a fix by where it came from, which is the point the
+[6GHYPE paper](https://github.com/Jacobbista/5g-northbound) makes when it argues
+that an accuracy radius alone collapses precision and provenance into one
+signal. The engine reads it to resolve a radius for a source that reports none.
+
+The band is a statement about the technology, not a bound on any single fix. A
+degraded fix reports its own worse accuracy honestly, and that does not move the
+source into another class. Declare the band the source usually delivers, not its
+worst case.
+
+`nominalAccuracy` is optional and only matters for a source that can report a
+position without a per-fix accuracy. Most sources compute one: the wifi adapter
+derives it from the trilateration residual, a vendor cloud usually returns a
+radius. When a source genuinely has none, the engine substitutes, in order: the
+adapter's own `nominalAccuracy` if declared, otherwise the `upperBound` of its
+declared class, which claims the worst of the band rather than a flattering
+midpoint. `coarse` is open-ended upward and resolves to no value on its own, so
+an adapter declaring it must also declare `nominalAccuracy`. A source with
+neither is dropped from the fusion cycle with a warning rather than fused
+against an invented number.
+
+Declare `nominalAccuracy` where the value is known for the deployed hardware,
+and cite the source in a comment. It describes one deployment's technology, so
+it belongs in that deployment's `ADAPTER_CAPABILITIES`, never baked into a
+generic image.
+
 ## Engine wiring
 
 The engine reads `ADAPTER_URLS` at startup. Each entry is a `name=url` pair; the name is what appears as the source tag if the adapter does not set its own, and what the optional `DEVICE_MAP` routes against:

@@ -1,17 +1,20 @@
-# Adapter capability contract for vendor-adapter (Wittra UWB cloud).
-# Declarative source of truth; runtime value travels in ADAPTER_CAPABILITIES
-# (JSON). `make positioning-check` asserts the two agree. The vendor is
-# schema-driven (examples/wittra-schema.json); these capabilities describe the
-# positioning traits the engine/gateway reason about.
-adapter: wittra
-description: Schema-driven REST bridge to a vendor positioning cloud (Wittra UWB).
+# Adapter capability contract for vendor-adapter.
+#
+# This image is generic. It bridges ANY vendor positioning cloud that an
+# operator describes in a schema document (PUT /schema, or a mounted file), so
+# it bakes no vendor's traits: no source name, no asset kinds, no coordinate
+# frame, no accuracy class. Those describe the bound vendor, not this binary,
+# and they arrive per deployment in ADAPTER_CAPABILITIES (JSON) - the same
+# reason GET /contract names no vendor's environment variables until a schema
+# is loaded. See docs/adapters.md#what-an-adapter-declares-about-itself.
+#
+# What stays here is what is true of the image whatever it is wired to: which
+# endpoints the binary exposes, and how it is driven. `make positioning-check`
+# asserts the deployment agrees with this base on every key both declare.
+adapter: vendor
+description: Schema-driven REST bridge to a vendor positioning cloud. Vendor traits are supplied at deploy time.
 capabilities:
-  source: wittra
-  kinds: [pallet, uwb-tag, asset]
-  frame: wgs84          # vendor returns WGS84; engine inverts to local
   streaming: false      # rest transport = pull-through (transport is a schema dimension; mqtt future)
-  z: true               # UWB reports height
-  accuracy_class: sub-metre
-  discover: true         # exposes /discover (vendor device enumeration); editor shows SYNC {source}
-  devices: true          # exposes /devices (vendor inventory for onboarding, standard shape)
-  diagnostics: true      # exposes /diagnostics/{id} (vendor fidelity telemetry, on-demand)
+  discover: true        # exposes /discover (vendor device enumeration); editor shows SYNC {source}
+  devices: true         # exposes /devices (vendor inventory for onboarding, standard shape)
+  diagnostics: true     # exposes /diagnostics/{id} (vendor fidelity telemetry, on-demand)
