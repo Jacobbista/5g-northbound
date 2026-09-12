@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     degrade_seconds: float = 8.0         # how long one lasts
     # Seed for reproducible trajectories; 0 = non-deterministic.
     rng_seed: int = 0
+    # When true a device reports nothing until it is placed (PUT
+    # /devices/{id}/placement), and reports nothing again once removed. The
+    # demo uses this so the synthetic asset is absent until an operator drops
+    # it somewhere, rather than always wandering. Default false keeps the
+    # standalone behaviour: every configured device walks from boot.
+    spawn_required: bool = False
 
     class Config:
         env_file = ".env"

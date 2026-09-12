@@ -20,6 +20,12 @@ async def get_measurement(device_id: str, request: Request):
     if served and device_id not in served:
         raise HTTPException(404, detail=f"{device_id} not served by this mock")
     walker = request.app.state.walker
+    if not walker.is_active(device_id):
+        # Configured but not placed: no fix, the same answer an adapter gives
+        # for a device it cannot currently locate. The engine skips this source
+        # for this cycle without entering cooldown, and the asset simply has no
+        # position until it is placed.
+        raise HTTPException(404, detail=f"{device_id} is not placed")
     x, y, z, ts = walker.step(device_id)
     # Synthesised, not measured: read after the step that advanced the quality
     # they map from, so the pair matches the fix just produced.

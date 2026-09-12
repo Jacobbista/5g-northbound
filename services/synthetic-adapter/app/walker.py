@@ -44,6 +44,10 @@ _QUALITY_JITTER = 0.05
 # it pushes the mass toward the good end and leaves a thin tail toward the
 # bad one, which is the shape indoor error actually has.
 _ACCURACY_SKEW = 2.2
+# A freshly placed device sits still for this long before it starts wandering.
+# Without it the first poll already moves it a metre, so the marker appears
+# away from where it was dropped and the placement reads as imprecise.
+_SETTLE_S = 2.0
 
 
 @dataclass
@@ -81,6 +85,12 @@ class _State:
     # `confidence / accuracy`, so the pair is exactly what matters.
     quality: float = 1.0
     degraded_until: float = 0.0
+    # Stays put until this time. Set on placement so the device is still where
+    # it was dropped when the first fix reaches the consumer.
+    hold_until: float = 0.0
+    # Whether this device is currently reporting. Only consulted when
+    # `spawn_required` is on; otherwise every device walks from boot.
+    active: bool = True
 
 
 def _segments_intersect(
@@ -392,6 +402,11 @@ class WaypointWalker:
         st.last_ts = now
         self._advance_quality(st, rng, dt, now)
 
+        # Just placed: hold the drop point so the first fix a consumer sees is
+        # the point the operator chose, not one a second of walking away.
+        if now < st.hold_until:
+            return st.x, st.y, st.z, now
+
         # Pick a waypoint if needed.
         if st.waypoint is None:
             st.waypoint = self._new_waypoint(rng)
@@ -460,6 +475,61 @@ class WaypointWalker:
             round(self._clamp(accuracy, lo, hi), 2),
             round(self._clamp(confidence, cfg.confidence_min, cfg.confidence_max), 3),
         )
+
+    # --- placement ---------------------------------------------------------
+    #
+    # Coordinates here are room-local canvas-y metres: origin top-left, x
+    # right, z down. That is the frame this walker already keeps its state in,
+    # the frame the placement editor stores, and the frame the demo's 3D scene
+    # renders, so a point picked on screen needs no conversion on the way in.
+    # `project_to_floor_plan` still lifts it to the engine's north-up frame on
+    # the way out.
+
+    def is_active(self, device_id: str) -> bool:
+        """Whether this device currently reports a position.
+
+        With `spawn_required` off every configured device walks from boot, as
+        it always has. With it on a device reports nothing until placed, which
+        is not a failure: it is the same 'no fix' an adapter reports for a
+        device it cannot currently locate.
+        """
+        if not self._cfg.spawn_required:
+            return True
+        st = self._state.get(device_id)
+        return st is not None and st.active
+
+    def place(self, device_id: str, x: float, z: float) -> tuple[float, float]:
+        """Put a device at a point and start it walking from there. Returns the
+        point it actually landed on.
+
+        The point is clamped into the same inset the walk itself respects, so a
+        drop slightly outside the room, or on a wall, lands just inside rather
+        than seeding the walk in a place the walk could never reach. Placing an
+        already-placed device moves it, which is what dropping it again means.
+        """
+        inset = _ROOM_INSET_M
+        cx = self._clamp(x, inset, max(inset, self._cfg.width_m - inset))
+        cz = self._clamp(z, inset, max(inset, self._cfg.depth_m - inset))
+        self._state[device_id] = _State(
+            x=cx,
+            y=self._cfg.height_m / 2,
+            z=cz,
+            # No waypoint yet: the next step picks one, so the device starts
+            # moving from where it was dropped rather than resuming an old leg.
+            waypoint=None,
+            last_ts=time.time(),
+            active=True,
+            hold_until=time.time() + _SETTLE_S,
+        )
+        return cx, cz
+
+    def remove(self, device_id: str) -> bool:
+        """Stop a device reporting. Returns whether it was there to remove.
+
+        The state goes with it, so placing it again starts clean rather than
+        resuming the walk it had before.
+        """
+        return self._state.pop(device_id, None) is not None
 
 
 # Backwards-compatible alias. Anything importing `RandomWalker` (tests,

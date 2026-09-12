@@ -200,6 +200,31 @@ and cite the source in a comment. It describes one deployment's technology, so
 it belongs in that deployment's `ADAPTER_CAPABILITIES`, never baked into a
 generic image.
 
+### Placement (`placement` capability)
+
+A source that synthesises its position can be told where to start. A source
+that measures one cannot: there is nothing to place, its hardware is already
+somewhere. Only the former advertises `placement`, and only it exposes
+`PUT`/`DELETE /devices/{id}/placement`.
+
+Coordinates are room-local metres, origin top-left, x right, z down. That is
+the frame the walker keeps, the placement editor stores, and the demo's 3D
+scene renders, so a point picked on screen travels unchanged. The point is
+clamped into the room on arrival, since seeding a walk somewhere the walk could
+never reach would strand the device.
+
+With `SPAWN_REQUIRED` set, a device reports nothing until it is placed, and
+nothing again once removed. That is not an error state: `GET /measurement/{id}`
+answers `404`, the same "no fix" any adapter gives for a device it cannot
+currently locate, so the engine skips the source for that cycle and the asset
+simply has no position. Nothing downstream special-cases it. Without the flag
+every configured device walks from boot, which is the standalone default.
+
+The gateway proxies this asset-shaped at `PUT`/`DELETE /assets/{assetId}/placement`,
+resolving the positioning id and refusing a source that does not advertise the
+capability with `422 NOT_PLACEABLE`. The demo drags an asset from its rail onto
+the floor plan and drops it.
+
 ## Engine wiring
 
 The engine reads `ADAPTER_URLS` at startup. Each entry is a `name=url` pair; the name is what appears as the source tag if the adapter does not set its own, and what the optional `DEVICE_MAP` routes against:

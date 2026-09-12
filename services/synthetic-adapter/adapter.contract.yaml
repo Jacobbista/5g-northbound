@@ -10,6 +10,10 @@ capabilities:
   kinds: [forklift, asset]   # asset kinds this adapter can locate
   frame: local          # Measurement frame it emits (floor-plan-local, north-up)
   devices: true         # exposes /devices (configured device inventory for onboarding)
+  # Exposes PUT/DELETE /devices/{id}/placement. Only a source that synthesises
+  # its position can offer this: a real one reports where its hardware is, and
+  # there is nothing to place. Consumers read it to know what is draggable.
+  placement: true
   streaming: false      # pull-only (no push channel)
   z: true               # provides a vertical (height) component
   # The band it reports inside, per spec/private-profile/accuracy-class-vocabulary.json.
