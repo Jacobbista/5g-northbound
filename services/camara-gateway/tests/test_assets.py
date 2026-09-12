@@ -166,3 +166,78 @@ async def test_put_assets_allows_the_same_asset_with_distinct_positioning_ids(cl
     }
     resp = await client.put(ASSETS, json=ok_map, headers=auth_headers)
     assert resp.status_code == 200
+
+
+def _adapters_response(*entries):
+    return httpx.Response(200, json={"adapters": list(entries)})
+
+
+def _adapter(name, source, kinds):
+    return {"name": name, "state": "live",
+            "capabilities": {"source": source, "kinds": kinds}}
+
+
+@pytest.fixture
+def engine(respx_mock, monkeypatch):
+    """Point the gateway at a stub engine and return its /adapters route."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    return respx_mock.get("http://engine.test/adapters")
+
+
+def _map_with(source, kind="tool"):
+    return {
+        "version": 4,
+        "assets": [
+            {"assetId": "drill-1", "kind": kind, "org": "atlas", "label": "Drill 1",
+             "capabilities": [{"source": source, "positioningId": "p-1"}]},
+        ],
+    }
+
+
+async def test_put_assets_rejects_a_source_no_adapter_serves(client, auth_headers, engine):
+    # The typo case: accepted today and then silent, because nothing answers
+    # for that source and no error ever says so.
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
+    resp = await client.put(ASSETS, json=_map_with("wtira"), headers=auth_headers)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "UNKNOWN_SOURCE"
+    assert "wtira" in resp.json()["message"]
+    # The rejected write must not have landed.
+    got = await client.get(ASSETS, headers=auth_headers)
+    assert "drill-1" not in {a["assetId"] for a in got.json()["assets"]}
+
+
+async def test_put_assets_rejects_a_kind_no_adapter_advertises(client, auth_headers, engine):
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
+    resp = await client.put(ASSETS, json=_map_with("wifi", kind="submarine"), headers=auth_headers)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "UNKNOWN_KIND"
+
+
+async def test_put_assets_accepts_what_the_live_fabric_advertises(client, auth_headers, engine):
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
+    resp = await client.put(ASSETS, json=_map_with("wifi"), headers=auth_headers)
+    assert resp.status_code == 200
+
+
+async def test_put_assets_proceeds_when_the_engine_cannot_be_asked(client, auth_headers, engine):
+    # A check that cannot run must not block an operator from writing. The
+    # engine being down is not evidence that the source is wrong.
+    engine.mock(side_effect=httpx.ConnectError("engine down"))
+    resp = await client.put(ASSETS, json=_map_with("wittra"), headers=auth_headers)
+    assert resp.status_code == 200
+
+
+async def test_put_assets_keeps_a_source_the_stored_map_already_uses(client, auth_headers, engine):
+    # A self-registered adapter that stays down long enough is evicted from the
+    # registry. A source the map already carries is not a typo, so it remains
+    # writable rather than becoming unwritable during an outage.
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool", "pallet"])))
+    # `wittra` is in the seeded map and no adapter advertises it here.
+    seeded = await client.get(ASSETS, headers=auth_headers)
+    assert "wittra" in {c["source"] for a in seeded.json()["assets"] for c in a["capabilities"]}
+    resp = await client.put(ASSETS, json=_map_with("wittra", kind="pallet"), headers=auth_headers)
+    assert resp.status_code == 200

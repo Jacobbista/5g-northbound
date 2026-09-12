@@ -54,6 +54,18 @@ This is checked only at write time, not on every read, so a map written before
 this check existed is not retroactively invalidated - fix it with a corrected
 `PUT /assets`.
 
+`source` and `kind` are checked against the live fabric on write, not against a
+list in the gateway's source. `PUT /assets` asks the engine which adapters are
+registered at that moment and what kinds they advertise, the same data
+`GET /capabilities` aggregates, and rejects a value no adapter serves with
+`422 UNKNOWN_SOURCE` or `422 UNKNOWN_KIND`. A closed list in code would have to
+be edited and released every time a vendor is onboarded, which is the opposite
+of how a vendor joins here. Two deliberate gaps: a value the stored map already
+uses stays writable, so an adapter that is down long enough to be evicted does
+not make its assets unwritable, and an engine that cannot be reached cannot be
+asked, so the write proceeds rather than blocking an operator during an
+incident.
+
 The whole document is `{ "version": 4, "assets": [ … ] }`. Copy
 [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json)
 as your starting point:
