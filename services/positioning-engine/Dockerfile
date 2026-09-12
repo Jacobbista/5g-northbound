@@ -9,6 +9,10 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY app/ app/
 COPY env.contract.yaml /app/env.contract.yaml
+# Normative accuracy-class bands, read when a source reports no per-fix
+# accuracy. Lives at the repo root, outside this build context, so
+# `make stage-contracts` copies it in before the build.
+COPY contracts/ /app/contracts/
 # Writable dir for the persisted blueprint (GET/PUT /blueprint). In the cluster
 # mount a PVC here; the directory must be owned by the non-root app user.
 RUN mkdir -p /app/data && chown -R app /app/data

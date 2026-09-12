@@ -6,24 +6,13 @@ from typing import Callable, Optional
 
 from fastapi import Request
 
+from ..accuracy_classes import nominal_for_class
 from ..adapters.base import Adapter, Measurement
 from ..fusion.base import FusedPosition, FusionStrategy
 from ..models import FloorPlan
 from .geo import gps_to_local
 
 log = logging.getLogger(__name__)
-
-# Nominal per-fix accuracy (metres), used ONLY when a source reports no
-# per-fix accuracy at all (Measurement.accuracy is None) - never when it
-# reports a real, if degenerate, number such as 0.0. Keyed by the
-# `accuracy_class` each adapter self-declares in its adapter.contract.yaml
-# (coarse | metre | sub-metre), so the fallback reflects what the technology
-# class claims rather than a number invented once per vendor schema. A
-# nominal value is never mistaken for a measurement downstream: `source` /
-# `sourceClass` travels on the same response so a consumer can tell them
-# apart (6GHYPE paper Sec. IV - accuracy alone collapses precision and
-# provenance into one signal; source is how the two stay separable).
-_NOMINAL_ACCURACY_M = {"sub-metre": 0.5, "metre": 2.0, "coarse": 5.0}
 
 
 @dataclass
@@ -97,18 +86,31 @@ class PositionService:
         return list(self._adapters.values())
 
     def _fill_nominal_accuracy(self, m: Measurement) -> Optional[Measurement]:
-        """A measurement with no per-fix accuracy gets the nominal value for
-        its source's declared accuracy_class, so fusion always has a real
-        number to weight by. Returns None (drop the measurement, with a
-        warning) when the source has advertised no accuracy_class either -
-        there is nothing honest left to fuse with."""
+        """A measurement with no per-fix accuracy gets a nominal one, so fusion
+        always has a real number to weight by.
+
+        Two sources for it, in order. The adapter's own `nominalAccuracy` wins:
+        it describes the deployed hardware, and only the deployment knows that.
+        Otherwise the upper bound of its declared `accuracy_class`, which claims
+        the worst of the band rather than a flattering midpoint. `coarse` is
+        open-ended and resolves to nothing on its own, so an adapter declaring
+        it without a `nominalAccuracy` has said nothing usable.
+
+        Returns None (drop the measurement, with a warning) when neither is
+        available. Dropping a source is recoverable and visible. Fusing it
+        against an invented radius is neither.
+        """
         if m.accuracy is not None:
             return m
-        accuracy_class = self._capabilities_for(m.source).get("accuracy_class")
-        nominal = _NOMINAL_ACCURACY_M.get(accuracy_class)
+        caps = self._capabilities_for(m.source)
+        declared = caps.get("nominalAccuracy")
+        nominal = float(declared) if declared is not None else nominal_for_class(
+            caps.get("accuracy_class")
+        )
         if nominal is None:
             log.warning(
-                "measurement from '%s' has no accuracy and no known accuracy_class; dropping",
+                "measurement from '%s' has no accuracy, and its source declares "
+                "neither nominalAccuracy nor a bounded accuracy_class; dropping",
                 m.source,
             )
             return None

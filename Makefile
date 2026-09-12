@@ -43,7 +43,10 @@ stage-contracts:
 	@rm -rf services/vendor-adapter/contracts
 	@mkdir -p services/vendor-adapter/contracts
 	@cp spec/private-profile/diagnostics-vocabulary.json services/vendor-adapter/contracts/diagnostics-vocabulary.json
-	@echo "  -> staged contracts into camara-gateway/ and vendor-adapter/"
+	@rm -rf services/positioning-engine/contracts
+	@mkdir -p services/positioning-engine/contracts
+	@cp spec/private-profile/accuracy-class-vocabulary.json services/positioning-engine/contracts/accuracy-class-vocabulary.json
+	@echo "  -> staged contracts into camara-gateway/, vendor-adapter/ and positioning-engine/"
 # Bootstrap committed templates into the gitignored runtime files the first
 # time `make demo` runs. Idempotent: only copies when the working file is
 # absent, so existing local edits (real Mapbox tokens, the real venue
@@ -62,7 +65,14 @@ env-config:
 # `make demo` auto-detects dev/wifi-config.local.json (gitignored, real
 # BSSIDs) and mounts it into wifi-adapter. Falls back to the committed
 # placeholder dev/wifi-config.json when the local file is absent.
-demo: env-config stage-contracts
+# Advisory check of the gitignored local demo config. `env-config.js` is never
+# overwritten (local tokens and blueprints survive), so it drifts from the
+# template and the realm. Warns, never blocks.
+.PHONY: demo-env-check
+demo-env-check:
+	@python3 deploy/tools/check_demo_env.py
+
+demo: env-config stage-contracts demo-env-check
 	@export HOST_UID=$$(id -u); export HOST_GID=$$(id -g); \
 	if [ -f dev/wifi-config.local.json ]; then \
 		echo "  -> using dev/wifi-config.local.json (real bindings)"; \

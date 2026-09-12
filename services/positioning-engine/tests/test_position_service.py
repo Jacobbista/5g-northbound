@@ -170,20 +170,51 @@ async def test_last_seen_absent_when_no_source_reports_it(floor_plan):
 
 
 @pytest.mark.asyncio
-async def test_missing_accuracy_falls_back_to_the_source_accuracy_class(floor_plan):
-    # Reproduces the Wittra case: a source reports no genuine per-fix accuracy
-    # (Measurement.accuracy is None, not a suspect zero). The nominal value
-    # for its declared accuracy_class fills in so fusion has a real number.
-    m = Measurement(source="wittra", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
+async def test_missing_accuracy_falls_back_to_the_declared_class_upper_bound(floor_plan):
+    # A source reports no genuine per-fix accuracy (Measurement.accuracy is
+    # None, not a suspect zero) and declares no nominalAccuracy of its own.
+    # The band resolves to its upper bound: with only the class to go on, the
+    # honest radius is the worst of the band, not a flattering midpoint.
+    m = Measurement(source="uwb-src", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
     a = _StaticAdapter(m)
     svc = PositionService(
-        adapters={"wittra": a}, floor_plan=floor_plan, device_map={},
+        adapters={"uwb-src": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
         capabilities_for=lambda name: {"accuracy_class": "sub-metre"},
     )
     result = await svc.get_position("dev1")
     assert result is not None
-    assert result.primary.fused.accuracy == 0.5
+    assert result.primary.fused.accuracy == 1.0
+
+
+@pytest.mark.asyncio
+async def test_a_declared_nominal_accuracy_wins_over_the_class_bound(floor_plan):
+    # Only the deployment knows its own hardware, so an adapter that declares
+    # nominalAccuracy overrides the generic band bound.
+    m = Measurement(source="uwb-src", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
+    a = _StaticAdapter(m)
+    svc = PositionService(
+        adapters={"uwb-src": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {"accuracy_class": "sub-metre", "nominalAccuracy": 0.3},
+    )
+    result = await svc.get_position("dev1")
+    assert result is not None
+    assert result.primary.fused.accuracy == 0.3
+
+
+@pytest.mark.asyncio
+async def test_coarse_without_a_declared_nominal_drops_the_measurement(floor_plan):
+    # `coarse` is open-ended upward, so it resolves to no value on its own. An
+    # adapter declaring it without a nominalAccuracy has said nothing usable.
+    m = Measurement(source="vague", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
+    a = _StaticAdapter(m)
+    svc = PositionService(
+        adapters={"vague": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {"accuracy_class": "coarse"},
+    )
+    assert await svc.get_position("dev1") is None
 
 
 @pytest.mark.asyncio
