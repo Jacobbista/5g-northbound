@@ -16,8 +16,12 @@ class Measurement:
     """
 
     source: str
-    accuracy: float          # metres; x-unit on the wire schema
-    confidence: float
+    # metres; x-unit on the wire schema. None when the source has no genuine
+    # per-fix accuracy to report (PositionService fills a nominal value from
+    # the source's accuracy_class before fusion; fusion itself never sees
+    # None - see position_service.py).
+    accuracy: Optional[float] = None
+    confidence: float = 0.0
     frame: Literal["local", "wgs84"] = "local"
     x: float = 0.0
     y: float = 0.0

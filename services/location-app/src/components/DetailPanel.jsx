@@ -327,17 +327,11 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
               {diag.accuracy != null && (
                 <div style={statRow}><span style={sLabel}>accuracy</span><span style={sVal}>±{Number(diag.accuracy).toFixed(2)} m</span></div>
               )}
-              {/* Legacy flat fields, in case a source has not migrated yet. */}
-              {diag.motion != null && (
-                <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.motion}</span></div>
-              )}
-              {diag.accuracy_value != null && (
-                <div style={statRow}>
-                  <span style={sLabel}>accuracy</span>
-                  <span style={sVal}>±{Number(diag.accuracy_value).toFixed(2)} m{diag.accuracy_kind ? ` · ${diag.accuracy_kind}` : ""}</span>
-                </div>
-              )}
-              {/* Everything the profile does not standardize: raw, collapsed. */}
+              {/* Everything the profile does not standardize: raw, collapsed, no
+                  unit assumed (a vendorSpecific value's unit is not declared -
+                  e.g. Wittra's accuracy_value is a confidence score, not a
+                  radius; formatting it as "±X m" would state something no
+                  contract asserts). */}
               {diag.vendorSpecific && Object.keys(diag.vendorSpecific).length > 0 && (
                 <details style={{ marginTop: 4 }}>
                   <summary style={{ ...sLabel, cursor: "pointer" }}>vendor-specific</summary>

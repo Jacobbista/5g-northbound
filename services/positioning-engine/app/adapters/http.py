@@ -103,7 +103,9 @@ class HttpAdapter(Adapter):
             body = r.json()
             measurement = Measurement(
                 source=body.get("source", self.name),
-                accuracy=float(body["accuracy"]),
+                accuracy=(
+                    float(body["accuracy"]) if body.get("accuracy") is not None else None
+                ),
                 confidence=float(body["confidence"]),
                 frame=body.get("frame", "local"),
                 x=float(body.get("x", 0.0)),

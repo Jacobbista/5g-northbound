@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI):
         device_map=settings.device_map_dict,
         primary_strategy=primary,
         compare_strategies=compare,
+        capabilities_for=registry.capabilities_for,
     )
 
     broadcast_task = asyncio.create_task(websocket.broadcast_loop(app))

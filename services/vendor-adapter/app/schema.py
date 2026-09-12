@@ -114,8 +114,10 @@ class Mapping(BaseModel):
     `frame` is "wgs84" or "local". In wgs84 `latitude`/`longitude` are
     geographic degrees; in a local frame they carry the room-local x / z in
     metres (the field names are kept so one spec serves either frame). `y`
-    (height) and `confidence` are optional: a 2D vendor, or one that reports
-    only an accuracy radius, omits them and they default to 0.
+    and `confidence` are optional and default to 0 when omitted. `accuracy`
+    is also optional: a vendor with no genuine per-fix radius omits it rather
+    than have the schema fabricate one (the engine substitutes a nominal
+    value for the adapter's accuracy_class instead).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -128,9 +130,16 @@ class Mapping(BaseModel):
     longitude: FieldSpec = Field(
         description="wgs84: geographic longitude in degrees. local: the room-local z coordinate in metres."
     )
-    accuracy: FieldSpec = Field(
+    accuracy: Optional[FieldSpec] = Field(
+        default=None,
         json_schema_extra={"x-unit": "m"},
-        description="Horizontal accuracy radius; surfaced as the core `accuracy` diagnostic.",
+        description=(
+            "Horizontal accuracy radius; surfaced as the core `accuracy` diagnostic. "
+            "Omit when the vendor reports no genuine per-fix radius (a confidence "
+            "score is not a radius - map that to `confidence` instead). The engine "
+            "falls back to a nominal value for the adapter's declared accuracy_class "
+            "rather than fusing a fabricated number."
+        ),
     )
     confidence: Optional[FieldSpec] = Field(
         default=None,

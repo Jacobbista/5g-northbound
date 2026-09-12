@@ -70,10 +70,14 @@ def test_unmapped_reports_supported_fields_the_document_does_not_map(wittra_sche
     assert "latitude" in cov["mapped"]
 
 
-def test_the_reference_document_maps_every_supported_field(wittra_schema):
+def test_the_reference_document_maps_every_supported_field_but_accuracy(wittra_schema):
     # The committed example is what an integrator copies, so it exercises the
-    # whole mapping surface.
-    assert mapping_coverage(wittra_schema)["unmapped"] == []
+    # whole mapping surface - except `accuracy`, deliberately: this real
+    # account's "accuracy" field is a [0,1] confidence score, not a metres
+    # radius (mapped to `confidence` instead), so the example demonstrates
+    # the one legitimate reason to leave accuracy unmapped rather than
+    # fabricate one.
+    assert mapping_coverage(wittra_schema)["unmapped"] == ["accuracy"]
     assert discover_mapping_coverage(wittra_schema)["unmapped"] == []
 
 

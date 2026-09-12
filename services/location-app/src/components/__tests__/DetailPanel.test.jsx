@@ -22,7 +22,7 @@ vi.mock("../../hooks/useDeviceDiagnostics", () => ({
     diagnostics: {
       battery: 84,
       lastSeen: 1700000000,
-      vendorSpecific: { motion: "MOVING", accuracy_value: 0.9, accuracy_kind: "vendor-radius", rssi: [-93, -87] },
+      vendorSpecific: { motion: "MOVING", accuracy_value: 0.42, accuracy_kind: "vendor-confidence-score", rssi: [-93, -87] },
     },
     loading: false, error: null,
   }),
@@ -44,6 +44,12 @@ describe("DetailPanel · device diagnostics vocabulary", () => {
     // Vendor-specific extras sit under a collapsed container, raw.
     expect(screen.getByText("vendor-specific")).toBeInTheDocument();
     expect(screen.getByText("MOVING")).toBeInTheDocument();
+    // accuracy_value is a Wittra confidence score (0-1), not a radius: raw,
+    // unitless - no fabricated "m" the way the core `accuracy` row (±0.90 m,
+    // from telemetry, a genuine metres radius) legitimately gets one.
+    expect(screen.getByText("±0.90 m")).toBeInTheDocument();
+    expect(screen.getByText("0.42")).toBeInTheDocument();
+    expect(screen.queryByText(/±0\.42 ?m/)).not.toBeInTheDocument();
     // lat/lon always shown; no coordinate toggle
     expect(screen.getByText("lat / lon")).toBeInTheDocument();
     // The device is live (telemetry present) but lastLocationTime is days old:

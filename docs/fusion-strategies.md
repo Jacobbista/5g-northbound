@@ -40,6 +40,8 @@ flowchart LR
 
 The implemented strategy. Each measurement gets a weight `w = confidence / accuracy`, and the output is the weighted mean of `Measurement.{x, y, z}`. Output accuracy combines the inputs in quadrature, `1 / sqrt(Σ 1/accuracy²)`, which is the inverse-variance result: fusing two 3 m sources yields about 2.1 m, and a source contributes in proportion to how much it narrows the estimate. Adding a poor source can therefore only improve the reported radius, which is the property that makes a multi-capability asset worth declaring.
 
+By the time a measurement reaches this strategy `accuracy` is always a real number, never `None` and never literally `0.0`: `PositionService` fills a missing accuracy with the nominal value for the source's declared `accuracy_class` before fusion runs (a vendor with no genuine per-fix radius, e.g. one that reports a `[0,1]` confidence score instead - see [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md)), and `weighted_avg` itself floors any reported accuracy at 1 cm so a degenerate zero cannot divide the weight to infinity. Neither guard changes a genuine measurement; both only stop an absent or zero value from taking the request down.
+
 - **Strengths:** stateless, O(N) per fusion cycle, robust to one bad adapter when several others agree.
 - **Weaknesses:** no temporal smoothing: output jitters at the noise floor of the worst weighted source. One catastrophically wrong measurement with high confidence drags the result.
 - **When to prefer:** static or slow-moving assets where N ≥ 2 adapters of comparable accuracy are usually online.

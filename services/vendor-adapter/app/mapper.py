@@ -93,10 +93,16 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     out: dict[str, Any] = {
         "source": vendor_name,
         "frame": frame,
-        "accuracy": float(resolve_field(mapping.accuracy, payload) or 0.0),
         # confidence and y are optional in the mapping; absent -> 0.0.
         "confidence": float(_resolve_optional(mapping.confidence, payload) or 0.0),
     }
+    # accuracy is optional: a vendor with no genuine per-fix radius omits the
+    # mapping entirely rather than fabricate one. Present-and-zero (a real
+    # reported value, however suspect) is kept, matching the coordinate rule
+    # above - only an unresolved mapping means "no radius", not a zero one.
+    accuracy = _resolve_optional(mapping.accuracy, payload)
+    if accuracy is not None:
+        out["accuracy"] = float(accuracy)
     if frame == "wgs84":
         out["latitude"] = float(lat_raw)
         out["longitude"] = float(lon_raw)

@@ -167,3 +167,51 @@ async def test_last_seen_absent_when_no_source_reports_it(floor_plan):
     )
     result = await svc.get_position("dev1")
     assert result.primary.fused.lastSeen is None
+
+
+@pytest.mark.asyncio
+async def test_missing_accuracy_falls_back_to_the_source_accuracy_class(floor_plan):
+    # Reproduces the Wittra case: a source reports no genuine per-fix accuracy
+    # (Measurement.accuracy is None, not a suspect zero). The nominal value
+    # for its declared accuracy_class fills in so fusion has a real number.
+    m = Measurement(source="wittra", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
+    a = _StaticAdapter(m)
+    svc = PositionService(
+        adapters={"wittra": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {"accuracy_class": "sub-metre"},
+    )
+    result = await svc.get_position("dev1")
+    assert result is not None
+    assert result.primary.fused.accuracy == 0.5
+
+
+@pytest.mark.asyncio
+async def test_a_real_zero_accuracy_is_never_replaced_by_the_nominal_value(floor_plan):
+    # accuracy=0.0 is a reported value, not an absence: the nominal fallback
+    # must not touch it (that is weighted_avg's own epsilon floor's job).
+    m = Measurement(source="wittra", x=5.0, y=0.0, z=5.0, accuracy=0.0, confidence=0.9, frame="local")
+    a = _StaticAdapter(m)
+    svc = PositionService(
+        adapters={"wittra": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {"accuracy_class": "coarse"},
+    )
+    result = await svc.get_position("dev1")
+    assert result is not None
+    assert result.primary.fused.accuracy < 5.0  # nowhere near the coarse nominal
+
+
+@pytest.mark.asyncio
+async def test_missing_accuracy_and_unknown_accuracy_class_drops_the_measurement(floor_plan):
+    # No per-fix accuracy and no declared accuracy_class: nothing honest to
+    # fuse with. The source is dropped, not defaulted to an arbitrary number.
+    m = Measurement(source="mystery", x=5.0, y=0.0, z=5.0, accuracy=None, confidence=0.9, frame="local")
+    a = _StaticAdapter(m)
+    svc = PositionService(
+        adapters={"mystery": a}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {},
+    )
+    result = await svc.get_position("dev1")
+    assert result is None

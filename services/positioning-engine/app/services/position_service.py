@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import Request
 
@@ -12,6 +12,18 @@ from ..models import FloorPlan
 from .geo import gps_to_local
 
 log = logging.getLogger(__name__)
+
+# Nominal per-fix accuracy (metres), used ONLY when a source reports no
+# per-fix accuracy at all (Measurement.accuracy is None) - never when it
+# reports a real, if degenerate, number such as 0.0. Keyed by the
+# `accuracy_class` each adapter self-declares in its adapter.contract.yaml
+# (coarse | metre | sub-metre), so the fallback reflects what the technology
+# class claims rather than a number invented once per vendor schema. A
+# nominal value is never mistaken for a measurement downstream: `source` /
+# `sourceClass` travels on the same response so a consumer can tell them
+# apart (6GHYPE paper Sec. IV - accuracy alone collapses precision and
+# provenance into one signal; source is how the two stay separable).
+_NOMINAL_ACCURACY_M = {"sub-metre": 0.5, "metre": 2.0, "coarse": 5.0}
 
 
 @dataclass
@@ -43,12 +55,16 @@ class PositionService:
         device_map: dict[str, str],
         primary_strategy: FusionStrategy,
         compare_strategies: list[FusionStrategy],
+        capabilities_for: Callable[[str], dict] = lambda name: {},
     ):
         self._adapters = adapters
         self._floor_plan = floor_plan
         self._device_map = device_map
         self._primary = primary_strategy
         self._compare = compare_strategies
+        # Live lookup (registry.capabilities_for), not a snapshot: a source's
+        # advertised accuracy_class can change on any heartbeat.
+        self._capabilities_for = capabilities_for
 
     def set_floor_plan(self, floor_plan: FloorPlan) -> None:
         """Swap the active floor plan at runtime. Called after a PUT /blueprint
@@ -79,6 +95,34 @@ class PositionService:
                 device_id, target,
             )
         return list(self._adapters.values())
+
+    def _fill_nominal_accuracy(self, m: Measurement) -> Optional[Measurement]:
+        """A measurement with no per-fix accuracy gets the nominal value for
+        its source's declared accuracy_class, so fusion always has a real
+        number to weight by. Returns None (drop the measurement, with a
+        warning) when the source has advertised no accuracy_class either -
+        there is nothing honest left to fuse with."""
+        if m.accuracy is not None:
+            return m
+        accuracy_class = self._capabilities_for(m.source).get("accuracy_class")
+        nominal = _NOMINAL_ACCURACY_M.get(accuracy_class)
+        if nominal is None:
+            log.warning(
+                "measurement from '%s' has no accuracy and no known accuracy_class; dropping",
+                m.source,
+            )
+            return None
+        return Measurement(
+            source=m.source,
+            accuracy=nominal,
+            confidence=m.confidence,
+            frame=m.frame,
+            x=m.x, y=m.y, z=m.z,
+            latitude=m.latitude, longitude=m.longitude,
+            timestamp=m.timestamp,
+            lastSeen=m.lastSeen,
+            diagnostics=m.diagnostics,
+        )
 
     def _normalise(self, m: Measurement) -> Measurement:
         if m.frame == "local":
@@ -112,7 +156,9 @@ class PositionService:
                 continue
             if r is None:
                 continue
-            measurements.append(self._normalise(r))
+            filled = self._fill_nominal_accuracy(self._normalise(r))
+            if filled is not None:
+                measurements.append(filled)
 
         if not measurements:
             return None

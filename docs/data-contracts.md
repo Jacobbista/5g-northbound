@@ -83,6 +83,8 @@ Response (`Location`):
 
 `area` is either a `CIRCLE` (centre + radius ≥ 1 m) or, per spec, a `POLYGON`. `radius` is in metres. `source`, `kind`, `altitude`, and `verticalAccuracy` are private-profile additions: descriptive fields the demo surfaces; a plain CAMARA client ignores them. `device` is mandatory; absence yields `422 MISSING_IDENTIFIER`.
 
+The `radius ≥ 1 m` floor is CAMARA's own [`Circle.radius`](https://github.com/camaraproject/DeviceLocation/blob/main/code/API_definitions/location-retrieval.yaml) minimum, not a private-profile addition: it was `2000` (2 km, a public-network Cell-ID legacy) until [PR #285](https://github.com/camaraproject/DeviceLocation/pull/285) lowered it in release r2.2, precisely to admit the non-3GPP, sub-metre-class fixes this profile carries. The gateway clamps to it (`radius = max(accuracy, 1)`) rather than raise, since a fix more precise than 1 m is still a valid fix, only not one CAMARA's schema can name exactly.
+
 ### Location Verification v3
 
 `POST /location-verification/v3/verify`
@@ -103,7 +105,7 @@ Response (`VerifyLocationResponse`):
 { "verificationResult": "TRUE", "lastLocationTime": "2024-01-01T12:00:00Z" }
 ```
 
-`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + accuracy radius) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.
+`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + accuracy radius, the same `radius ≥ 1 m` floor described above) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.
 
 ### Authentication
 

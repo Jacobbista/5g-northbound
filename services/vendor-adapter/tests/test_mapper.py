@@ -27,10 +27,11 @@ def test_to_measurement_wgs84(wittra_schema, wittra_sample_payload):
     assert out["frame"] == "wgs84"
     assert out["latitude"] == 45.064547
     assert out["longitude"] == 7.659272
-    # v4 schema: accuracy pulled from the vendor (radius in metres);
-    # confidence is a fixed 0.5 because v4 does not expose a 0-1 score.
-    assert out["accuracy"] == 0.85
-    assert out["confidence"] == 0.5
+    # This real account's "accuracy" field is a [0,1] confidence score, not a
+    # metres radius - mapped to `confidence`. The schema maps no accuracy at
+    # all, so the key is absent rather than a fabricated number.
+    assert "accuracy" not in out
+    assert out["confidence"] == 0.85
     assert out["y"] == 1.2
     assert isinstance(out["timestamp"], float)
 

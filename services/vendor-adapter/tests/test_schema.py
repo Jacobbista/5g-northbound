@@ -131,7 +131,7 @@ def test_diagnostics_absent_is_none(wittra_schema_dict):
 
 def test_example_schema_declares_diagnostics(wittra_schema):
     assert "motion" in wittra_schema.diagnostics.stream
-    assert wittra_schema.diagnostics.onDemand[0].mapping["accuracy_kind"].const == "vendor-radius"
+    assert wittra_schema.diagnostics.onDemand[0].mapping["accuracy_kind"].const == "vendor-confidence-score"
 
 
 def test_env_ref_accepts_a_posix_name():

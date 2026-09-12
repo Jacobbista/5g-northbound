@@ -34,12 +34,8 @@
     "longitude": {
       "path": "latest.data.location.value.longitude"
     },
-    "accuracy": {
-      "path": "latest.data.location.value.accuracy",
-      "default": 5.0
-    },
     "confidence": {
-      "const": 0.5
+      "path": "latest.data.location.value.accuracy"
     },
     "y": {
       "path": "latest.data.location.value.height",
@@ -128,7 +124,7 @@
             "path": "latest.data.location.value.accuracy"
           },
           "accuracy_kind": {
-            "const": "vendor-radius"
+            "const": "vendor-confidence-score"
           }
         }
       }

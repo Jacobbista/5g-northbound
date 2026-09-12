@@ -185,6 +185,14 @@ class AdapterRegistry:
             if e.capabilities.get("devices") and self._state(e, now) == "live"
         ]
 
+    def capabilities_for(self, name: str) -> dict:
+        """The capabilities the named adapter last advertised (empty if
+        unknown). PositionService reads `accuracy_class` from this to fill a
+        nominal accuracy when a measurement reports none - a live read, not a
+        snapshot, since capabilities refresh on every heartbeat."""
+        entry = self._entries.get(name)
+        return entry.capabilities if entry is not None else {}
+
     def status_list(self) -> list[dict]:
         now = self._clock()
         out = []
