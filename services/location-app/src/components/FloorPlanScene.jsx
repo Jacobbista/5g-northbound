@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Edges,
   Grid,
@@ -95,19 +95,21 @@ const labelStyle = {
   backdropFilter: "blur(4px)",
 };
 
-function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, onClick }) {
+function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, inert = false, onClick }) {
   const groupRef = useRef();
   const ring = useRef();
   const glow = useRef();
   const bodyRef = useRef();
   const renderColor = stale ? "#5a6470" : color;
 
-  // Seed position + visibility scale once so a marker that starts hidden begins
-  // at scale 0 and one that starts shown does not lerp in from the origin.
+  // Seed the position so the marker never lerps in from the origin, and start
+  // at zero scale so it grows into place. Arriving markers otherwise pop at
+  // full size, which is most visible right after a placement, where it lands
+  // on top of the mark left by the drop.
   useEffect(() => {
     if (groupRef.current) {
       groupRef.current.position.set(x, 0, z);
-      groupRef.current.scale.setScalar(hidden ? 0 : 1);
+      groupRef.current.scale.setScalar(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -153,13 +155,17 @@ function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, onCli
           so the asset detail would never open. This is the single event target. */}
       <mesh
         position={[0, 1.0, 0]}
+        // Out of the raycast entirely while an asset is being placed: a marker
+        // that handles the move stops it reaching the block being carried.
+        raycast={inert ? () => null : undefined}
         onPointerDown={(e) => {
-          if (hidden || !onClick) return;
+          if (hidden || inert || !onClick) return;
           e.stopPropagation();
           onClick();
         }}
         onPointerOver={(e) => {
-          if (hidden) return;
+          if (inert) return;
+          if (hidden || inert) return;
           e.stopPropagation();
           if (onClick) document.body.style.cursor = "pointer";
         }}
@@ -235,7 +241,7 @@ function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, onCli
   );
 }
 
-function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, hidden = false, colors = TECH_PALETTE.wifi, onClick }) {
+function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, hidden = false, inert = false, colors = TECH_PALETTE.wifi, onClick }) {
   const groupRef = useRef();
   const ringRef = useRef();
   const pulseRef = useRef();
@@ -291,13 +297,15 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, hidde
           single event target so overlapping decorative meshes never double-fire. */}
       <mesh
         position={[0, hitH / 2, 0]}
+        // See DeviceMarker: inert while a placement is in progress.
+        raycast={inert ? () => null : undefined}
         onPointerDown={(e) => {
-          if (hidden || !onClick) return;
+          if (hidden || inert || !onClick) return;
           e.stopPropagation();
           onClick();
         }}
         onPointerOver={(e) => {
-          if (hidden) return;
+          if (hidden || inert) return;
           e.stopPropagation();
           if (onClick) document.body.style.cursor = "pointer";
           setHovered(true);
@@ -471,7 +479,7 @@ const axisTag = (color) => ({
 // The origin gizmo. Idle it is a short colour key in the corner; on hover the
 // world dims and the X / Y / Z axes extend smoothly with labels - a quick
 // legend for the room-local frame.
-function OriginAxes({ span = 20 }) {
+function OriginAxes({ span = 20, inert = false }) {
   const [hovered, setHovered] = useState(false);
   const dimRef = useRef();
   const xRef = useRef();
@@ -514,6 +522,7 @@ function OriginAxes({ span = 20 }) {
           setHovered(true);
         }}
         onPointerOut={() => setHovered(false)}
+        raycast={inert ? () => null : undefined}
       >
         <sphereGeometry args={[1.5, 16, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
@@ -863,7 +872,7 @@ function ConnectionLines({ from, aps, color }) {
   });
 }
 
-function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
+function DeviceTracks({ positions, onSelectDevice, aps, frame, inert = false }) {
   const trailsRef = useRef({});
   const lastSeenRef = useRef({});
   // Per-device smoothed position (EMA of toLocal output).
@@ -941,6 +950,7 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
             color={device.color}
             stale={stale}
             hidden={!selected}
+            inert={inert}
             onClick={onSelectDevice ? () => onSelectDevice(device) : undefined}
           />
         )}
@@ -952,6 +962,457 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame }) {
 // A large gradient sky dome behind the scene: near-black overhead easing to a
 // faint blue at the horizon, so the world sits in an open space, not a void.
 // Ambient only (fog off, not raycastable) - never touches the room itself.
+// Placing an asset: the block appears floating over the middle of the room,
+// and you carry it where you want it. Not an HTML drag: the thing being moved
+// is the marker the scene will keep, so what you pick up is what will be there.
+//
+// The scene renders the room at world x in [0, w], z in [0, d] with no
+// transform, so a hit on the floor plane IS the room-local coordinate the
+// placement API takes.
+// How high the block waits, as a fraction of how far the camera is from it.
+// A fixed height in metres reads as a hop when the view is pulled back and as
+// a tower when it is close in; tying it to the distance keeps the gap between
+// block and floor about the same on screen at any zoom. Clamped so a very
+// tight or very wide view stays sane.
+const HOVER_RATIO = 0.22;
+const HOVER_MIN_M = 3.5;
+const HOVER_MAX_M = 16.0;
+const FALL_S = 0.55;        // how long the drop takes
+const FOLLOW_RATE = 7.0;    // how hard the block chases the hand per second
+const RETURN_RATE = 2.6;    // how fast it drifts home when released outside
+const TILT_MAX = 0.5;       // radians of bank at full speed
+const TILT_PER_MS = 0.16;   // lateral speed that reaches full bank
+const REFUSED = "#ff6b78";
+// Clearance kept from a wall face, on top of its own half-thickness. An asset
+// sitting flush inside masonry is not a place it could be.
+const WALL_CLEARANCE_M = 0.35;
+
+// Do two segments cross? Used to count the walls standing between two points.
+function segmentsCross(ax, az, bx, bz, cx, cz, dx, dz) {
+  const r1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+  const r2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+  const r3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx);
+  const r4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+  return r1 * r2 < 0 && r3 * r4 < 0;
+}
+
+// The solid stretches of a wall, in room-local metres, with doorways removed.
+function solidSpans(wall) {
+  const x1 = Number(wall.x1);
+  const z1 = Number(wall.y1);
+  const x2 = Number(wall.x2);
+  const z2 = Number(wall.y2);
+  const len = Math.hypot(x2 - x1, z2 - z1);
+  if (!Number.isFinite(len) || len < 0.05) return [];
+  const ux = (x2 - x1) / len;
+  const uz = (z2 - z1) / len;
+  return segmentWall(wall, len).solid.map((sp) => ({
+    ax: x1 + ux * sp.start_m,
+    az: z1 + uz * sp.start_m,
+    bx: x1 + ux * sp.end_m,
+    bz: z1 + uz * sp.end_m,
+  }));
+}
+
+// How many solid walls stand between two points. Doorways do not count, so a
+// room you could walk into reads as reachable and a sealed box does not.
+function wallsBetween(fromX, fromZ, toX, toZ, walls) {
+  let n = 0;
+  for (const wall of walls) {
+    for (const sp of solidSpans(wall)) {
+      if (segmentsCross(fromX, fromZ, toX, toZ, sp.ax, sp.az, sp.bx, sp.bz)) n += 1;
+    }
+  }
+  return n;
+}
+
+// Distance from a point to a wall segment, both in room-local metres.
+function distanceToWall(px, pz, wall) {
+  const x1 = Number(wall.x1);
+  const z1 = Number(wall.y1);
+  const x2 = Number(wall.x2);
+  const z2 = Number(wall.y2);
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const len2 = dx * dx + dz * dz;
+  if (!Number.isFinite(len2) || len2 < 1e-6) return Infinity;
+  // Project onto the segment, clamped to its ends.
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (pz - z1) * dz) / len2));
+  return Math.hypot(px - (x1 + t * dx), pz - (z1 + t * dz));
+}
+
+function PlacementGhost({ color = "#5dffb0", label, w, d, walls = [], onDrop, onCancel, onGrabChange }) {
+  const { camera, gl } = useThree();
+  const bodyRef = useRef();
+  const groupRef = useRef();
+  const home = useMemo(() => ({ x: w / 2, z: d / 2 }), [w, d]);
+  // Read every frame rather than on every event, so the block moves at frame
+  // rate and the carry stays smooth.
+  const targetRef = useRef(null);
+  const stateRef = useRef({ ...home, vx: 0, vz: 0, born: 0, held: false, fall: null });
+  // Driven per frame from the camera distance, and used for the body height,
+  // the tether length and the drop, so the three never disagree.
+  const hoverRef = useRef(HOVER_MIN_M);
+  const tetherRef = useRef();
+  // Read inside a handler that must not be rebuilt on every blueprint render.
+  const wallsRef = useRef(walls);
+  wallsRef.current = walls;
+  // Only for the label and the ring colour; the carry itself is ref-driven.
+  const [ui, setUi] = useState({ held: false, inside: true });
+
+  // A point is droppable when it is inside the room AND clear of its walls.
+  // The room bounds alone let an asset land inside a partition, which is a
+  // place it could never be and which the walker would have to shove it out of.
+  const inside = (p) => {
+    if (!p || p.x < 0 || p.x > w || p.z < 0 || p.z > d) return false;
+    const walls = wallsRef.current;
+    // Not inside the masonry itself.
+    for (const wall of walls) {
+      const half = (Number(wall.thickness) || DEFAULT_WALL_THICK) / 2;
+      if (distanceToWall(p.x, p.z, wall) < half + WALL_CLEARANCE_M) return false;
+    }
+    // And not shut inside a partition. An odd number of solid walls between
+    // the point and the open floor means it is enclosed, which is a place the
+    // asset could not walk to and could not leave: dropped there it would sit
+    // against the inside of a box forever.
+    return wallsBetween(w / 2, d / 2, p.x, p.z, walls) % 2 === 0;
+  };
+
+  // Where the cursor ray crosses the horizontal plane the block floats on.
+  //
+  // This is the whole trick, and getting it wrong is what made the block
+  // either jump on grab or trail off somewhere else. The cursor points AT the
+  // block, which is in the air. Projecting that ray onto the FLOOR gives a
+  // point well past it, so following the floor point moves the block to
+  // somewhere the hand never indicated. Projecting onto the plane at the
+  // block's own height keeps it exactly under the cursor, with nothing to
+  // correct for.
+  const planeAt = (ray, y) => {
+    if (!ray || Math.abs(ray.direction.y) < 1e-6) return null;
+    const t = (y - ray.origin.y) / ray.direction.y;
+    if (t <= 0) return null;
+    return {
+      x: ray.origin.x + ray.direction.x * t,
+      z: ray.origin.z + ray.direction.z * t,
+    };
+  };
+
+  const release = useCallback(() => {
+    const st = stateRef.current;
+    if (!st.held || st.fall) return;
+    st.held = false;
+    onGrabChange?.(false);
+    document.body.style.cursor = "auto";
+    const point = targetRef.current;
+    if (inside(point)) {
+      st.fall = { t: 0, from: hoverRef.current };
+      // Hand the point over now, not when the fall ends: the call goes out
+      // while the block is still in the air, so the network overlaps the
+      // animation instead of following it.
+      onDrop?.({ x: st.x, z: st.z });
+    } else {
+      // Released over nothing. It drifts back over the room rather than being
+      // dropped somewhere the asset could not be.
+      targetRef.current = null;
+    }
+    setUi({ held: false, inside: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDrop, onGrabChange, w, d]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onCancel?.();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerup", release);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerup", release);
+    };
+  }, [onCancel, release]);
+
+  // While the block is held the pointer is read straight from the window,
+  // not through the scene's own event system. Anything the cursor crosses on
+  // the way - an anchor, a marker, a label - handles the move and stops it
+  // travelling, which starved the carry and made it stutter. Nothing can
+  // intercept this.
+  useEffect(() => {
+    if (!ui.held) return;
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const onMove = (ev) => {
+      const st = stateRef.current;
+      if (!st.held || st.fall) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      ndc.set(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(ndc, camera);
+      const point = planeAt(raycaster.ray, hoverRef.current);
+      if (!point) return;
+      targetRef.current = point;
+      const now = inside(point);
+      setUi((cur) => (cur.inside === now ? cur : { held: true, inside: now }));
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ui.held, camera, gl, w, d]);
+
+  useEffect(() => {
+    const st = stateRef.current;
+    st.x = home.x;
+    st.z = home.z;
+    st.born = performance.now() / 1000;
+    return () => onGrabChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useFrame(({ clock, camera }, delta) => {
+    const dt = Math.min(delta || 0.016, 0.05);
+    const st = stateRef.current;
+    const g = groupRef.current;
+    const b = bodyRef.current;
+    if (!g || !b) return;
+    const t = clock.getElapsedTime();
+
+    // Follow the view, smoothed, so a zoom does not snap the block upward.
+    const dist = camera.position.distanceTo(g.position);
+    const want = Math.max(HOVER_MIN_M, Math.min(HOVER_MAX_M, dist * HOVER_RATIO));
+    hoverRef.current += (want - hoverRef.current) * Math.min(1, dt * 3);
+    const hover = hoverRef.current;
+    if (tetherRef.current) tetherRef.current.scale.y = hover;
+
+    if (st.fall) {
+      // Ease in: slow off the top, quickest just before it lands, so it reads
+      // as falling rather than sliding down. It also stops spinning and levels
+      // out, which settles the eye on the landing point.
+      st.fall.t = Math.min(1, st.fall.t + dt / FALL_S);
+      const k = st.fall.t * st.fall.t;
+      // Falls from wherever it was waiting, not from a fixed height.
+      b.position.y = st.fall.from * (1 - k);
+      b.rotation.x += (0 - b.rotation.x) * Math.min(1, dt * 6);
+      b.rotation.z += (0 - b.rotation.z) * Math.min(1, dt * 6);
+      b.rotation.y += dt * 1.2 * (1 - k);
+      const squash = st.fall.t >= 1 ? 1 : 1 + k * 0.12;
+      b.scale.set(1 / squash, squash, 1 / squash);
+      return;
+    }
+
+    // Materialise: grow from nothing with a slight overshoot, so it arrives
+    // rather than blinking into place.
+    const age = t - st.born;
+    const grow = Math.min(1, age / 0.4);
+    const pop = 1 + Math.sin(Math.min(1, age / 0.4) * Math.PI) * 0.2;
+    b.scale.setScalar(grow * pop);
+
+    // Held: chase the hand with lag, so it trails rather than being welded to
+    // the cursor. Loose: drift back over the middle of the room.
+    const target = st.held && targetRef.current ? targetRef.current : home;
+    const rate = st.held ? FOLLOW_RATE : RETURN_RATE;
+    const px = st.x;
+    const pz = st.z;
+    const k = Math.min(1, rate * dt);
+    st.x += (target.x - st.x) * k;
+    st.z += (target.z - st.z) * k;
+    st.vx = (st.x - px) / dt;
+    st.vz = (st.z - pz) / dt;
+    g.position.set(st.x, 0, st.z);
+
+    // Bank into the direction of travel, the way a carried thing swings.
+    const tiltX = Math.max(-TILT_MAX, Math.min(TILT_MAX, st.vz * TILT_PER_MS));
+    const tiltZ = Math.max(-TILT_MAX, Math.min(TILT_MAX, -st.vx * TILT_PER_MS));
+    b.rotation.x += (tiltX - b.rotation.x) * Math.min(1, dt * 7);
+    b.rotation.z += (tiltZ - b.rotation.z) * Math.min(1, dt * 7);
+    b.rotation.y += dt * 0.6;
+    // One height, held or not. Changing it on grab made the block dip the
+    // moment it was taken, which read as it slipping rather than being lifted.
+    const rest = hover;
+    b.position.y += (rest + Math.sin(t * 1.8) * 0.14 - b.position.y) * Math.min(1, dt * 5);
+  });
+
+  const showRefused = ui.held && !ui.inside;
+  const ringColor = showRefused ? REFUSED : color;
+  const caption = stateRef.current.fall
+    ? ""
+    : ui.held
+      ? (ui.inside ? "release to drop it here" : "outside the room")
+      : "drag it into the room";
+
+  return (
+    <group>
+      <group ref={groupRef}>
+        {/* Where it would land, and the line joining the two, so the point is
+            unambiguous from any camera angle. */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={() => null}>
+          <ringGeometry args={[0.66, 0.8, 48]} />
+          <meshBasicMaterial color={ringColor} transparent opacity={showRefused ? 0.5 : 0.7} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} raycast={() => null}>
+          <circleGeometry args={[0.66, 48]} />
+          <meshBasicMaterial color={ringColor} transparent opacity={0.1} />
+        </mesh>
+        {/* Unit tether, scaled per frame to the current hover, so its length
+            always joins the block to its landing point. */}
+        <group ref={tetherRef} position={[0, 0.06, 0]}>
+          <Line
+            points={[[0, 0, 0], [0, 1, 0]]}
+            color={ringColor}
+            lineWidth={1}
+            dashed
+            dashSize={0.05}
+            gapSize={0.04}
+            transparent
+            opacity={0.45}
+          />
+        </group>
+
+        <group ref={bodyRef} position={[0, HOVER_MIN_M, 0]}>
+          {/* The block is the grab target. A generous invisible hitbox, since
+              the body itself is small and a miss would feel like a dead click. */}
+          <mesh
+            onPointerDown={(e) => {
+              const st = stateRef.current;
+              if (st.fall) return;
+              e.stopPropagation();
+              st.held = true;
+              // Taken at its own height, so the grab point is where the block
+              // already is: it does not move at the moment it is picked up.
+              const at = planeAt(e.ray, hoverRef.current);
+              targetRef.current = at || { x: st.x, z: st.z };
+              onGrabChange?.(true);
+              setUi({ held: true, inside: inside(targetRef.current) });
+              document.body.style.cursor = "grabbing";
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = "grab";
+            }}
+            onPointerOut={() => {
+              document.body.style.cursor = "auto";
+            }}
+          >
+            <sphereGeometry args={[1.1, 16, 12]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+
+          <mesh raycast={() => null}>
+            <octahedronGeometry args={[0.45, 0]} />
+            <meshStandardMaterial
+              color={showRefused ? REFUSED : color}
+              emissive={showRefused ? REFUSED : color}
+              emissiveIntensity={0.8}
+              transparent
+              opacity={0.9}
+            />
+          </mesh>
+
+          {caption && (
+            <Html center distanceFactor={16} position={[0, 1.15, 0]} className="scene-label">
+              <div
+                style={{
+                  whiteSpace: "nowrap",
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10.5,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: showRefused ? REFUSED : color,
+                  background: "rgba(7,11,24,0.85)",
+                  border: `1px solid ${showRefused ? REFUSED : color}55`,
+                  borderRadius: 6,
+                  padding: "3px 8px",
+                }}
+              >
+                {label} · {caption}
+              </div>
+            </Html>
+          )}
+        </group>
+      </group>
+    </group>
+  );
+}
+
+
+// Holds the landing point while the placed asset makes its way back through
+// the fabric. Without it the block lands, vanishes, and the real marker turns
+// up a beat later, which reads as the drop having failed.
+function PlacementSettling({ x, z, color = "#5dffb0", fading = false, onDone }) {
+  const inner = useRef();
+  const outer = useRef();
+  const fadeRef = useRef(1);
+  useFrame(({ clock }, delta) => {
+    const t = clock.getElapsedTime();
+    // Once the asset is really there, this eases out underneath it rather than
+    // being cut, so the two overlap for a moment instead of flicking over.
+    if (fading) {
+      fadeRef.current = Math.max(0, fadeRef.current - (delta || 0.016) / 0.35);
+      if (fadeRef.current <= 0) onDone?.();
+    }
+    const k = fadeRef.current;
+    if (inner.current) inner.current.material.opacity = (0.45 + Math.sin(t * 6) * 0.18) * k;
+    if (outer.current) {
+      const p = (t % 1.1) / 1.1;
+      outer.current.scale.setScalar(1 + p * 1.6);
+      outer.current.material.opacity = 0.5 * (1 - p) * k;
+    }
+  });
+  return (
+    <group position={[x, 0, z]}>
+      <mesh ref={inner} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={() => null}>
+        <circleGeometry args={[0.6, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.45} />
+      </mesh>
+      <mesh ref={outer} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]} raycast={() => null}>
+        <ringGeometry args={[0.6, 0.74, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+
+// Taking an asset off the plan. The marker would otherwise simply stop being
+// drawn, which reads as a glitch rather than as something the operator did.
+function PlacementVanishing({ x, z, color = "#5dffb0", onDone }) {
+  const body = useRef();
+  const ring = useRef();
+  const t0 = useRef(null);
+  useFrame(({ clock }) => {
+    const now = clock.getElapsedTime();
+    if (t0.current === null) t0.current = now;
+    const p = Math.min(1, (now - t0.current) / 0.55);
+    if (body.current) {
+      // Lifts and shrinks away rather than fading in place, so the eye follows
+      // it off the floor.
+      body.current.position.y = 0.6 + p * 2.2;
+      body.current.scale.setScalar(Math.max(0.001, 1 - p));
+      body.current.rotation.y = p * 4;
+      body.current.material.opacity = 0.9 * (1 - p);
+    }
+    if (ring.current) {
+      ring.current.scale.setScalar(1 + p * 1.4);
+      ring.current.material.opacity = 0.6 * (1 - p);
+    }
+    if (p >= 1) onDone?.();
+  });
+  return (
+    <group position={[x, 0, z]}>
+      <mesh ref={body} position={[0, 0.6, 0]} raycast={() => null}>
+        <octahedronGeometry args={[0.45, 0]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} transparent opacity={0.9} />
+      </mesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={() => null}>
+        <ringGeometry args={[0.6, 0.74, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+
 function GradientDome({ cx = 0, cz = 0, radius = 220 }) {
   const mat = useMemo(
     () =>
@@ -979,7 +1440,7 @@ function GradientDome({ cx = 0, cz = 0, radius = 220 }) {
   );
 }
 
-function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp }) {
+function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp, inert = false }) {
   // Prefer v2 layout fields (rooms[0]) when present; legacy v1 (room_w / room_h /
   // aps / walls) still works as a fallback.
   const room = layout?.rooms?.[0] || null;
@@ -1067,7 +1528,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         openings={perimeterOpenings}
       />
       <InnerWalls walls={walls} defaultHeight={ceiling} />
-      <OriginAxes span={span} />
+      <OriginAxes span={span} inert={inert} />
 
       {allAps.map((ap) => {
         // Anchors stay mounted when a layer is toggled off; `hidden` scales them
@@ -1078,6 +1539,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         const dimmed = relevantAnchorIds != null && !relevantAnchorIds.has(ap.id);
         return (
           <ApMarker
+            inert={inert}
             key={ap.id}
             id={ap.id}
             x={ap.x}
@@ -1091,7 +1553,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         );
       })}
 
-      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} frame={frame} />
+      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} frame={frame} inert={inert} />
     </>
   );
 }
@@ -1134,9 +1596,14 @@ function CameraRig({ homePos, target, signal, controlsRef }) {
   return null;
 }
 
-export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, recenterSignal = 0, onSelectDevice, onSelectAp, onLayoutLoaded }) {
+export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, recenterSignal = 0, onSelectDevice, onSelectAp, onLayoutLoaded, placing = null, settling = null, vanishing = null, onPlaced, onCancelPlacing, onSettled, onVanished }) {
   const [layout, setLayout] = useState(null);
   const controlsRef = useRef();
+  // True while the block is being carried. The scene stops taking pointer
+  // events for as long as it is: the carry is driven from the window, so
+  // nothing in the scene needs them, and letting anchors and markers light up
+  // under a cursor that is busy moving something else is only noise.
+  const [carrying, setCarrying] = useState(false);
 
   // The blueprint comes from the CAMARA gateway (which proxies the engine, the
   // blueprint authority). The demo is a MEC app: it talks only to the gateway,
@@ -1162,8 +1629,14 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
     };
   }, [token, onLayoutLoaded]);
 
-  const w = layout?.room_w ?? FLOOR_W;
-  const d = layout?.room_h ?? FLOOR_D;
+  // Same derivation Scene uses to draw the room, so the placement bounds and
+  // the drawn walls can never describe different rooms. Reading only the
+  // legacy top-level fields happened to agree on the current blueprint and
+  // would not on one that carries rooms[] alone.
+  const room0 = layout?.rooms?.[0] || null;
+  const w = (room0 ? Number(room0.width_m) : layout?.room_w) ?? FLOOR_W;
+  const d = (room0 ? Number(room0.height_m) : layout?.room_h) ?? FLOOR_D;
+  const walls = (room0?.walls ?? layout?.walls) ?? [];
   const cx = w / 2;
   const cz = d / 2;
   const span = Math.max(w + 2 * MARGIN, d + 2 * MARGIN);
@@ -1183,6 +1656,7 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
 
   return (
     <div style={{ position: "relative", height: "100%", minHeight: 0 }}>
+
       {/* Bulletproof: scene labels (drei Html) must never intercept the raycast,
           otherwise a label sitting over a marker eats hover/click. drei only
           sets pointer-events on the inner div; force it off on the wrapper too. */}
@@ -1192,14 +1666,58 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
         frameloop="demand"
         camera={{ position: [cx + span * 0.32, span * 0.5, cz + span * 0.62], fov: 50 }}
         gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
-        style={{ height: "100%", borderRadius: 0, background: "#070b18", touchAction: "none" }}
+        style={{
+          height: "100%",
+          borderRadius: 0,
+          background: "#070b18",
+          touchAction: "none",
+          pointerEvents: carrying ? "none" : "auto",
+        }}
         onPointerMissed={() => {
+          if (placing) return;
           if (Date.now() - pickedAtRef.current < 250) return;
           onSelectDevice?.(null);
         }}
       >
         <RenderTick fps={30} />
+        {placing && (
+          <PlacementGhost
+            color={placing.color}
+            label={placing.label}
+            w={w}
+            d={d}
+            walls={walls}
+            onDrop={(point) => onPlaced?.(placing.assetId, point)}
+            onCancel={() => onCancelPlacing?.()}
+            // Carrying the block and orbiting the camera are the same gesture.
+            // While it is held the camera stays put, or the room swings around
+            // under the thing being positioned.
+            onGrabChange={(held) => {
+              setCarrying(held);
+              const c = controlsRef.current;
+              if (c) c.enabled = !held;
+            }}
+          />
+        )}
+        {settling && (
+          <PlacementSettling
+            x={settling.x}
+            z={settling.z}
+            color={settling.color}
+            fading={settling.fading}
+            onDone={() => onSettled?.(settling.assetId)}
+          />
+        )}
+        {vanishing && (
+          <PlacementVanishing
+            x={vanishing.x}
+            z={vanishing.z}
+            color={vanishing.color}
+            onDone={() => onVanished?.(vanishing.assetId)}
+          />
+        )}
         <Scene
+          inert={Boolean(placing)}
           positions={positions}
           layout={layout}
           visibleTechs={visibleTechs}

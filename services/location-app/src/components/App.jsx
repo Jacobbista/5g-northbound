@@ -9,6 +9,7 @@ import { useSelection } from "../hooks/useSelection";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
 import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
 import { livenessFor, recordLastSeen } from "../lib/liveness";
+import { placeAsset, placeableSources, removeAsset } from "../lib/placement";
 import { FloorPlanScene, TECH_KEYS } from "./FloorPlanScene";
 import { DetailPanel } from "./DetailPanel";
 
@@ -656,7 +657,23 @@ const mockPill = {
   fontFamily: "ui-monospace, monospace",
 };
 
-function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggleShown, frame }) {
+// Puts the asset on the plan, or takes it off. Borrows the asset's own colour
+// when it is off the plan, so the one row control that starts an action reads
+// as belonging to that asset rather than as another status chip.
+const placeBtn = (placed, color) => ({
+  background: "transparent",
+  border: `1px solid ${placed ? "rgba(255,255,255,0.18)" : `${color}66`}`,
+  color: placed ? "#9aa9c4" : color,
+  borderRadius: 6,
+  width: 22,
+  height: 22,
+  cursor: "pointer",
+  fontSize: 12,
+  lineHeight: 1,
+  flexShrink: 0,
+});
+
+export function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggleShown, frame, placeable = false, placed = false, placing = false, onPlace, onRemove, onCancelPlace }) {
   const center = position?.area?.center;
   // Liveness is intrinsic to the asset, not to whether it is shown: the pill
   // reads live/offline from the stream regardless of the eye toggle.
@@ -696,6 +713,32 @@ function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggl
           {device.label}
         </strong>
         <span style={statusPill(state)}>{state}</span>
+        {placeable && (
+          <button
+            type="button"
+            // A placement already under way counts as on the plan for this
+            // control: the block is out there floating, so the thing to offer
+            // is putting it away, not starting again.
+            style={placeBtn(placed || placing, device.color)}
+            title={placing
+              ? "Cancel and put it away"
+              : placed
+                ? "Take it off the floor plan"
+                : "Place it on the floor plan"}
+            aria-label={placing
+              ? "Cancel placing"
+              : placed
+                ? "Take off the floor plan"
+                : "Place on the floor plan"}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (placing) onCancelPlace?.(device.assetId);
+              else (placed ? onRemove : onPlace)?.(device.assetId);
+            }}
+          >
+            {placed || placing ? "⤒" : "⤓"}
+          </button>
+        )}
         <button
           type="button"
           style={{
@@ -722,6 +765,7 @@ function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, onToggl
         >
           {device.assetId} · {device.kind} · {device.source}
         </span>
+
         {device.source === "synthetic" && (
           <span style={mockPill} title="Synthetic source - waypoint walker, not real hardware">
             synthetic
@@ -923,7 +967,70 @@ export function App() {
   const allAssetIds = devices.map((d) => d.assetId);
   const { isSelected, toggle } = useSelection(allAssetIds);
   const adapters = useAdapterHealth(token, { paused });
-  const { byDeviceId, connected } = usePositionsStream(token, { paused });
+  // Sources that synthesise their position, so where an asset starts is a
+  // choice rather than a fact. Their assets can be dragged onto the plan.
+  const placeable = useMemo(() => placeableSources(adapters), [adapters]);
+  const [placementError, setPlacementError] = useState(null);
+  // The asset currently being positioned, or null. While set, the scene shows
+  // the block itself hovering over the plan and a click drops it.
+  const [placing, setPlacing] = useState(null);
+  // The landing point, held from the drop until the asset reports from it.
+  const [settling, setSettling] = useState(null);
+  // The last place an asset stood, held just long enough to show it leaving.
+  const [vanishing, setVanishing] = useState(null);
+  // What we just did, per asset, until the stream catches up. Reading "on the
+  // plan" from liveness alone flickers right after an action: a placed asset
+  // reads offline until its first fix arrives, so the row offered to place it
+  // again, and a removed one reads live until its last fix ages out.
+  const [placedIntent, setPlacedIntent] = useState({});
+
+  // Nothing is refreshed after either call: the asset appears and disappears
+  // through the position stream, the same path any source going quiet or
+  // coming back already takes.
+  // The drop hands over while the block is still falling, so the call and the
+  // animation overlap. The landing point stays lit until the asset comes back
+  // through the stream, otherwise the block lands, vanishes, and the real
+  // marker turns up a beat later, which reads as the drop having failed.
+  const handlePlaced = async (assetId, point) => {
+    const color = placing?.color;
+    setPlacing(null);
+    setSettling({ assetId, x: point.x, z: point.z, color });
+    try {
+      const landed = await placeAsset(token, assetId, point);
+      setPlacementError(null);
+      setPlacedIntent((cur) => ({ ...cur, [assetId]: true }));
+      // The source clamps the point into the room, so move the mark to where
+      // it actually went rather than where it was asked to go.
+      if (typeof landed?.x === "number") {
+        setSettling((cur) => (cur?.assetId === assetId ? { ...cur, x: landed.x, z: landed.z } : cur));
+      }
+    } catch (err) {
+      setPlacementError(err.message);
+      setSettling((cur) => (cur?.assetId === assetId ? null : cur));
+    }
+  };
+
+  const handleRemoveAsset = async (assetId, positioningId, color) => {
+    // Where it stood, before the entry goes. A marker that simply stops being
+    // drawn reads as a glitch rather than as something the operator did.
+    const center = byAsset[assetId]?.position?.area?.center;
+    const at = center && gpsToLocal(center.latitude, center.longitude, frameFromLayout(layout));
+    try {
+      await removeAsset(token, assetId);
+      setPlacementError(null);
+      setPlacedIntent((cur) => ({ ...cur, [assetId]: false }));
+      // The stream keeps a last-known fix for a source that goes quiet, which
+      // is right for one that missed a beat and wrong for one just taken off.
+      if (positioningId) forget(positioningId);
+      // The marker and its trail go with the stream entry. Let that land
+      // first, then show the asset leaving: playing the two together left the
+      // effect sitting on top of a track that vanished from under it.
+      if (at) setTimeout(() => setVanishing({ assetId, x: at.x, z: at.z, color }), 120);
+    } catch (err) {
+      setPlacementError(err.message);
+    }
+  };
+  const { byDeviceId, connected, forget } = usePositionsStream(token, { paused });
 
   // Index every registered asset against the live stream by its internal
   // positioningId (the WS payload key). Assets without a stream entry get
@@ -943,6 +1050,45 @@ export function App() {
   // Remember the last position each asset reported, so an asset that goes
   // offline can still show its last known fix in the detail panel (the stream
   // stops carrying it, but a client-side memory does not). Keeps the most
+  // On the plan means currently reporting, except just after an action, where
+  // what we did outranks a stream that has not caught up yet.
+  const streamPlaced = (position, assetId) =>
+    Boolean(position) &&
+    !["offline", "stale"].includes(deviceState({ position, deviceId: assetId }));
+  const isPlaced = (assetId, position) => {
+    const intent = placedIntent[assetId];
+    return intent === undefined ? streamPlaced(position, assetId) : intent;
+  };
+
+  // Let go of an intent as soon as the stream says the same thing, so a failed
+  // or externally undone change cannot pin the row to a lie.
+  useEffect(() => {
+    setPlacedIntent((cur) => {
+      const next = {};
+      let changed = false;
+      for (const [assetId, intent] of Object.entries(cur)) {
+        if (streamPlaced(byAsset[assetId]?.position, assetId) === intent) changed = true;
+        else next[assetId] = intent;
+      }
+      return changed ? next : cur;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byAsset]);
+
+  // The landing mark hands over to the real marker the moment the asset
+  // reports from where it was dropped, so the two never overlap and there is
+  // never a gap with nothing on the floor.
+  useEffect(() => {
+    if (!settling) return;
+    const position = byAsset[settling.assetId]?.position;
+    if (!position) return;
+    const state = deviceState({ position, deviceId: settling.assetId });
+    if (state === "offline" || state === "stale") return;
+    // Start the fade rather than clearing outright: the mark eases out under
+    // the marker that has just arrived, so the two overlap for a moment.
+    setSettling((cur) => (cur && !cur.fading ? { ...cur, fading: true } : cur));
+  }, [settling, byAsset]);
+
   // recent non-null position per asset for the session.
   const lastFixRef = useRef({});
   useEffect(() => {
@@ -1138,6 +1284,11 @@ export function App() {
               discovery failed: {devicesError}
             </div>
           )}
+          {placementError && (
+            <div style={{ color: "#ff6b78", fontSize: 12, padding: 10 }}>
+              placement failed: {placementError}
+            </div>
+          )}
           {!devicesLoading && devices.length === 0 && !devicesError && (
             <div style={{ color: "#7a8aab", fontSize: 12, padding: 10 }}>no devices registered</div>
           )}
@@ -1155,6 +1306,12 @@ export function App() {
                   onOpenDetail={(dev) => setSelection({ kind: "device", device: dev })}
                   onToggleShown={toggle}
                   frame={frameFromLayout(layout)}
+                  placeable={placeable.has(d.source)}
+                  placed={isPlaced(d.assetId, entry?.position)}
+                  placing={placing?.assetId === d.assetId}
+                  onCancelPlace={() => setPlacing(null)}
+                  onPlace={(assetId) => setPlacing({ assetId, label: d.label, color: d.color })}
+                  onRemove={(assetId) => handleRemoveAsset(assetId, d.positioningId, d.color)}
                 />
               </div>
             );
@@ -1179,6 +1336,13 @@ export function App() {
           onSelectDevice={(d) => setSelection(d ? { kind: "device", device: d } : null)}
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
           onLayoutLoaded={setLayout}
+          placing={placing}
+          settling={settling}
+          vanishing={vanishing}
+          onPlaced={handlePlaced}
+          onSettled={() => setSettling(null)}
+          onVanished={() => setVanishing(null)}
+          onCancelPlacing={() => setPlacing(null)}
         />
         {/* Floating overlay on the scene - never resizes the canvas. */}
         <div

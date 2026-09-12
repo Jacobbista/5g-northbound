@@ -164,12 +164,16 @@ services:
       # The walker can synthesise a position for any id; scope it so it 404s for
       # devices it does not own, keeping engine fan-out (no DEVICE_MAP) clean.
       DEVICE_IDS: "synthetic-demo-01"
+      # Demo behaviour: the synthetic asset reports nothing until an operator
+      # drops it on the floor plan, and nothing again once removed. Without
+      # this it walks from boot, which is the standalone default.
+      SPAWN_REQUIRED: "true"
       # Fixed anchors this on-premise RTLS substitute exposes: surfaced on
       # /devices as role=infrastructure (never onboarded as assets), so the demo
       # exercises both onboarding classes. SOURCE_CLASS tags the technology.
       ANCHOR_IDS: "synthetic-anchor-01,synthetic-anchor-02"
       SOURCE_CLASS: "uwb"
-      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"metre","devices":true}'
+      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"metre","devices":true,"placement":true}'
     depends_on:
       positioning-engine:
         condition: service_healthy

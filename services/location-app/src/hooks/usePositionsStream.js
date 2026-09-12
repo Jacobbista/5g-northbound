@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CAMARA_API_BASE } from "../config";
 
 // Live position feed from the gateway's WebSocket.
@@ -117,5 +117,18 @@ export function usePositionsStream(token, { paused = false } = {}) {
     };
   }, [token, paused]);
 
-  return { byDeviceId, connected };
+  // Drop one device's last-known fix. The map otherwise keeps it forever, on
+  // purpose: a source that misses a beat should read as stale rather than
+  // vanish. That is wrong for a device deliberately taken off the plan, where
+  // the last fix is no longer something the operator wants to see.
+  const forget = useCallback((positioningId) => {
+    setByDeviceId((prev) => {
+      if (!(positioningId in prev)) return prev;
+      const next = { ...prev };
+      delete next[positioningId];
+      return next;
+    });
+  }, []);
+
+  return { byDeviceId, connected, forget };
 }
