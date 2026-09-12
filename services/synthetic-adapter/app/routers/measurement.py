@@ -21,6 +21,9 @@ async def get_measurement(device_id: str, request: Request):
         raise HTTPException(404, detail=f"{device_id} not served by this mock")
     walker = request.app.state.walker
     x, y, z, ts = walker.step(device_id)
+    # Synthesised, not measured: read after the step that advanced the quality
+    # they map from, so the pair matches the fix just produced.
+    accuracy, confidence = walker.fidelity(device_id)
     # The walker steps in room-local (canvas-y); lift to the engine's
     # documented `local` frame (floor-plan-local, north-up) before emitting.
     fx, fz = walker.project_to_floor_plan(x, z)
@@ -30,7 +33,7 @@ async def get_measurement(device_id: str, request: Request):
         x=round(fx, 4),
         y=round(y, 4),
         z=round(fz, 4),
-        accuracy=settings.accuracy_m,
-        confidence=settings.confidence,
+        accuracy=accuracy,
+        confidence=confidence,
         timestamp=ts,
     )

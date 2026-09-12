@@ -39,9 +39,30 @@ class Settings(BaseSettings):
     # the room geometry. When unset, the walker just rectangles inside the
     # AABB defined by width_m × depth_m.
     layout_path: str | None = None
-    # Fixed reported accuracy and confidence for the synthetic measurement.
-    accuracy_m: float = 1.5
-    confidence: float = 0.6
+    # Reported accuracy and confidence are synthesised per fix, not frozen.
+    # There is no measurement behind them: this adapter locates nothing. They
+    # stand in for what a source of the declared accuracy_class would report,
+    # so that everything downstream (fusion weighting, the rendered radius, the
+    # demo's imprecise threshold) receives a realistic distribution instead of
+    # one constant that exercises no branch.
+    #
+    # Indoor error is not symmetric. An obstructed path makes the first arrival
+    # LONGER than the truth and never shorter, and inverting RSSI to a distance
+    # turns the log-normal shadowing of the dB domain into a right-skewed
+    # spread in metres. So the generator sits near the good end of the band and
+    # excursions run toward the bad end, never past either edge: the band is
+    # what accuracy_class declares, and a draw outside it would contradict the
+    # declaration.
+    accuracy_min_m: float = 1.5
+    accuracy_max_m: float = 6.0
+    confidence_min: float = 0.35
+    confidence_max: float = 0.95
+    # Quality is autocorrelated, not redrawn per tick: indoor degradation comes
+    # in episodes (an obstruction between a tag and the anchors lasts seconds,
+    # not milliseconds). Independent draws would give the right histogram and
+    # the wrong texture, a radius that flickers like a rendering fault.
+    degrade_probability: float = 0.015   # per second, chance an episode starts
+    degrade_seconds: float = 8.0         # how long one lasts
     # Seed for reproducible trajectories; 0 = non-deterministic.
     rng_seed: int = 0
 

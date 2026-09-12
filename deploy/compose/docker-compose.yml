@@ -169,7 +169,7 @@ services:
       # exercises both onboarding classes. SOURCE_CLASS tags the technology.
       ANCHOR_IDS: "synthetic-anchor-01,synthetic-anchor-02"
       SOURCE_CLASS: "uwb"
-      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"coarse","devices":true}'
+      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"local","streaming":false,"z":true,"accuracy_class":"metre","devices":true}'
     depends_on:
       positioning-engine:
         condition: service_healthy

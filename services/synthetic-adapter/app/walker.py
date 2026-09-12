@@ -30,6 +30,21 @@ _ROOM_INSET_M = 0.5
 # device should still only advance a few seconds' worth of distance.
 _MAX_DT_S = 2.0
 
+# Quality relaxes back toward this level between episodes, and sinks toward
+# this floor during one. Neither is reached exactly: the pull is proportional
+# to the remaining gap, so the value keeps moving without ever snapping.
+_QUALITY_BASELINE = 0.92
+_QUALITY_DEGRADED = 0.15
+# Fraction of the remaining gap closed per second. Slow enough that the
+# rendered radius breathes rather than flickers.
+_QUALITY_RATE_PER_S = 0.55
+# Jitter added per second of drift, so a clean stretch is not a flat line.
+_QUALITY_JITTER = 0.05
+# Curve applied to (1 - quality) when mapping onto the accuracy band. Above 1
+# it pushes the mass toward the good end and leaves a thin tail toward the
+# bad one, which is the shape indoor error actually has.
+_ACCURACY_SKEW = 2.2
+
 
 @dataclass
 class _Segment:
@@ -58,6 +73,14 @@ class _State:
     z: float
     waypoint: Optional[tuple[float, float]] = None
     last_ts: float = 0.0
+    # Fix quality in [0, 1], 1 = clean. One latent variable drives both the
+    # reported accuracy and the reported confidence, because in a real source
+    # they move together: an obstructed or badly-conditioned fix is both less
+    # precise AND less trusted. Drawing them independently would emit pairs no
+    # real source produces, and the fusion weight is literally
+    # `confidence / accuracy`, so the pair is exactly what matters.
+    quality: float = 1.0
+    degraded_until: float = 0.0
 
 
 def _segments_intersect(
@@ -367,6 +390,7 @@ class WaypointWalker:
         # arrive seconds later, but capped so a long gap can't teleport it.
         dt = min(_MAX_DT_S, max(0.0, now - st.last_ts))
         st.last_ts = now
+        self._advance_quality(st, rng, dt, now)
 
         # Pick a waypoint if needed.
         if st.waypoint is None:
@@ -395,6 +419,47 @@ class WaypointWalker:
         if moved < advance * 0.8:
             st.waypoint = None
         return st.x, st.y, st.z, now
+
+    def _advance_quality(self, st: _State, rng: random.Random, dt: float, now: float) -> None:
+        """Move fix quality one tick, in episodes rather than per-tick noise.
+
+        Between episodes quality relaxes toward the baseline. With a small
+        chance per second it drops into a degraded stretch lasting a few
+        seconds, the way a tag passing behind a rack loses its clean paths for
+        as long as it is back there. The pull is a fraction of the remaining
+        gap per second, so the behaviour does not change if the poll rate does.
+        """
+        if dt <= 0.0:
+            return
+        if now >= st.degraded_until and rng.random() < self._cfg.degrade_probability * dt:
+            st.degraded_until = now + self._cfg.degrade_seconds
+        target = _QUALITY_DEGRADED if now < st.degraded_until else _QUALITY_BASELINE
+        pull = min(1.0, _QUALITY_RATE_PER_S * dt)
+        q = st.quality + (target - st.quality) * pull
+        q += rng.uniform(-_QUALITY_JITTER, _QUALITY_JITTER) * dt
+        st.quality = self._clamp(q, 0.0, 1.0)
+
+    def fidelity(self, device_id: str) -> tuple[float, float]:
+        """(accuracy in metres, confidence in [0, 1]) for this device's current
+        fix quality. Both are synthesised, not measured: this adapter locates
+        nothing. Read after `step`, which advances the quality they map from.
+
+        Accuracy rides `(1 - quality)` through a curve above 1, so the value
+        sits near the good end of the band and runs toward the bad end only
+        during a degraded stretch. Confidence tracks quality directly, which
+        keeps the pair coherent: the fixes that read as imprecise are the same
+        fixes that read as untrusted.
+        """
+        cfg = self._cfg
+        st = self._state.get(device_id)
+        q = st.quality if st is not None else _QUALITY_BASELINE
+        lo, hi = cfg.accuracy_min_m, cfg.accuracy_max_m
+        accuracy = lo + (hi - lo) * ((1.0 - q) ** _ACCURACY_SKEW)
+        confidence = cfg.confidence_min + (cfg.confidence_max - cfg.confidence_min) * q
+        return (
+            round(self._clamp(accuracy, lo, hi), 2),
+            round(self._clamp(confidence, cfg.confidence_min, cfg.confidence_max), 3),
+        )
 
 
 # Backwards-compatible alias. Anything importing `RandomWalker` (tests,

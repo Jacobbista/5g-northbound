@@ -12,4 +12,8 @@ capabilities:
   devices: true         # exposes /devices (configured device inventory for onboarding)
   streaming: false      # pull-only (no push channel)
   z: true               # provides a vertical (height) component
-  accuracy_class: coarse  # coarse | metre | sub-metre
+  # The band it reports inside, per spec/private-profile/accuracy-class-vocabulary.json.
+  # It was `coarse` while it emitted a fixed 1.5m, which is not coarse under any
+  # reading. `coarse` is not a way to say "this source is fake": that is what
+  # `source: synthetic` says, on its own axis.
+  accuracy_class: metre

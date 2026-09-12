@@ -6,6 +6,7 @@ from app.walker import (
     _crossing_blocked,
     _Segment,
     _segments_intersect,
+    _State,
 )
 
 
@@ -97,3 +98,71 @@ def test_crossing_blocked_respects_ranges():
     assert _crossing_blocked(5.0, []) is True
     assert _crossing_blocked(5.0, [(4.0, 6.0)]) is False
     assert _crossing_blocked(3.0, [(4.0, 6.0)]) is True
+
+
+def _fidelity_series(cfg, device="d1", ticks=600, dt=1.0):
+    """Drive one device's quality over simulated time and collect what it would
+    report. Steps the model directly with an explicit dt so the series does not
+    depend on the wall clock or on how fast the test machine runs."""
+    w = WaypointWalker(cfg)
+    w._state[device] = _State(x=1.0, y=1.0, z=1.0, last_ts=0.0)
+    rng = w._rng_for(device)
+    out = []
+    for i in range(ticks):
+        w._advance_quality(w._state[device], rng, dt, i * dt)
+        out.append(w.fidelity(device))
+    return out
+
+
+def test_fidelity_stays_inside_the_declared_band():
+    # A draw outside the band would contradict the adapter's own accuracy_class
+    # declaration, which is the whole point of declaring one.
+    cfg = Settings(width_m=10.0, depth_m=10.0, height_m=3.0, rng_seed=1)
+    for accuracy, confidence in _fidelity_series(cfg):
+        assert cfg.accuracy_min_m <= accuracy <= cfg.accuracy_max_m
+        assert cfg.confidence_min <= confidence <= cfg.confidence_max
+
+
+def test_fidelity_is_reproducible_under_a_seed():
+    # `rng_seed` already promises reproducible trajectories. The synthesised
+    # fidelity draws from the same per-device RNG, so it keeps that promise.
+    cfg = lambda: Settings(width_m=10.0, depth_m=10.0, height_m=3.0, rng_seed=7)
+    assert _fidelity_series(cfg()) == _fidelity_series(cfg())
+
+
+def test_accuracy_and_confidence_move_together():
+    # One latent quality drives both, so a worse radius always comes with less
+    # confidence. Independent draws would emit pairs no real source produces,
+    # and the fusion weight is confidence over accuracy, so the pair is what
+    # actually matters.
+    cfg = Settings(width_m=10.0, depth_m=10.0, height_m=3.0, rng_seed=3)
+    samples = _fidelity_series(cfg)
+    worst = max(samples, key=lambda s: s[0])
+    best = min(samples, key=lambda s: s[0])
+    assert worst[1] < best[1]
+
+
+def test_accuracy_is_skewed_toward_the_good_end():
+    # Indoor error is not symmetric: an obstructed path lengthens the measured
+    # distance and never shortens it. Most fixes sit near the good end of the
+    # band with a thin tail toward the bad one, so the median lands well below
+    # the midpoint, which a symmetric draw would not do.
+    cfg = Settings(width_m=10.0, depth_m=10.0, height_m=3.0, rng_seed=11)
+    samples = sorted(s[0] for s in _fidelity_series(cfg))
+    median = samples[len(samples) // 2]
+    assert median < (cfg.accuracy_min_m + cfg.accuracy_max_m) / 2
+    # The tail is real, not a flat line: degraded stretches do occur.
+    assert samples[-1] > median
+
+
+def test_quality_degrades_in_episodes_not_per_tick():
+    # Indoor degradation lasts seconds. A stretch that dips must stay dipped
+    # for several consecutive ticks rather than flicker back immediately.
+    cfg = Settings(width_m=10.0, depth_m=10.0, height_m=3.0, rng_seed=5)
+    series = [a for a, _ in _fidelity_series(cfg, ticks=800)]
+    threshold = (cfg.accuracy_min_m + cfg.accuracy_max_m) / 2
+    longest = run = 0
+    for a in series:
+        run = run + 1 if a > threshold else 0
+        longest = max(longest, run)
+    assert longest >= 3, "degradation is flickering per tick, not lasting"
