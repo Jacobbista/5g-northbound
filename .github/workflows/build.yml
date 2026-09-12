@@ -86,11 +86,12 @@ jobs:
           # provenance rides the immutable sha256 digest every image already has.
           flavor: latest=false
 
-      # The gateway self-serves the profile contracts (GET /contracts) and the
-      # vendor-adapter bakes the normative diagnostics vocabulary it routes
-      # against. Both live at the repo root, outside their build contexts, so
-      # stage them in first.
-      - if: matrix.image == 'camara-gateway' || matrix.image == 'vendor-adapter'
+      # Three images bake a normative artefact from the repo root, which sits
+      # outside their build contexts: the gateway self-serves the profile
+      # contracts (GET /contracts), the vendor-adapter routes against the
+      # diagnostics vocabulary, and the engine resolves accuracy-class bands.
+      # Stage them in first, or the COPY has nothing to copy.
+      - if: matrix.image == 'camara-gateway' || matrix.image == 'vendor-adapter' || matrix.image == 'positioning-engine'
         run: make stage-contracts
 
       - uses: docker/build-push-action@v7
