@@ -362,6 +362,16 @@ async def get_adapter_status() -> list[dict] | None:
         return None
 
 
+async def adapter_base_url(source: str) -> str | None:
+    """The base URL of the adapter serving `source`, or None when the engine
+    cannot be reached or nothing serves it. Built on the same /adapters read
+    the health proxy uses, so there is one path to the registry, not two."""
+    for a in (await get_adapter_status() or []):
+        if a.get("name") == source:
+            return a.get("baseUrl")
+    return None
+
+
 async def get_engine_devices() -> list[dict] | None:
     """Vendor extension: proxy the engine's GET /devices aggregate (discoverable
     devices across live sources) for the onboarding flow. Returns the list, or

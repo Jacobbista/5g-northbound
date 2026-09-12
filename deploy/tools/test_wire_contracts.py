@@ -211,7 +211,7 @@ def test_gateway_reads_the_adapter_fields_the_engine_reports():
     emitted |= _names(registry, r"^                ([a-zA-Z]+)=")
     # The envelope the router wraps the list in.
     emitted |= _names(router, r'return \{"([a-zA-Z]+)": registry')
-    read = _reads("services/camara-gateway/app/routers/diagnostics.py", "_adapter_base_url")
+    read = _reads("services/camara-gateway/app/position.py", "adapter_base_url")
     missing = read - emitted
     assert not missing, f"the gateway reads adapter fields the engine never reports: {sorted(missing)}"
 
