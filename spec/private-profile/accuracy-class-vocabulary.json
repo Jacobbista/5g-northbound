@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "description": "Normative accuracy-class taxonomy for the private-asset profile. An adapter declares the band its technology nominally delivers (`accuracy_class` in its adapter.contract.yaml, or in ADAPTER_CAPABILITIES at deploy time). The gateway publishes this artifact (GET /contracts/accuracy-class-vocabulary.json) and aggregates the declared bands into GET /capabilities; the engine reads it to resolve a nominal accuracy for a source that reports none per fix.",
+  "unit": "m",
+  "provenance": "The boundaries below are defined by this profile, not adopted from an external standard. No positioning standard we found defines a comparable discrete taxonomy: omlox specifies accuracy as a continuous value with no classes, and 3GPP TR 38.855 publishes accuracy targets per public-network use case (regulatory, commercial, industrial), a framing whose regulatory and outdoor scope does not describe a private indoor deployment. The boundaries are chosen here and sanity-checked against those published figures for order of magnitude only.",
+  "semantics": "A class states what a technology nominally delivers. It is not a bound on any individual fix: a degraded fix reports its own worse accuracy honestly rather than changing the source's class. Where a source reports no per-fix accuracy at all, a bounded class resolves to its `upperBound`, which claims the worst of the band rather than a flattering midpoint.",
+  "classes": {
+    "sub-metre": {
+      "lowerBound": 0,
+      "upperBound": 1,
+      "description": "Ranging-based indoor positioning, typically UWB. Nominally better than one metre."
+    },
+    "metre": {
+      "lowerBound": 1,
+      "upperBound": 10,
+      "description": "Trilateration or fingerprinting against fixed anchors, typically WiFi RSSI. Nominally a few metres."
+    },
+    "coarse": {
+      "lowerBound": 10,
+      "description": "Nominally worse than ten metres. Open-ended upward, so it resolves to no value on its own: an adapter declaring this class must also declare its own `nominalAccuracy`."
+    }
+  }
+}

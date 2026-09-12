@@ -88,6 +88,17 @@ by numeric id and labels it "Battery Level"; it defines no JSON field name, so
 source lives in the `standard` field of
 `spec/private-profile/diagnostics-vocabulary.json`.
 
+**Not everything can be anchored, and saying so is part of the contract.** The
+accuracy-class taxonomy (`coarse` / `metre` / `sub-metre`, declared by each
+adapter) has no external source to borrow from: omlox specifies accuracy as a
+continuous value with no classes, and 3GPP TR 38.855 publishes targets per
+public-network use case, a regulatory and outdoor framing that does not describe
+a private indoor deployment. The boundaries are this profile's own. Rather than
+leave that implicit, `spec/private-profile/accuracy-class-vocabulary.json`
+carries a `provenance` field that states it, so a reader can tell a borrowed
+definition from one we chose. An unanchored definition is legitimate. An
+unanchored definition presented as a borrowed one is not.
+
 ### The convention
 
 - **Field names are lowerCamelCase.** `assetId`, `positioningId`,
@@ -141,6 +152,7 @@ Take each `<path>` and prefix it with a base above.
 | Hop-log schema | `schema/hop-log.schema.json` | this project | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
 | Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
+| Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares-about-itself)) |
 | Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
