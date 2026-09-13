@@ -4,7 +4,11 @@ import { CAMARA_API_BASE } from "../config";
 // Fetches the gateway's device-diagnostics extension for one asset on demand
 // (device selection), not on the stream cadence. Vendor fidelity: link quality,
 // accuracy provenance, motion. Pass null to clear.
-export function useDeviceDiagnostics(token, assetId) {
+//
+// `enabled` is whether the asset's source advertises diagnostics at all. A
+// source that does not (wifi, synthetic) has nothing to answer, so the panel
+// does not ask, instead of asking and collecting a 404 on every selection.
+export function useDeviceDiagnostics(token, assetId, enabled = true) {
   const [diagnostics, setDiagnostics] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +21,7 @@ export function useDeviceDiagnostics(token, assetId) {
   }, [assetId]);
 
   useEffect(() => {
-    if (!token || !assetId) {
+    if (!token || !assetId || !enabled) {
       setDiagnostics(null);
       return;
     }
@@ -39,7 +43,7 @@ export function useDeviceDiagnostics(token, assetId) {
     return () => {
       cancelled = true;
     };
-  }, [token, assetId]);
+  }, [token, assetId, enabled]);
 
   return { diagnostics, loading, error };
 }

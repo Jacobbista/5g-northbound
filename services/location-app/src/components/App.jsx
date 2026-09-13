@@ -9,6 +9,7 @@ import { useSelection } from "../hooks/useSelection";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
 import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
 import { livenessFor, recordLastSeen } from "../lib/liveness";
+import { sourcesAdvertising } from "../lib/capabilities";
 import { placeAsset, placeableSources, removeAsset } from "../lib/placement";
 import { FloorPlanScene, TECH_KEYS } from "./FloorPlanScene";
 import { DetailPanel } from "./DetailPanel";
@@ -970,6 +971,9 @@ export function App() {
   // Sources that synthesise their position, so where an asset starts is a
   // choice rather than a fact. Their assets can be dragged onto the plan.
   const placeable = useMemo(() => placeableSources(adapters), [adapters]);
+  // Sources whose adapter serves vendor diagnostics. The panel asks only
+  // those; the others have nothing to answer.
+  const diagnosable = useMemo(() => sourcesAdvertising(adapters, "diagnostics"), [adapters]);
   const [placementError, setPlacementError] = useState(null);
   // The asset currently being positioned, or null. While set, the scene shows
   // the block itself hovering over the plan and a click drops it.
@@ -1128,7 +1132,11 @@ export function App() {
   // neighbours) or its technology decide which anchors stay bright; the rest
   // recede. Null when nothing is focused (neutral overview).
   const focusedDevice = selection?.kind === "device" ? selection.device : null;
-  const { diagnostics: focusDiag } = useDeviceDiagnostics(token, focusedDevice?.assetId || null);
+  const { diagnostics: focusDiag } = useDeviceDiagnostics(
+    token,
+    focusedDevice?.assetId || null,
+    diagnosable.has(focusedDevice?.source)
+  );
   const relevance = useMemo(() => {
     if (!focusedDevice) return null;
     const anchors = (layout?.rooms?.[0]?.anchors ?? layout?.aps) ?? [];
@@ -1389,6 +1397,9 @@ export function App() {
                   renderedSelection.kind === "device"
                     ? lastFixRef.current[renderedSelection.device?.assetId]
                     : null
+                }
+                diagnosable={
+                  renderedSelection.kind === "device" && diagnosable.has(renderedSelection.device?.source)
                 }
                 onClose={() => setSelection(null)}
               />

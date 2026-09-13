@@ -178,12 +178,12 @@ function fmtTime(iso) {
   return d.toLocaleString();
 }
 
-function DevicePanel({ token, device, onClose, frame, lastFix, state }) {
+function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosable = true }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
   // Diagnostics come from a per-device vendor GET, independent of a current
   // position fix: an offline asset still reports battery / lastSeen. Fetch
-  // regardless of liveness.
-  const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId);
+  // regardless of liveness, but only from a source that serves them.
+  const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId, diagnosable);
   const t = details?.telemetry;
   const accent = device.color;
   const kind = details?.kind || device.kind;
@@ -454,10 +454,10 @@ function ApPanel({ ap, onClose, token, frame }) {
   );
 }
 
-export function DetailPanel({ selection, token, onClose, frame, lastFix, state }) {
+export function DetailPanel({ selection, token, onClose, frame, lastFix, state, diagnosable = true }) {
   if (!selection) return null;
   if (selection.kind === "device")
-    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} lastFix={lastFix} state={state} />;
+    return <DevicePanel token={token} device={selection.device} onClose={onClose} frame={frame} lastFix={lastFix} state={state} diagnosable={diagnosable} />;
   if (selection.kind === "ap") return <ApPanel ap={selection.ap} onClose={onClose} token={token} frame={frame} />;
   return null;
 }

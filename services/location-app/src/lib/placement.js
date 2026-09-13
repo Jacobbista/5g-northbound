@@ -5,6 +5,7 @@
 // are room-local metres, origin top-left, x right, z down, which is the frame
 // the 3D scene already renders, so a point picked on screen travels unchanged.
 import { CAMARA_API_BASE } from "../config";
+import { sourcesAdvertising } from "./capabilities";
 
 
 async function call(method, token, assetId, body) {
@@ -48,10 +49,5 @@ export function removeAsset(token, assetId) {
 // that measures its position has nothing to place, so it is absent here and
 // its assets are never draggable.
 export function placeableSources(adapters = []) {
-  return new Set(
-    adapters
-      .filter((a) => a?.capabilities?.placement)
-      .map((a) => a.capabilities?.source || a.name)
-      .filter(Boolean)
-  );
+  return sourcesAdvertising(adapters, "placement");
 }
