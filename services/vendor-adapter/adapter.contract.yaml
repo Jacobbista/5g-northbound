@@ -14,7 +14,10 @@
 adapter: vendor
 description: Schema-driven REST bridge to a vendor positioning cloud. Vendor traits are supplied at deploy time.
 capabilities:
-  streaming: false      # rest transport = pull-through (transport is a schema dimension; mqtt future)
+  # Engine-facing: the engine polls GET /measurement, this adapter never
+  # pushes. How it reaches the VENDOR is a separate axis, reported as
+  # `transports` on GET /contract and chosen per schema.
+  streaming: false
   discover: true        # exposes /discover (vendor device enumeration); editor shows SYNC {source}
   devices: true         # exposes /devices (vendor inventory for onboarding, standard shape)
   diagnostics: true     # exposes /diagnostics/{id} (vendor fidelity telemetry, on-demand)

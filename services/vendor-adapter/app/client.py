@@ -88,6 +88,14 @@ def build_auth_headers(schema: Schema) -> Optional[dict[str, str]]:
     return None
 
 
+# Source-side transports this binary can actually drive, as opposed to the ones
+# the schema grammar accepts (`Schema.transport`, which also names `mqtt` and
+# `webhook` as extension points). Served on GET /contract so a deploy dashboard
+# reads the implemented set from the image instead of assuming it, and declared
+# here, next to the code that would have to branch, so the two cannot drift.
+IMPLEMENTED_TRANSPORTS = ("rest",)
+
+
 async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
     """One GET against the vendor for one device.
 
@@ -95,8 +103,11 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
     error / misconfiguration. Logs noisily for non-404 failures so the
     operator sees what went wrong without a debugger.
     """
-    if schema.transport != "rest":
-        log.warning("vendor %s uses transport '%s'; only 'rest' is implemented", schema.vendor, schema.transport)
+    if schema.transport not in IMPLEMENTED_TRANSPORTS:
+        log.warning(
+            "vendor %s uses transport '%s'; this image implements %s",
+            schema.vendor, schema.transport, ", ".join(IMPLEMENTED_TRANSPORTS),
+        )
         return None
     path = _substitute_path_vars(schema, device_id)
     if path is None:

@@ -151,3 +151,32 @@ async def test_the_baked_contract_names_no_vendor():
     app.state.store = State()
     body = (await _get("/contract")).json()
     assert "WITTRA" not in json.dumps(body["env"])
+
+
+async def test_contract_reports_the_transports_the_image_implements():
+    # A deploy dashboard reads the implemented set from the image instead of
+    # assuming it: one entry means REST is a fact, not a choice to offer.
+    app.state.store = State()
+    r = await _get("/contract")
+    body = r.json()
+    assert body["transports"] == ["rest"]
+    # Unconfigured: no schema has picked one yet.
+    assert body["transport"] is None
+
+
+async def test_contract_reports_the_transport_the_active_schema_picked():
+    app.state.store = State()
+    app.state.store.schema = _example()
+    body = (await _get("/contract")).json()
+    assert body["transport"] == "rest"
+    assert body["transport"] in body["transports"]
+
+
+async def test_implemented_transports_are_a_subset_of_the_grammar():
+    # The grammar names extension points the binary does not drive yet. The
+    # implemented set must never name one the grammar would reject.
+    declared = set(
+        (await _get("/contract/schema")).json()["properties"]["transport"]["enum"]
+    )
+    body = (await _get("/contract")).json()
+    assert set(body["transports"]) <= declared

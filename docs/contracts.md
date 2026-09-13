@@ -168,6 +168,13 @@ generic and holds no vendor's names. The same response carries `configured`,
 tell an unbound instance from a bound one, and `mapping.unmapped`, which lists
 the mapping fields this binary supports that the loaded document does not map.
 
+It also carries `transports`, the source-side transports this image can drive,
+and `transport`, the one the active schema picked. That is a different axis from
+the `streaming` capability, which says whether the ENGINE is pushed to or polls
+the adapter. A caller reads `transports` as a fact when it holds one entry and
+offers a choice only when it holds more; the full set the grammar accepts is in
+`GET /contract/schema`.
+
 The vendor-adapter additionally serves `GET /contract/schema` (JSON Schema of
 the operator-authored vendor document). That is adapter config, not a profile
 contract: it is not listed in the table above and is not baked into the gateway

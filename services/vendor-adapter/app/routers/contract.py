@@ -20,6 +20,7 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, HTTPException, Request
 
+from ..client import IMPLEMENTED_TRANSPORTS
 from ..envcontract import discover_mapping_coverage, mapping_coverage, vendor_env
 from ..schema import Schema
 
@@ -69,6 +70,14 @@ def contract(request: Request) -> dict:
         # once an operator has given it that vendor's schema.
         "configured": schema is not None,
         "vendor": schema.vendor if schema is not None else None,
+        # How the adapter reaches the SOURCE, which is a different axis from
+        # the `streaming` capability (whether the ENGINE is pushed to or polls
+        # this adapter; it polls, always). `transports` is what the image can
+        # drive, so a dashboard states it as a fact and offers a choice only
+        # when there is more than one; `transport` is the one the active schema
+        # picked. The full set the grammar accepts is on GET /contract/schema.
+        "transports": list(IMPLEMENTED_TRANSPORTS),
+        "transport": schema.transport if schema is not None else None,
         "schema_source": getattr(store, "schema_source", "none"),
         "schema": "/contract/schema",
         "mapping": mapping_coverage(schema) if schema is not None else None,
