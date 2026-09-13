@@ -17,6 +17,14 @@ import { shortLabel } from "../lib/label";
 // Html z-index so a floating label never covers an open panel.
 const LABEL_Z = [30, 0];
 
+// Raycast gating for markers while an asset is being carried. Both branches
+// are real functions. R3F writes a function prop straight onto the instance,
+// so `raycast={undefined}` sets an own property that shadows
+// Mesh.prototype.raycast; three then throws "raycast is not a function" on
+// the next pointer move and the canvas' whole event pipeline dies with it.
+const NO_RAYCAST = () => null;
+const MESH_RAYCAST = THREE.Mesh.prototype.raycast;
+
 const M_PER_DEG = 111320;
 
 // Per-technology visual palette. Anchors with unknown technology fall back to
@@ -157,7 +165,7 @@ function DeviceMarker({ x, z, radius, label, color, stale, hidden = false, inert
         position={[0, 1.0, 0]}
         // Out of the raycast entirely while an asset is being placed: a marker
         // that handles the move stops it reaching the block being carried.
-        raycast={inert ? () => null : undefined}
+        raycast={inert ? NO_RAYCAST : MESH_RAYCAST}
         onPointerDown={(e) => {
           if (hidden || inert || !onClick) return;
           e.stopPropagation();
@@ -298,7 +306,7 @@ function ApMarker({ id, x, z, height = 1.2, ceiling = DEFAULT_WALL_HEIGHT, hidde
       <mesh
         position={[0, hitH / 2, 0]}
         // See DeviceMarker: inert while a placement is in progress.
-        raycast={inert ? () => null : undefined}
+        raycast={inert ? NO_RAYCAST : MESH_RAYCAST}
         onPointerDown={(e) => {
           if (hidden || inert || !onClick) return;
           e.stopPropagation();
@@ -522,7 +530,7 @@ function OriginAxes({ span = 20, inert = false }) {
           setHovered(true);
         }}
         onPointerOut={() => setHovered(false)}
-        raycast={inert ? () => null : undefined}
+        raycast={inert ? NO_RAYCAST : MESH_RAYCAST}
       >
         <sphereGeometry args={[1.5, 16, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
