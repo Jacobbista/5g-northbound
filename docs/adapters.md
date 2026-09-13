@@ -167,6 +167,15 @@ exposes (`devices`, `discover`, `diagnostics`), whether it pushes or is polled
 holds no vendor's traits, for the same reason its `GET /contract` names no
 vendor's variables until a schema is loaded.
 
+`ADAPTER_CAPABILITIES` is declared in each adapter's `env.contract.yaml` with
+`type: json`, so a deploy dashboard driven by the contract offers it like any
+other variable rather than requiring the operator to know it exists.
+
+The `kind` an adapter registers under is the image's **family** (`wifi`,
+`vendor`, `synthetic`), read from the `adapter:` field of its own
+`adapter.contract.yaml`. It is not configuration: the image knows which family
+it belongs to, and a deployment that could restate it could only get it wrong.
+
 ### `accuracy_class` and `nominalAccuracy`
 
 `accuracy_class` is the band the source's technology nominally delivers, one of

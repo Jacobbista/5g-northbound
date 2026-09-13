@@ -31,7 +31,7 @@ COMPOSE_FILE = REPO_ROOT / "deploy" / "compose" / "docker-compose.yml"
 
 # Value shape, for form rendering and validation. Orthogonal to `sensitive`:
 # a secret is a string that routes to a Secret rather than a ConfigMap.
-ALLOWED_TYPES = {"string", "url", "integer", "number", "boolean", "path"}
+ALLOWED_TYPES = {"string", "url", "integer", "number", "boolean", "path", "json"}
 
 # Where each service expects its env to be edited, in dev. The deploy portal
 # will replace this with k8s ConfigMap / Secret paths at production time.

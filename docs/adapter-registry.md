@@ -85,9 +85,14 @@ blueprint unauthenticated in-cluster).
 ## Wiring
 
 Each adapter sets `POSITIONING_ENGINE_URL`, `ADAPTER_NAME` (the routing key, see
-below), `ADAPTER_BASE_URL` (its own in-cluster Service URL the engine polls), and
-optionally `ADAPTER_KIND`. With those set the adapter self-registers; unset, it
-runs standalone and the engine only knows it via an `ADAPTER_URLS` seed.
+below) and `ADAPTER_BASE_URL` (its own in-cluster Service URL the engine polls).
+With those set the adapter self-registers; unset, it runs standalone and the
+engine only knows it via an `ADAPTER_URLS` seed.
+
+The `kind` in the registration body is the adapter **family** (`wifi`,
+`vendor`, `synthetic`), read from the `adapter:` field of the image's own
+`adapter.contract.yaml`. It describes the image, not the source it is bound to,
+so the image declares it and no deployment restates it.
 
 The engine persists the registry on the same writable volume as the blueprint
 (`ADAPTER_REGISTRY_PATH`, default `/app/data/adapters.json`). No extra PVC. A

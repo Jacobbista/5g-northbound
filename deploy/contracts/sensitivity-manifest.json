@@ -55,6 +55,23 @@
       ]
     },
     {
+      "name": "ADAPTER_CAPABILITIES",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": true,
+      "type": "json",
+      "consumed_by": [
+        "vendor-adapter",
+        "wifi-adapter"
+      ],
+      "services": [
+        "vendor-adapter",
+        "wifi-adapter"
+      ]
+    },
+    {
       "name": "ADAPTER_HEARTBEAT_S",
       "sensitive": false,
       "tier": "configmap",
@@ -67,23 +84,6 @@
       ],
       "services": [
         "positioning-engine"
-      ]
-    },
-    {
-      "name": "ADAPTER_KIND",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "type": "string",
-      "consumed_by": [
-        "vendor-adapter",
-        "wifi-adapter"
-      ],
-      "services": [
-        "vendor-adapter",
-        "wifi-adapter"
       ]
     },
     {

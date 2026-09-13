@@ -41,7 +41,6 @@ services:
       # /blueprint from here and self-registers (POST /adapters) + heartbeats.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "wifi"
-      ADAPTER_KIND: "wifi"
       ADAPTER_BASE_URL: "http://wifi-adapter:8080"
       # Advertised capabilities (mirrors adapter.contract.yaml; validated by
       # `make positioning-check`). Drives the gateway's GET /capabilities.
@@ -119,7 +118,6 @@ services:
       # Self-register with the engine's adapter registry.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "wittra"
-      ADAPTER_KIND: "vendor"
       ADAPTER_BASE_URL: "http://vendor-adapter:8080"
       ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true,"diagnostics":true}'
     depends_on:
@@ -159,7 +157,6 @@ services:
       # Self-register with the engine's adapter registry.
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "synthetic"
-      ADAPTER_KIND: "synthetic"
       ADAPTER_BASE_URL: "http://synthetic-adapter:8080"
       # The walker can synthesise a position for any id; scope it so it 404s for
       # devices it does not own, keeping engine fan-out (no DEVICE_MAP) clean.

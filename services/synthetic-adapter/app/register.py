@@ -32,22 +32,35 @@ _CONTRACT_PATHS = (
 )
 
 
-def _contract_caps() -> dict:
-    """Capabilities the image declares about itself, from the baked
-    adapter.contract.yaml. Lets the adapter self-advertise without the
-    deployment restating the JSON in an env var."""
+def _contract() -> dict:
+    """The baked adapter.contract.yaml, whichever path carries it."""
     if yaml is None:
         return {}
     for path in _CONTRACT_PATHS:
         try:
-            data = yaml.safe_load(Path(path).read_text()) or {}
+            return yaml.safe_load(Path(path).read_text()) or {}
         except OSError:
             continue
         except Exception:
             return {}
-        caps = data.get("capabilities")
-        return dict(caps) if isinstance(caps, dict) else {}
     return {}
+
+
+def _contract_caps() -> dict:
+    """Capabilities the image declares about itself, from the baked
+    adapter.contract.yaml. Lets the adapter self-advertise without the
+    deployment restating the JSON in an env var."""
+    caps = _contract().get("capabilities")
+    return dict(caps) if isinstance(caps, dict) else {}
+
+
+def _family() -> str:
+    """The `kind` this adapter registers under: which family of adapter the
+    image is, never which source it is bound to. The image knows its own
+    family, so it is read from the baked contract instead of being restated
+    per deployment."""
+    family = _contract().get("adapter")
+    return str(family) if family else "adapter"
 
 
 def _caps() -> dict:
@@ -70,7 +83,7 @@ def _cfg() -> dict:
         "engine_url": os.environ.get("POSITIONING_ENGINE_URL", "").rstrip("/"),
         "name": os.environ.get("ADAPTER_NAME", ""),
         "base_url": os.environ.get("ADAPTER_BASE_URL", ""),
-        "kind": os.environ.get("ADAPTER_KIND", "adapter"),
+        "kind": _family(),
         "heartbeat_s": float(os.environ.get("ADAPTER_HEARTBEAT_S", "15")),
         "capabilities": _caps(),
     }

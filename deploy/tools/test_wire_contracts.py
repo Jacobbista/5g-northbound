@@ -22,6 +22,8 @@ import sys
 import types
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -177,7 +179,6 @@ def test_every_adapter_announces_itself_with_the_body_the_engine_accepts():
         "POSITIONING_ENGINE_URL": "http://engine:8000",
         "ADAPTER_NAME": "probe",
         "ADAPTER_BASE_URL": "http://probe:8000",
-        "ADAPTER_KIND": "adapter",
         "ADAPTER_HEARTBEAT_S": "0.01",
     }
     for adapter in ("vendor-adapter", "wifi-adapter", "synthetic-adapter"):
@@ -188,6 +189,12 @@ def test_every_adapter_announces_itself_with_the_body_the_engine_accepts():
         body = posted["body"]
         assert body["name"] == "probe"
         assert body["baseUrl"] == "http://probe:8000"
+        # The family comes from the image's own contract, with no env var to
+        # mistype and nothing for a deployment to contradict.
+        family = yaml.safe_load(
+            (ROOT / f"services/{adapter}/adapter.contract.yaml").read_text()
+        )["adapter"]
+        assert body["kind"] == family, f"{adapter} registers kind {body['kind']!r}, not {family!r}"
         unknown = set(body) - accepted
         assert not unknown, f"{adapter} announces fields the engine drops: {sorted(unknown)}"
 
