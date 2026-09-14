@@ -16,45 +16,49 @@ The engine and the gateway have no vendor knowledge to update, because none was
 ever placed in them.
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph consumers["Consumers"]
+    direction LR
     APP(["location-app<br/>CAMARA client"])
     EDITOR(["placement-editor<br/>operator UI"])
   end
 
-  subgraph northbound["Northbound · defines the contracts"]
-    GW["camara-gateway<br/>CAMARA REST · JWT · assets · tenant scope"]
-    ENG["positioning-engine<br/>fusion · coordinate frames · blueprint authority"]
+  KC[("Keycloak<br/>OIDC + JWKS")]
+
+  subgraph northbound["Northbound"]
+    direction LR
+    GW["camara-gateway<br/>CAMARA REST · JWT<br/>assets · tenant scope"]
+    ENG["positioning-engine<br/>fusion · coordinate frames<br/>blueprint authority"]
   end
 
-  subgraph southbound["Southbound · conforms to them"]
+  subgraph southbound["Southbound"]
+    direction LR
     WIFI["wifi-adapter<br/>RSSI multilateration"]
-    VENDOR["vendor-adapter<br/>schema-driven REST translator"]
-    SYNTH["synthetic-adapter<br/>waypoint walker · demo + reference"]
-    PRIV["private adapter<br/>proprietary SDK · separate repo"]
+    VENDOR["vendor-adapter<br/>schema-driven<br/>REST translator"]
+    SYNTH["synthetic-adapter<br/>waypoint walker"]
+    PRIV["private adapter<br/>proprietary SDK<br/>separate repo"]
   end
 
   subgraph external["Outside the trust domain"]
-    CLOUD[("vendor cloud<br/>e.g. api.wittra.se")]
+    direction LR
     EDGEDEV(["edge devices<br/>Pi WiFi scanner"])
+    CLOUD[("vendor cloud<br/>e.g. api.wittra.se")]
   end
 
-  KC[("Keycloak<br/>OIDC + JWKS")]
-
-  APP -- "CAMARA REST · Bearer JWT" --> GW
-  APP -- "WS /positions/stream" --> GW
-  APP -- "PKCE login" --> KC
-  GW -- "JWKS validate" --> KC
+  APP -. "PKCE login" .-> KC
+  GW -. "JWKS validate" .-> KC
+  APP -- "CAMARA REST · WS<br/>Bearer JWT" --> GW
   EDITOR -- "PUT /blueprint" --> ENG
 
-  GW -- "GET /position/{positioning_id}?source=" --> ENG
-  ENG -- "GET /measurement/{positioning_id}" --> WIFI
-  ENG -- "GET /measurement/{positioning_id}" --> VENDOR
-  ENG -- "GET /measurement/{positioning_id}" --> SYNTH
-  ENG -- "GET /measurement/{positioning_id}" --> PRIV
+  GW -- "GET /position/{positioning_id}" --> ENG
+  ENG -- "GET /measurement/{positioning_id}<br/>to every adapter" --> southbound
 
-  VENDOR -- "vendor REST, per the loaded schema" --> CLOUD
-  EDGEDEV -- "POST /ingest/wifi-scan<br/>over the 5G data network" --> WIFI
+  EDGEDEV -- "POST /ingest/wifi-scan<br/>(5G data network)" --> WIFI
+  VENDOR -- "vendor REST<br/>per the loaded schema" --> CLOUD
+
+  consumers ~~~ KC
+  KC ~~~ northbound
+  southbound ~~~ external
 ```
 
 Read the middle band as the contract surface. Above it, one identifier crosses:
@@ -231,11 +235,10 @@ This stack collapses that chain to fit a research testbed where Open5GS does not
 | 3GPP / CAMARA role | This repository | Notes |
 |---|---|---|
 | Application (API consumer) | `location-app`, and any CAMARA client | PKCE login, polls `POST /location-retrieval/v0.5/retrieve` |
-| CAMARA Gateway + NEF | `camara-gateway` | One service: CAMARA REST surface, JWT, Asset Identity Map, tenant authorization. It also fuses an asset's capabilities into one circle, so it is not geometry-free, but it holds no venue geometry: it combines WGS84 answers and never projects or rotates |
+| CAMARA Gateway + NEF | `camara-gateway` | One service: CAMARA REST surface, JWT, Asset Identity Map, tenant authorization. It fuses an asset's capabilities into one circle by combining WGS84 answers. The venue geometry stays in the engine |
 | LMF, method selection and hybrid combination | `positioning-engine` | Routes a request to the source named by the capability, falls back to fanning out, and fuses what comes back. The strategy is pluggable (see [`fusion-strategies.md`](fusion-strategies.md), baseline `weighted_avg`). Owns the venue georeference and normalises to WGS84 |
 | LMF, one per positioning technology | the adapters: `wifi-adapter`, `vendor-adapter`\*, `synthetic-adapter` | Each occupies the LMF slot for one technology. The engine asks for a position and cannot tell how the answer was produced, which is the substitution the adapter contract exists to provide. `wifi-adapter` computes on site, multilaterating RSSI scans the device posts over the 5G data network |
-| RAN / UE measurements | Not consumed as measurements. The adapter contract carries a computed position (`Measurement` is a fix with an accuracy, not a raw observation). Raw measurements exist on one leg only, `POST /ingest/wifi-scan` into `wifi-adapter` | see [`adapters.md`](adapters.md) |
-| 3GPP network-based positioning | **Not implemented.** `fiveg` is in the `source` enum of [`asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json) with no adapter behind it | The slot is declared so an asset can bind a cellular capability the day a source exists. Nothing in the stack produces a 3GPP fix today, and no claim in this documentation depends on one |
+| RAN / UE measurements | `POST /ingest/wifi-scan` into `wifi-adapter`, the one leg that carries raw measurements | The adapter contract itself carries a computed fix with an accuracy, not an observation. See [`adapters.md`](adapters.md) |
 | AMF / SMF session state | out of scope | The profile addresses assets by `assetId`, not by subscriber or session identity, so the gateway resolves identity from the Asset Identity Map rather than from the SMF |
 
 The internal decomposition is a deployment choice and can be re-split into
@@ -243,16 +246,11 @@ separate NEF and LMF services later without breaking northbound consumers.
 
 \* `vendor-adapter` fills the slot without holding the solver. A vendor RTLS
 computes in its own cloud, and the adapter is the REST bridge to it. The slot,
-the contract and the engine's view are identical either way, which is the point:
-moving that solver on site changes what stands behind the box, not the
-architecture. State the asterisk out loud when the diagram is shown. It is also
-the shortest way to introduce the direction the profile argues for, a fix
-computed where the assets are.
+the contract and the engine's view are the same either way: moving that solver
+on site changes what stands behind the box, not the architecture.
 
-The vocabulary is a reading of 3GPP, not a claim to conform to it. 3GPP has one
-LMF per request, reaching several positioning methods; here the split is per
-technology, and selection and hybrid combination stay in the engine. The
-external contracts (CAMARA REST) are the standard part.
+3GPP places one LMF per request, reaching several positioning methods. Here the
+split is per technology, with selection and hybrid combination in the engine.
 
 ## Coordinate frame
 
