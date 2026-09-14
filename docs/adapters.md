@@ -341,7 +341,7 @@ In-cluster adapters (`wifi-adapter`, `synthetic-adapter`) do not set these varia
 flowchart LR
   subgraph adp[wifi-adapter service]
     CFG[/wifi-config.json<br/>AP map · RSSI calibration/] --> MAIN[app/main.py<br/>lifespan loads config<br/>builds WifiAdapter]
-    MAIN --> ST[(app.state<br/>{adapter, cfg})]
+    MAIN --> ST[(app.state<br/>adapter + cfg)]
 
     INGR[/POST /ingest/wifi-scan<br/>app/routers/ingest.py/] --> ALGO
     ALGO[app/wifi.py<br/>RSSI → distance<br/>multilateration · Kalman] --> CACHE[(per-device cache<br/>latest Measurement)]

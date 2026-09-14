@@ -145,7 +145,7 @@ sequenceDiagram
 
   loop each capability (source, positioning_id)
     GW->>ENG: GET /position/{positioning_id}?source=…
-    ENG->>AD: GET /measurement/{positioning_id}<br/>(route by source; else fan out + fuse)
+    ENG->>AD: GET /measurement/{positioning_id}<br/>(route by source, else fan out + fuse)
     AD-->>ENG: 200 Measurement (local) or 404
     ENG->>ENG: normalise wgs84→local · run FUSION_STRATEGY · local→WGS84 via gps_origin
     ENG-->>GW: EnginePosition or 404
@@ -228,15 +228,31 @@ The canonical 3GPP location-exposure chain is:
 
 This stack collapses that chain to fit a research testbed where Open5GS does not ship a full NEF or LMF:
 
-| 3GPP / CAMARA role              | This repository                                            | Notes |
-|---------------------------------|------------------------------------------------------------|-------|
-| Application (API consumer)      | `location-app` (any CAMARA client also works)          | PKCE login, polls `POST /location-retrieval/v0.5/retrieve` |
-| CAMARA Gateway + NEF            | `camara-gateway`                                           | Single service: CAMARA REST surface, JWT, Asset Identity Map + tenant authz. Geometry-agnostic |
-| LMF                             | `positioning-engine`                                       | Thin fusion of 3GPP and non-3GPP sources via the HTTP adapter contract; fusion strategy is pluggable (see [`fusion-strategies.md`](fusion-strategies.md), baseline is `weighted_avg`); normalises to WGS84 |
-| RAN / UE measurements           | Adapter pods (`wifi-adapter` in repo; vendor adapters as private images) | Each adapter is its own pod implementing `GET /measurement/{id}`: see [`adapters.md`](adapters.md) |
-| AMF / SMF session state         | out of scope                                               | The private-asset profile addresses assets by `assetId`, not by subscriber/session identity, so the gateway resolves identity from the Asset Identity Map, not from SMF. 3GPP network-based positioning is a component-bound future direction (see the [profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md)) |
+| 3GPP / CAMARA role | This repository | Notes |
+|---|---|---|
+| Application (API consumer) | `location-app`, and any CAMARA client | PKCE login, polls `POST /location-retrieval/v0.5/retrieve` |
+| CAMARA Gateway + NEF | `camara-gateway` | One service: CAMARA REST surface, JWT, Asset Identity Map, tenant authorization. It also fuses an asset's capabilities into one circle, so it is not geometry-free, but it holds no venue geometry: it combines WGS84 answers and never projects or rotates |
+| LMF, method selection and hybrid combination | `positioning-engine` | Routes a request to the source named by the capability, falls back to fanning out, and fuses what comes back. The strategy is pluggable (see [`fusion-strategies.md`](fusion-strategies.md), baseline `weighted_avg`). Owns the venue georeference and normalises to WGS84 |
+| LMF, one per positioning technology | the adapters: `wifi-adapter`, `vendor-adapter`\*, `synthetic-adapter` | Each occupies the LMF slot for one technology. The engine asks for a position and cannot tell how the answer was produced, which is the substitution the adapter contract exists to provide. `wifi-adapter` computes on site, multilaterating RSSI scans the device posts over the 5G data network |
+| RAN / UE measurements | Not consumed as measurements. The adapter contract carries a computed position (`Measurement` is a fix with an accuracy, not a raw observation). Raw measurements exist on one leg only, `POST /ingest/wifi-scan` into `wifi-adapter` | see [`adapters.md`](adapters.md) |
+| 3GPP network-based positioning | **Not implemented.** `fiveg` is in the `source` enum of [`asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json) with no adapter behind it | The slot is declared so an asset can bind a cellular capability the day a source exists. Nothing in the stack produces a 3GPP fix today, and no claim in this documentation depends on one |
+| AMF / SMF session state | out of scope | The profile addresses assets by `assetId`, not by subscriber or session identity, so the gateway resolves identity from the Asset Identity Map rather than from the SMF |
 
-The external contracts (CAMARA REST) are standard; the internal decomposition is a deployment choice and can be re-split into separate NEF and LMF services later without breaking northbound consumers.
+The internal decomposition is a deployment choice and can be re-split into
+separate NEF and LMF services later without breaking northbound consumers.
+
+\* `vendor-adapter` fills the slot without holding the solver. A vendor RTLS
+computes in its own cloud, and the adapter is the REST bridge to it. The slot,
+the contract and the engine's view are identical either way, which is the point:
+moving that solver on site changes what stands behind the box, not the
+architecture. State the asterisk out loud when the diagram is shown. It is also
+the shortest way to introduce the direction the profile argues for, a fix
+computed where the assets are.
+
+The vocabulary is a reading of 3GPP, not a claim to conform to it. 3GPP has one
+LMF per request, reaching several positioning methods; here the split is per
+technology, and selection and hybrid combination stay in the engine. The
+external contracts (CAMARA REST) are the standard part.
 
 ## Coordinate frame
 
