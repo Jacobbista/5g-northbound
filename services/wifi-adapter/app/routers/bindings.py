@@ -25,10 +25,31 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
 from ..assemble import bindings_from_dict, load_bindings, write_bindings
+from ..kalman import MOTION_MODELS
 from ..models import WifiBindings
+from ..wifi import ALGORITHMS
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["bindings"])
+
+
+def _reject_unknown_tunables(bindings: WifiBindings) -> None:
+    """Refuse a document naming a motion model or algorithm this binary does
+    not implement. Both are a choice from a set the image publishes on
+    GET /contract; accepting a name outside it would silently fall back, and
+    the operator would tune a value the adapter never used."""
+    if bindings.motion_model not in MOTION_MODELS:
+        raise HTTPException(
+            422,
+            f"unknown motion_model '{bindings.motion_model}'; "
+            f"this image implements {', '.join(sorted(MOTION_MODELS))}",
+        )
+    if bindings.algorithm not in ALGORITHMS:
+        raise HTTPException(
+            422,
+            f"unknown algorithm '{bindings.algorithm}'; "
+            f"this image implements {', '.join(ALGORITHMS)}",
+        )
 
 
 @router.get("/bindings", response_model=WifiBindings)
@@ -55,6 +76,7 @@ async def put_bindings(request: Request) -> dict:
         bindings = bindings_from_dict(data)
     except ValidationError as exc:
         raise HTTPException(422, f"not a valid bindings document: {exc}") from exc
+    _reject_unknown_tunables(bindings)
 
     write_bindings(request.app.state.bindings_path, bindings)
 

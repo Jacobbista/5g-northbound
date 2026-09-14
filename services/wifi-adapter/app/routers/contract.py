@@ -15,7 +15,10 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+
+from ..kalman import MOTION_MODELS
+from ..wifi import ALGORITHMS
 
 router = APIRouter(tags=["contract"])
 
@@ -48,13 +51,23 @@ def _sanitize(entries: list) -> list:
 
 
 @router.get("/contract")
-def contract() -> dict:
+def contract(request: Request) -> dict:
     raw = _load()
+    # The positioning tunables are a choice from a fixed set, not free text, so
+    # the contract names the set this image implements alongside the value in
+    # force. A dashboard renders a selector and cannot offer a value the binary
+    # would ignore. Defensive read: /contract answers on a pod whose blueprint
+    # has not loaded, which is exactly when a wizard needs it.
+    cfg = getattr(request.app.state, "wifi_config", None)
     return {
         "service": raw.get("service"),
         "kind": raw.get("kind"),
         "external_origin": raw.get("external_origin"),
         "description": raw.get("description"),
+        "motion_models": sorted(MOTION_MODELS),
+        "motion_model": getattr(cfg, "motion_model", None),
+        "algorithms": list(ALGORITHMS),
+        "algorithm": getattr(cfg, "algorithm", None),
         "env": {
             "required": _sanitize(raw.get("required")),
             "recommended": _sanitize(raw.get("recommended")),

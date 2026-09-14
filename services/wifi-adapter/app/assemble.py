@@ -187,6 +187,7 @@ def assemble_from_blueprint_dict(
         weight_power=bindings.weight_power,
         smoothing=bindings.smoothing,
         process_noise=bindings.process_noise,
+        motion_model=bindings.motion_model,
     )
 
 

@@ -4,7 +4,7 @@ import os
 import time
 from typing import Optional
 
-from .kalman import Tracker2D
+from .kalman import tracker_for
 from .models import Measurement, WifiConfig
 
 log = logging.getLogger(__name__)
@@ -17,6 +17,11 @@ _DEBUG = os.environ.get("WIFI_DEBUG", "0") not in ("", "0", "false", "False")
 # --- Positioning: RSSI multilateration with weighted-centroid fallback ---
 
 Scan = dict[str, int]  # BSSID -> RSSI (dBm)
+
+# The position solvers this binary implements. Served on GET /contract beside
+# the motion models, and enforced on PUT /bindings, so a dashboard offers the
+# set the image has instead of a free-text field nothing contradicts.
+ALGORITHMS = ("trilateration", "centroid")
 
 
 def _rssi_to_distance(rssi: int, tx_power: float, n: float) -> float:
@@ -157,7 +162,7 @@ class WifiAdapter:
         # adapter already knows which device sent each scan, so the fact is
         # reported per device on GET /devices rather than left in the log.
         self._superseded_ingest: dict[str, str] = {}
-        self._trackers: dict[str, Tracker2D] = {}
+        self._trackers: dict = {}
         self._last_ts: dict[str, float] = {}
         # Optional ingest hook. The calibration router installs one here
         # so an active capture session can pull raw scans in real time.
@@ -165,11 +170,23 @@ class WifiAdapter:
         self.on_ingest: Optional[callable] = None
 
     def reload(self, config: WifiConfig) -> None:
-        """Swap the active config in place. Keeps the in-flight cache /
-        smoothing trackers; only the propagation model + AP map change.
-        Used by the calibration apply path to install per-router params
-        without restarting the container."""
+        """Swap the active config in place. Keeps the in-flight cache, and the
+        smoothing trackers when the filter they were built from is unchanged.
+        Used by the calibration apply path to install per-router params without
+        restarting the container.
+
+        A tracker holds the model it was constructed with, so changing
+        `motion_model` or `process_noise` has to drop them or the change would
+        take effect only for devices seen for the first time afterwards. They
+        rebuild on the next scan, at the cost of one unsmoothed fix.
+        """
+        refilter = (
+            config.motion_model != self.cfg.motion_model
+            or config.process_noise != self.cfg.process_noise
+        )
         self.cfg = config
+        if refilter:
+            self._trackers.clear()
 
     def note_superseded_ingest(self, device_id: str, field: str) -> bool:
         """Record that this device posted under a superseded identifier field.
@@ -194,7 +211,9 @@ class WifiAdapter:
         if self.cfg.smoothing:
             tracker = self._trackers.get(device_id)
             if tracker is None:
-                tracker = self._trackers[device_id] = Tracker2D(self.cfg.process_noise)
+                tracker = self._trackers[device_id] = tracker_for(
+                    self.cfg.motion_model, self.cfg.process_noise
+                )
             dt = ts - self._last_ts.get(device_id, ts)
             if dt >= 0:
                 x, y = tracker.update(x, y, dt, accuracy_m**2)

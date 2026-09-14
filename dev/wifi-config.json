@@ -1,26 +1,48 @@
 {
-  "_comment": "Per-venue WiFi adapter bindings. Each entry maps an anchor `id` (defined in the placement-editor blueprint at location-app/public/layout.json) to its physical BSSIDs. Positions are NOT here - they come from the blueprint. BSSIDs below are placeholders; for a real venue, copy this file to dev/wifi-config.local.json (gitignored) with the real values and `export WIFI_CONFIG=./dev/wifi-config.local.json` before `make demo`.",
-  "tx_power": -42,
+  "tx_power": -42.0,
   "path_loss_n": 2.7,
   "algorithm": "trilateration",
+  "weight_power": 2.0,
   "smoothing": true,
   "process_noise": 1.0,
+  "motion_model": "random-walk",
   "bindings": [
     {
       "id": "AP07",
-      "bssids": ["AA:BB:CC:00:07:01", "AA:BB:CC:00:07:02"]
+      "bssids": [
+        "AA:BB:CC:00:07:01",
+        "AA:BB:CC:00:07:02"
+      ],
+      "tx_power": null,
+      "path_loss_n": null
     },
     {
       "id": "AP08",
-      "bssids": ["AA:BB:CC:00:08:01", "AA:BB:CC:00:08:02"]
+      "bssids": [
+        "AA:BB:CC:00:08:01",
+        "AA:BB:CC:00:08:02"
+      ],
+      "tx_power": null,
+      "path_loss_n": null
     },
     {
       "id": "AP09",
-      "bssids": ["AA:BB:CC:00:09:01", "AA:BB:CC:00:09:02"]
+      "bssids": [
+        "AA:BB:CC:00:09:01",
+        "AA:BB:CC:00:09:02"
+      ],
+      "tx_power": null,
+      "path_loss_n": null
     },
     {
       "id": "AP10",
-      "bssids": ["AA:BB:CC:00:10:01", "AA:BB:CC:00:10:02"]
+      "bssids": [
+        "AA:BB:CC:00:10:01",
+        "AA:BB:CC:00:10:02"
+      ],
+      "tx_power": null,
+      "path_loss_n": null
     }
-  ]
+  ],
+  "calibration_samples": []
 }

@@ -209,6 +209,28 @@ and cite the source in a comment. It describes one deployment's technology, so
 it belongs in that deployment's `ADAPTER_CAPABILITIES`, never baked into a
 generic image.
 
+### Tunables with a published vocabulary (wifi-adapter)
+
+Two of the wifi-adapter's bindings are a choice from a fixed set rather than a
+number: `motion_model` (which Kalman motion model smooths the fix) and
+`algorithm` (which solver turns ranges into a position). The image publishes
+the set it implements on `GET /contract` as `motion_models` and `algorithms`,
+beside the value in force, and `PUT /bindings` answers `422` for a name outside
+it. So an operator tunes from a selector, changes take effect on the next scan,
+and a rollback is the previous value, not a redeploy.
+
+`motion_model` is `random-walk` by default. The two differ in one property:
+
+| Model | Prediction | Stationary device | Moving device |
+|---|---|---|---|
+| `random-walk` (constant position) | widens the uncertainty, does not move the estimate | stays put: there is no velocity state for measurement noise to load | trails, about 0.6 m at 1 m/s with `process_noise` 1.0, more as that value falls |
+| `constant-velocity` | extrapolates along the estimated velocity | drifts after a bad fix, for as long as the velocity estimate survives | no steady-state lag while the velocity is constant, which is the motion it models |
+
+`process_noise` does not substitute for the choice. Under `constant-velocity`,
+raising it trades the drift for jitter and lowering it makes the drift
+longer-lived. Under `random-walk` it is monotone: higher is more responsive,
+lower is smoother.
+
 ### Placement (`placement` capability)
 
 A source that synthesises its position can be told where to start. A source
@@ -408,7 +430,7 @@ Ship it as a container, deploy a `Deployment` + `ClusterIP Service`, append the 
 Adapter configuration splits into two distinct files that travel separately:
 
 1. **Blueprint** (placement-editor JSON), room geometry, anchor positions, georef. Portable, no secrets. The committed template is [`services/location-app/public/layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/services/location-app/public/layout.example.json); `make demo` bootstraps the gitignored working copy `layout.json` from it on first run. Real venue blueprints never enter the repo.
-2. **Bindings** ([`dev/wifi-config.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/wifi-config.json)), propagation tunables (`tx_power`, `path_loss_n`, smoothing) plus the per-AP `id → BSSIDs` mapping. Venue-sensitive; the committed file is a placeholder, real values live in `dev/wifi-config.local.json` (gitignored) or a Kubernetes Secret.
+2. **Bindings** ([`dev/wifi-config.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/wifi-config.json)), propagation tunables (`tx_power`, `path_loss_n`, smoothing, `motion_model`) plus the per-AP `id → BSSIDs` mapping. Venue-sensitive; the committed file is a placeholder, real values live in `dev/wifi-config.local.json` (gitignored) or a Kubernetes Secret.
 
 The wifi-adapter service joins the two files on anchor `id` at startup. See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md) for the full architecture rationale and authoring flow.
 

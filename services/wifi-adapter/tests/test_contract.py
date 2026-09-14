@@ -42,3 +42,19 @@ async def test_ready_endpoint_present():
     # default bindings file the app loads and is ready.
     r = await _get("/ready")
     assert r.status_code in (200, 503)
+
+
+async def test_contract_publishes_the_tunable_vocabularies():
+    """A dashboard renders a selector from the set the image implements, and
+    cannot offer a value the binary would ignore."""
+    body = (await _get("/contract")).json()
+    assert body["motion_models"] == ["constant-velocity", "random-walk"]
+    assert body["algorithms"] == ["trilateration", "centroid"]
+
+
+async def test_contract_reports_the_active_tunables():
+    body = (await _get("/contract")).json()
+    # /contract answers before the blueprint loads, when there is no live
+    # config to read an active value from.
+    for key, vocab in (("motion_model", "motion_models"), ("algorithm", "algorithms")):
+        assert body[key] is None or body[key] in body[vocab]

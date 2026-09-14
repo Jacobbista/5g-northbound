@@ -2,6 +2,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .kalman import DEFAULT_MOTION_MODEL
+
 
 class GpsOrigin(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -80,6 +82,9 @@ class WifiBindings(BaseModel):
     weight_power: float = 2.0
     smoothing: bool = True
     process_noise: float = 0.5
+    # "random-walk" (constant position; the estimate never extrapolates) |
+    # "constant-velocity". The set the image implements is on GET /contract.
+    motion_model: str = DEFAULT_MOTION_MODEL
     bindings: list[WifiBinding] = []
     # Persisted calibration survey points. Empty until the operator runs
     # the guided calibration tool. The tool re-derives `tx_power` and
@@ -108,6 +113,7 @@ class WifiConfig(BaseModel):
     weight_power: float = 2.0
     smoothing: bool = True
     process_noise: float = 0.5
+    motion_model: str = DEFAULT_MOTION_MODEL
 
 
 class Measurement(BaseModel):

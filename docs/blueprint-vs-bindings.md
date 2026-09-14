@@ -9,7 +9,7 @@ makes sense without the distinction.
 ```mermaid
 flowchart TD
     BP["<b>blueprint</b><br/>rooms, walls, openings<br/>anchor id + x/y/z + tech<br/>georef (lat/lon)<br/><i>portable, geometry only - only the placeholder is committable</i>"]
-    BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware - never committed</i>"]
+    BN["<b>bindings</b> (per-venue, secret)<br/>id → BSSID(s)<br/>tx_power, path_loss_n, algorithm, smoothing, motion_model<br/>per-AP calibration overrides + samples<br/><i>rotates with hardware - never committed</i>"]
     WIFI["<b>wifi-adapter service</b><br/>joins blueprint + bindings on anchor id at startup<br/>exposes GET /measurement/{positioning_id}<br/>calibration tool persists samples + per-AP params"]
     BP --> WIFI
     BN -->|"read AND write<br/>(calibration writes back here)"| WIFI
@@ -123,6 +123,7 @@ anchor `id`. Example minimal bindings file:
   "algorithm": "trilateration",
   "smoothing": true,
   "process_noise": 1.0,
+  "motion_model": "random-walk",
   "bindings": [
     { "id": "AP07", "bssids": ["AA:BB:CC:01:02:03"] },
     { "id": "AP08", "bssids": ["AA:BB:CC:01:02:04"] },
