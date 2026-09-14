@@ -2235,6 +2235,11 @@ export function App() {
             onCommit={(v) => updateGeo("altitude_m", v)}
           />
         </div>
+        <div style={{ fontSize: 10, color: "#7a8aab", padding: "0 4px 6px", lineHeight: 1.4 }}>
+          This floor's height above sea level: terrain plus the floor's height
+          above ground. Added to each fix's local vertical to give its
+          altitude. Entered by hand: no calibration or map gesture updates it.
+        </div>
           </>
         )}
           </>

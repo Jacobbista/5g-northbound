@@ -763,7 +763,7 @@ function AddressSearch({ onPick }) {
           onKeyDown={onKeyDown}
           onFocus={() => suggestions.length && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Address or place (e.g. Politecnico di Torino)"
+          placeholder="Address or place"
           style={{
             flex: 1,
             background: "rgba(255,255,255,0.06)",
