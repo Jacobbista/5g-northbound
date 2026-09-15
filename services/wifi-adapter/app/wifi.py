@@ -12,7 +12,9 @@ log = logging.getLogger(__name__)
 # strongest RSSI per router, computed distances, fused position. Verbose;
 # meant for tuning tx_power / path_loss_n against a real venue, off by
 # default to keep the adapter quiet in production.
-_DEBUG = os.environ.get("WIFI_DEBUG", "0") not in ("", "0", "false", "False")
+# Public (not _DEBUG): GET /contract reports it, so an operator can tell an
+# inactive flag from an active one that simply has nothing to log.
+DEBUG = os.environ.get("WIFI_DEBUG", "0") not in ("", "0", "false", "False")
 
 # --- Positioning: RSSI multilateration with weighted-centroid fallback ---
 
@@ -94,6 +96,18 @@ def compute_position(scan: Scan, cfg: WifiConfig) -> Optional[tuple[float, float
             router_rssi[rid] = rssi
 
     if not router_rssi:
+        # The one case WIFI_DEBUG existed to catch and, before this, the one
+        # it never logged: the debug line further down sits past this return,
+        # so a binding gap (no BSSID bound to any anchor) or a scan that never
+        # saw a bound AP produced total silence even with debug on. No BSSIDs
+        # here (sensitive, see docs/blueprint-vs-bindings.md); counts are
+        # enough to tell "nothing is bound" (routers_bound=0) from "bound,
+        # but this scan missed every one of them" (routers_bound>0).
+        if DEBUG:
+            log.info(
+                "wifi-debug: no match, scan_size=%d, routers_bound=%d",
+                len(scan), len(router_pos),
+            )
         return None
 
     # Per-router path-loss overrides (populated by the calibration tool)
@@ -131,7 +145,7 @@ def compute_position(scan: Scan, cfg: WifiConfig) -> Optional[tuple[float, float
     x, y, accuracy_m = sol
     clamped_x = max(0.0, min(cfg.room_w, x))
     clamped_y = max(0.0, min(cfg.room_h, y))
-    if _DEBUG:
+    if DEBUG:
         log.info(
             "wifi-debug: matched=%d/%d, scan_size=%d, "
             "rssi=%s, dists_m=%s, raw_xy=(%.2f, %.2f), clamped=(%.2f, %.2f), "

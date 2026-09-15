@@ -18,7 +18,7 @@ import yaml
 from fastapi import APIRouter, HTTPException, Request
 
 from ..kalman import MOTION_MODELS
-from ..wifi import ALGORITHMS
+from ..wifi import ALGORITHMS, DEBUG
 
 router = APIRouter(tags=["contract"])
 
@@ -68,6 +68,17 @@ def contract(request: Request) -> dict:
         "motion_model": getattr(cfg, "motion_model", None),
         "algorithms": list(ALGORITHMS),
         "algorithm": getattr(cfg, "algorithm", None),
+        # WIFI_DEBUG is read once at process start (a plain env var, not a
+        # hot-reloadable file), so a value toggled in a deploy dashboard
+        # without a pod restart is not this. Reported so an operator can tell
+        # "not active" from "active but nothing to log" instead of guessing
+        # from an empty log stream.
+        "debug": DEBUG,
+        # How many anchors this adapter can actually range against right now:
+        # a blueprint anchor needs both a position (blueprint) and a BSSID
+        # (bindings) to count. 0 means every scan is silently unlocatable,
+        # which without this looks identical to "not receiving scans at all".
+        "routers_bound": len(cfg.routers) if cfg is not None else None,
         "env": {
             "required": _sanitize(raw.get("required")),
             "recommended": _sanitize(raw.get("recommended")),

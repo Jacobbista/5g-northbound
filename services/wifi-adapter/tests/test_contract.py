@@ -58,3 +58,30 @@ async def test_contract_reports_the_active_tunables():
     # config to read an active value from.
     for key, vocab in (("motion_model", "motion_models"), ("algorithm", "algorithms")):
         assert body[key] is None or body[key] in body[vocab]
+
+
+async def test_contract_reports_whether_debug_is_active():
+    # WIFI_DEBUG is a plain env var, read once at process start: this reports
+    # the value actually in effect, not what a dashboard's toggle claims,
+    # since only a pod restart can change it.
+    body = (await _get("/contract")).json()
+    assert body["debug"] is False
+
+
+async def test_contract_reports_how_many_routers_are_bound(app_with_adapter, cfg):
+    # 0 here means every scan is silently unlocatable: an anchor needs both a
+    # blueprint position and a bindings BSSID to count. Distinguishing that
+    # from "not receiving scans at all" was previously log-only.
+    body = (await _get("/contract")).json()
+    assert body["routers_bound"] == len(cfg.routers)
+
+
+async def test_contract_reports_none_before_the_blueprint_loads(monkeypatch):
+    # A boot still waiting on the engine's blueprint: app.state carries no
+    # wifi_config yet. Explicit teardown, since app.state is a module-level
+    # singleton other tests in this file set it on.
+    from app.main import app as _app
+
+    monkeypatch.delattr(_app.state, "wifi_config", raising=False)
+    body = (await _get("/contract")).json()
+    assert body["routers_bound"] is None

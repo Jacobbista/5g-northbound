@@ -55,3 +55,24 @@ def test_adapter_caches_last_fix_with_timestamp(cfg):
 def test_adapter_rejects_scan_without_known_ap(cfg):
     adapter = WifiAdapter(cfg)
     assert adapter.ingest("dev1", {"FF:FF:FF:FF:FF:FF": -40}) is False
+
+
+def test_no_match_logs_a_debug_line_with_no_bssids(cfg, monkeypatch, caplog):
+    """The one case WIFI_DEBUG existed to catch, and the one it silently
+    dropped: before this, the debug log sat past the early return for a scan
+    that matched no configured router, so a binding gap logged nothing even
+    with debug on. BSSIDs never appear in the line (sensitive); only counts,
+    which are still enough to tell "nothing bound" from "bound, scan missed
+    it"."""
+    monkeypatch.setattr("app.wifi.DEBUG", True)
+    with caplog.at_level("INFO", logger="app.wifi"):
+        assert compute_position({"FF:FF:FF:FF:FF:FF": -40}, cfg) is None
+    assert any("no match" in r.message for r in caplog.records)
+    assert any(f"routers_bound={len(cfg.routers)}" in r.message for r in caplog.records)
+    assert "FF:FF:FF:FF:FF:FF" not in caplog.text
+
+
+def test_no_match_logs_nothing_with_debug_off(cfg, caplog):
+    with caplog.at_level("INFO", logger="app.wifi"):
+        assert compute_position({"FF:FF:FF:FF:FF:FF": -40}, cfg) is None
+    assert not caplog.records

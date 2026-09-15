@@ -195,6 +195,16 @@ without them the blueprint's anchors have no radio to match scans against and
 `wifi-adapter` comes up with `0 routers`. Import supplies the id → BSSID
 table and positioning starts.
 
+`GET /contract`'s `routers_bound` reports that count live, and `debug`
+reports whether `WIFI_DEBUG` is active in the running pod, so both can be
+checked without reading logs. `WIFI_DEBUG` is a plain env var read once at
+process start: toggling it in a deploy dashboard does nothing until the pod
+is recreated with the new value, which is what `debug: false` there is
+telling you. Once it is genuinely on, a scan matching no bound router logs
+one line (`wifi-debug: no match, scan_size=…, routers_bound=…`) rather than
+nothing - the case `0 routers` produces on every single scan, and the one
+`WIFI_DEBUG` existed to catch.
+
 Under the hood these are `GET`/`PUT /bindings` on `wifi-adapter`, proxied
 by the editor at `/api/wifi/bindings`. BSSIDs ride this **operator plane** only
 (the editor is gated by `placement-admin`); they are never proxied to the demo
