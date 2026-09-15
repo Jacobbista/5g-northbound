@@ -26,3 +26,34 @@ describe("FloorPlanScene raycast gating", () => {
     }
   });
 });
+
+
+describe("wifi connection lines", () => {
+  it("draws trilateration lines only to wifi anchors, not every visible AP", () => {
+    // The `aps` array Scene builds is filtered by the WIFI/UWB visibility
+    // toggle only, so with both toggles on it holds UWB anchors too. A
+    // wifi-sourced device's connection lines must be built from a
+    // technology-filtered set, not that shared array, or a UWB tag's anchors
+    // get drawn as if they had trilaterated the wifi asset.
+    expect(source).toMatch(/const wifiAps = aps\.filter\(\(a\) => techOfAnchor\(a\) === "wifi"\)/);
+    expect(source).toMatch(/<ConnectionLines from={local} aps={wifiAps}/);
+    expect(source).not.toMatch(/<ConnectionLines from={local} aps={aps}/);
+  });
+});
+
+
+describe("blueprint freshness", () => {
+  it("polls the blueprint instead of fetching it once", () => {
+    // A one-shot fetch on mount leaves an open tab rendering fixes against
+    // whatever frame the room had when the tab loaded. If the georeference
+    // changes afterward (placement editor, live), every fix is projected onto
+    // the old frame and the dot drifts from the room until a reload re-fetches
+    // it once. Polling is the fix; this guards against the fetch reverting to
+    // a single call with no re-schedule.
+    expect(source).toMatch(/setTimeout\(tick, BLUEPRINT_POLL_MS\)/);
+  });
+
+  it("keeps the last-known layout on a failed poll rather than clearing it", () => {
+    expect(source).not.toMatch(/catch\(\(\) => \{\s*if \(!cancelled\) setLayout\(null\)/);
+  });
+});

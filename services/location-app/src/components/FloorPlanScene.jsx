@@ -47,6 +47,13 @@ const techPalette = (a) => TECH_PALETTE[techOfAnchor(a)] || TECH_PALETTE.wifi;
 const TRAIL_MAX = 60;
 const MARGIN = 6;
 const STALE_MS = 10000;
+// The blueprint changes only on an operator's action in the placement editor
+// (georef, room size, anchor positions), not on the demo's own cadence, so a
+// slow poll is enough. Without it, a tab open across such an edit keeps
+// projecting fresh WGS84 fixes onto the room's old frame: the dot visibly
+// drifts off where the anchors and walls now are, and only a reload (which
+// re-fetches once, on mount) corrects it. Matches useAdapterHealth's poll.
+const BLUEPRINT_POLL_MS = 15000;
 // Display threshold for the reported fix accuracy (metres). Matches the
 // sidebar's `imprecise` state in App.jsx; override per deployment via
 // runtime env.
@@ -880,7 +887,7 @@ function ConnectionLines({ from, aps, color }) {
   });
 }
 
-function DeviceTracks({ positions, onSelectDevice, aps, frame, inert = false }) {
+function DeviceTracks({ positions, onSelectDevice, wifiAps, frame, inert = false }) {
   const trailsRef = useRef({});
   const lastSeenRef = useRef({});
   // Per-device smoothed position (EMA of toLocal output).
@@ -946,7 +953,7 @@ function DeviceTracks({ positions, onSelectDevice, aps, frame, inert = false }) 
     return (
       <group key={phone}>
         {selected && hasWifi && !stale && local && (
-          <ConnectionLines from={local} aps={aps} color={device.color} />
+          <ConnectionLines from={local} aps={wifiAps} color={device.color} />
         )}
         {selected && <GradientTrail points={trail} color={device.color} />}
         {local && (
@@ -1462,6 +1469,11 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
   const aps = visibleTechs
     ? allAps.filter((a) => visibleTechs.has(techOfAnchor(a)))
     : allAps;
+  // ConnectionLines draws a trilateration line per AP for a wifi-sourced
+  // device. Restricted to wifi anchors: `aps` above is only filtered by the
+  // WIFI/UWB visibility toggle, so with both toggles on it would otherwise
+  // include UWB anchors a wifi fix never ranged against.
+  const wifiAps = aps.filter((a) => techOfAnchor(a) === "wifi");
   const walls = (room?.walls ?? layout?.walls) ?? [];
   const perimeterOpenings = room?.perimeter_openings ?? [];
   const cx = w / 2;
@@ -1561,7 +1573,7 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
         );
       })}
 
-      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} aps={aps} frame={frame} inert={inert} />
+      <DeviceTracks positions={positions} onSelectDevice={onSelectDevice} wifiAps={wifiAps} frame={frame} inert={inert} />
     </>
   );
 }
@@ -1620,20 +1632,29 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    fetch(`${CAMARA_API_BASE}/blueprint`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
+    let timer = null;
+
+    const tick = async () => {
+      try {
+        const r = await fetch(`${CAMARA_API_BASE}/blueprint`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = r.ok ? await r.json() : null;
         if (cancelled) return;
         setLayout(data);
         if (onLayoutLoaded) onLayoutLoaded(data);
-      })
-      .catch(() => {
-        if (!cancelled) setLayout(null);
-      });
+      } catch {
+        // Transient failure: keep the last-known layout rather than dropping
+        // to the default dimensions, matching useAdapterHealth's posture.
+      } finally {
+        if (!cancelled) timer = setTimeout(tick, BLUEPRINT_POLL_MS);
+      }
+    };
+    tick();
+
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [token, onLayoutLoaded]);
 
