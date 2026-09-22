@@ -14,6 +14,7 @@ KID = "test-key-1"
 CERTS_URL = "http://kc.test/auth/realms/5g-testbed/protocol/openid-connect/certs"
 
 _SPEC_DIR = Path(__file__).resolve().parents[1] / "spec"
+_PROFILE_SPEC_DIR = Path(__file__).resolve().parents[3] / "spec" / "private-profile" / "generated"
 
 
 @pytest.fixture(scope="session")
@@ -127,8 +128,8 @@ async def client(app, respx_mock):
 # --- CAMARA response schema validation ---
 
 
-def _validator(spec_file: str, schema_name: str):
-    spec = yaml.safe_load((_SPEC_DIR / spec_file).read_text())
+def _validator(spec_file: str, schema_name: str, spec_dir: Path = _SPEC_DIR):
+    spec = yaml.safe_load((spec_dir / spec_file).read_text())
     resolver = RefResolver.from_schema(spec)
     schema = {"$ref": f"#/components/schemas/{schema_name}"}
     return Draft7Validator(schema, resolver=resolver)
@@ -137,6 +138,13 @@ def _validator(spec_file: str, schema_name: str):
 @pytest.fixture(scope="session")
 def location_validator():
     return _validator("location-retrieval.yaml", "Location")
+
+
+@pytest.fixture(scope="session")
+def profiled_location_validator():
+    # Same schema plus the private-profile overlay (assetId, source/kind/altitude/
+    # verticalAccuracy) - the half of the contract location_validator can't see.
+    return _validator("location-retrieval.profiled.yaml", "Location", spec_dir=_PROFILE_SPEC_DIR)
 
 
 @pytest.fixture(scope="session")

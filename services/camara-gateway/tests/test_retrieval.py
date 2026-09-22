@@ -45,7 +45,9 @@ async def test_retrieve_fuses_multi_capability(client, respx_mock, auth_headers,
     assert body["area"]["radius"] < 0.5 or body["area"]["radius"] == 1.0  # CAMARA floors radius at 1 m
 
 
-async def test_retrieve_returns_spec_shaped_circle(client, auth_headers, location_validator):
+async def test_retrieve_returns_spec_shaped_circle(
+    client, auth_headers, location_validator, profiled_location_validator
+):
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
@@ -56,6 +58,7 @@ async def test_retrieve_returns_spec_shaped_circle(client, auth_headers, locatio
     assert body["source"] == "wifi"
     assert body["kind"] == "tool"
     location_validator.validate(body)
+    profiled_location_validator.validate(body)
 
 
 async def test_retrieve_via_nai_asset_alias(client, auth_headers, location_validator):
