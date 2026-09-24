@@ -17,7 +17,7 @@ The full contract and its rationale live in [`spec/private-profile/README.md`](s
 | **Identity** | `assetId` is first-class; a public identifier (`phoneNumber`, IP) is rejected with `422 UNSUPPORTED_IDENTIFIER` |
 | **Delivery** | a streaming channel (`/positions/stream`) beside the pull `retrieve` endpoint |
 | **Authorisation** | 2-legged, `org`-scoped - no three-legged consent, since network, assets, and apps are one owner |
-| **Dimension** | optional `altitude` + `verticalAccuracy` on the fix |
+| **Dimension** | optional `altitude` + `verticalAccuracy` on the fix, and `horizontalAccuracy` below CAMARA's 1 m radius floor |
 | **Provenance** | optional `source` + `kind` - the technology and asset class behind the fix |
 
 On top of the extensions the gateway honours the base r3.2 contract fully - `maxAge` freshness, `maxSurface`, and the namespaced CAMARA error codes.

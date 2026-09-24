@@ -76,14 +76,15 @@ Response (`Location`):
   },
   "source":           "wittra",
   "kind":             "pallet",
+  "horizontalAccuracy": 50.0,
   "altitude":         240.4,
   "verticalAccuracy": 2.0
 }
 ```
 
-`area` is either a `CIRCLE` (centre + radius ≥ 1 m) or, per spec, a `POLYGON`. `radius` is in metres. `source`, `kind`, `altitude`, and `verticalAccuracy` are private-profile additions: descriptive fields the demo surfaces; a plain CAMARA client ignores them. `device` is mandatory; absence yields `422 MISSING_IDENTIFIER`.
+`area` is either a `CIRCLE` (centre + radius ≥ 1 m) or, per spec, a `POLYGON`. `radius` is in metres. `source`, `kind`, `horizontalAccuracy`, `altitude`, and `verticalAccuracy` are private-profile additions: descriptive fields the demo surfaces; a plain CAMARA client ignores them. `device` is mandatory; absence yields `422 MISSING_IDENTIFIER`.
 
-The `radius ≥ 1 m` floor is CAMARA's own [`Circle.radius`](https://github.com/camaraproject/DeviceLocation/blob/main/code/API_definitions/location-retrieval.yaml) minimum, not a private-profile addition: it was `2000` (2 km, a public-network Cell-ID legacy) until [PR #285](https://github.com/camaraproject/DeviceLocation/pull/285) lowered it in release r2.2, precisely to admit the non-3GPP, sub-metre-class fixes this profile carries. The gateway clamps to it (`radius = max(accuracy, 1)`) rather than raise, since a fix more precise than 1 m is still a valid fix, only not one CAMARA's schema can name exactly.
+The `radius ≥ 1 m` floor is CAMARA's own [`Circle.radius`](https://github.com/camaraproject/DeviceLocation/blob/main/code/API_definitions/location-retrieval.yaml) minimum, not a private-profile addition: it was `2000` (2 km, a public-network Cell-ID legacy) until [PR #285](https://github.com/camaraproject/DeviceLocation/pull/285) lowered it in release r2.2, precisely to admit the non-3GPP, sub-metre-class fixes this profile carries. The gateway clamps to it (`radius = max(accuracy, 1)`) rather than raise, since a fix more precise than 1 m is still a valid fix, only not one CAMARA's schema can name exactly. `horizontalAccuracy` carries the unclamped value. A missing or non-positive engine accuracy is treated as unknown and reported as the 50 m default.
 
 ### Location Verification v3
 
@@ -105,7 +106,7 @@ Response (`VerifyLocationResponse`):
 { "verificationResult": "TRUE", "lastLocationTime": "2024-01-01T12:00:00Z" }
 ```
 
-`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + accuracy radius, the same `radius ≥ 1 m` floor described above) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.
+`verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + the reported accuracy as radius, without the retrieval `radius ≥ 1 m` floor) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.
 
 ### Authentication
 
@@ -289,7 +290,7 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 }
 ```
 
-The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)`.
+The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)` and the unclamped value in `horizontalAccuracy`.
 
 **Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the source named by the capability it is resolving, so steady-state routing is single-adapter; fan-out is the no-source fallback. See [adapter-registry.md](adapter-registry.md).
 

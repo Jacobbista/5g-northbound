@@ -46,6 +46,7 @@ async def retrieve(
         # Private-asset profile extensions.
         source=asset.source,
         kind=asset.kind,
+        horizontalAccuracy=pos.radius_m,
         altitude=pos.altitude_m,
         verticalAccuracy=pos.vertical_accuracy_m,
     )

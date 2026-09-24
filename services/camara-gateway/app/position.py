@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 _MOCK_CENTER = (45.064312, 7.659154)
 _MOCK_RADIUS_M = 50.0
 
+
+def _radius_or_default(accuracy) -> float:
+    """A missing or non-positive accuracy is unknown, not infinitely precise."""
+    if isinstance(accuracy, (int, float)) and accuracy > 0:
+        return float(accuracy)
+    return _MOCK_RADIUS_M
+
 # Engine call resilience. A 5xx or network error on the engine call gets one
 # retry after a short backoff - most engine restarts and brief blips clear
 # within a few hundred milliseconds. We do NOT retry 404 (legitimate "no fix").
@@ -193,7 +200,7 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
     return Position(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=d.get("accuracy", _MOCK_RADIUS_M),
+        radius_m=_radius_or_default(d.get("accuracy")),
         last_location_time=datetime.fromisoformat(d["timestamp"]),
         altitude_m=d.get("altitude"),
         vertical_accuracy_m=d.get("vertical_accuracy_m"),
@@ -299,7 +306,7 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
     return PositionDetails(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=d.get("accuracy", _MOCK_RADIUS_M),
+        radius_m=_radius_or_default(d.get("accuracy")),
         last_location_time=datetime.fromisoformat(d["timestamp"]),
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),

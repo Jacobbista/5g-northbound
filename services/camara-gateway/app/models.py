@@ -62,9 +62,11 @@ class Location(BaseModel):
     # let quality-sensitive consumers reason about the fix (a UWB fix is
     # trusted differently from a WiFi fix at the same radius). `altitude` +
     # `verticalAccuracy` carry the third dimension CAMARA's 2D Circle drops
-    # (multi-floor / stacked storage).
+    # (multi-floor / stacked storage). `horizontalAccuracy` is the unfloored
+    # radius: `area.radius` cannot go below CAMARA's 1 m minimum.
     source: Optional[str] = None
     kind: Optional[str] = None
+    horizontalAccuracy: Optional[float] = None
     altitude: Optional[float] = None
     verticalAccuracy: Optional[float] = None
 

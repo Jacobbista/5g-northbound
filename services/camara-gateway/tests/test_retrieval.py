@@ -41,8 +41,10 @@ async def test_retrieve_fuses_multi_capability(client, respx_mock, auth_headers,
     body = r.json()
     # inverse-variance fusion pulls the fix toward the sharp UWB estimate...
     assert body["area"]["center"]["latitude"] > 0.9
-    # ...and the fused radius is tighter than the best single input (0.5 m).
-    assert body["area"]["radius"] < 0.5 or body["area"]["radius"] == 1.0  # CAMARA floors radius at 1 m
+    # ...and the fused accuracy is tighter than the best single input (0.5 m),
+    # while area.radius stays at CAMARA's 1 m minimum.
+    assert body["horizontalAccuracy"] < 0.5
+    assert body["area"]["radius"] == 1.0
 
 
 async def test_retrieve_returns_spec_shaped_circle(

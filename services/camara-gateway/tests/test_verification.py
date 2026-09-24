@@ -122,3 +122,13 @@ def test_classify_partial_when_fix_circle_straddles_boundary():
     result, match_rate = _classify(_pos(45.0009, 7.0, 50), _area(45.0, 7.0, 100))
     assert result == "PARTIAL"
     assert 1 <= match_rate <= 99
+
+
+def test_classify_uses_sub_metre_accuracy_without_floor():
+    from app.routers.verification import _classify
+
+    # Fix centre ~1.56 m from the area centre (0.000014 deg lat), area radius
+    # 2 m. A 0.3 m fix lies fully inside; floored to 1 m it would straddle.
+    result, match_rate = _classify(_pos(45.000014, 7.0, 0.3), _area(45.0, 7.0, 2))
+    assert result == "TRUE"
+    assert match_rate is None

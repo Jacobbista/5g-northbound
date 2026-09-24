@@ -19,8 +19,8 @@ The schema deltas are a machine-readable [OpenAPI Overlay](https://spec.openapis
 edited:
 
 - [`overlay-retrieval.yaml`](overlay-retrieval.yaml) - adds `assetId` to `Device`,
-  removes the public-network identifiers, adds `source`/`kind`/`altitude`/
-  `verticalAccuracy` to `Location`.
+  removes the public-network identifiers, adds `source`/`kind`/
+  `horizontalAccuracy`/`altitude`/`verticalAccuracy` to `Location`.
 - [`overlay-verification.yaml`](overlay-verification.yaml) - the same asset-identity
   delta (the verification response is already `TRUE`/`FALSE`/`PARTIAL` in the base).
 
@@ -114,6 +114,7 @@ The `Location` response gains optional fields (omitted when absent):
 |-------|---------|
 | `source` | positioning modality (`wittra`/`wifi`/`fiveg`/`gnss`/`synthetic`) - a UWB fix is trusted differently from a WiFi fix at the same radius |
 | `kind` | asset class (`uwb-tag`/`tool`/`pallet`/`forklift`/…) |
+| `horizontalAccuracy` | horizontal uncertainty (m) as reported by the source, without the 1 m floor CAMARA sets on `area.radius`. The confidence level is the source's own |
 | `altitude` | fused vertical position (m); multi-floor / stacked storage that CAMARA's 2D Circle drops |
 | `verticalAccuracy` | vertical 1-sigma (m), when available |
 
@@ -218,7 +219,9 @@ check, as the spec intends.
 **uncertainty circle** (centre + accuracy radius) against the queried area:
 `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it
 straddles the boundary. For `PARTIAL`, `matchRate` (1-99) is the percentage of
-the fix circle that falls inside the area.
+the fix circle that falls inside the area. The radius is the reported accuracy,
+not the floored `area.radius`: CAMARA's 1 m minimum constrains the retrieval
+schema, not this comparison.
 
 ### Error codes
 
@@ -249,7 +252,7 @@ CAMARA 400 codes.
 |-----------|-------|
 | `assetId` identity + Asset Identity Map (`GET/PUT /assets`) | implemented |
 | Public identifiers rejected (`UNSUPPORTED_IDENTIFIER`) | implemented |
-| `source` / `kind` / `altitude` / `verticalAccuracy` on `Location` | implemented |
+| `source` / `kind` / `horizontalAccuracy` / `altitude` / `verticalAccuracy` on `Location` | implemented |
 | Streaming channel (asset-shaped `/positions/stream`, org-scoped) | implemented |
 | 2-legged `org`-scoped authz (retrieve/verify/assets/capabilities/stream) | implemented (per-consumer Keycloak clients = KELT) |
 | `maxAge` freshness + position cache | implemented |

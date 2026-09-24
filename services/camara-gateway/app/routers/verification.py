@@ -46,11 +46,13 @@ def _classify(pos, area) -> tuple[str, int | None]:
     """TRUE/FALSE/PARTIAL from the fix's uncertainty circle against the queried
     area. The fix is a circle (centre, radius = accuracy): TRUE when it lies
     fully inside the area, FALSE when fully outside, PARTIAL when it straddles
-    the boundary - with matchRate the percentage of the fix circle inside."""
+    the boundary - with matchRate the percentage of the fix circle inside. The
+    radius is the reported accuracy: CAMARA's 1 m floor applies to the
+    retrieval Circle, not to this comparison."""
     d = _haversine_m(
         pos.latitude, pos.longitude, area.center.latitude, area.center.longitude
     )
-    r_fix = max(pos.radius_m, 1.0)
+    r_fix = pos.radius_m
     r_area = area.radius
     if d + r_fix <= r_area:
         return "TRUE", None

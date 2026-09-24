@@ -42,6 +42,13 @@ actions:
         type: number
         format: double
         description: Fused vertical position in metres (profile extension).
+      horizontalAccuracy:
+        type: number
+        format: double
+        description: |
+          Horizontal uncertainty in metres as reported by the source, without
+          the 1 m floor `area.radius` must respect. Treated as 1-sigma when
+          fixes are fused. The confidence level is the source's own.
       verticalAccuracy:
         type: number
         format: double
