@@ -48,7 +48,7 @@ async def test_placing_an_asset_reaches_its_source_by_positioning_id(client, aut
 
 async def test_removing_an_asset_takes_it_off_the_floor(client, auth_headers, fabric):
     fabric.delete("http://synthetic.test/devices/synthetic-demo-01/placement").mock(
-        return_value=httpx.Response(200, json={"id": "synthetic-demo-01", "x": 0.0, "y": 0.0, "placed": False})
+        return_value=httpx.Response(200, json={"id": "synthetic-demo-01", "placed": False})
     )
     r = await client.delete(SYNTHETIC, headers=auth_headers)
     assert r.status_code == 200

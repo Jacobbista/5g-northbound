@@ -29,6 +29,10 @@ consumer that ignores the extension containers sees a conformant CAMARA payload.
 | `GET /assets/discoverable` | resource | `spec/private-profile/extensions.yaml` | Onboarding candidates not yet mapped to a capability |
 | `GET /assets/{assetId}/details` | resource | `spec/private-profile/extensions.yaml` | Fusion metadata (strategy, sources, accuracy), fused across capabilities by the gateway |
 | `GET /anchors/calibration` | resource | `spec/private-profile/extensions.yaml` | Per-anchor RF calibration (wifi) |
+| `PUT/DELETE /assets/{assetId}/placement` | resource | `spec/private-profile/extensions.yaml` | Start point of a synthetic asset, in the frame of its room |
+| `GET /capabilities` | resource | `spec/private-profile/extensions.yaml` | What the deployment can do now, from the adapters' declarations and the asset map |
+| `GET /adapters` | resource | `spec/private-profile/extensions.yaml` | Health of each positioning adapter |
+| `GET /blueprint` | resource | `spec/private-profile/extensions.yaml`, `schema/layout.schema.json` | The venue blueprint, read-only |
 
 See [Machine-readable contracts](contracts.md) for the fetch URLs (Pages CDN +
 pinned tag).

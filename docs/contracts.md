@@ -153,7 +153,7 @@ Take each `<path>` and prefix it with a base above.
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
 | Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | The core diagnostics names, their units and the standard each is anchored to, and the rule that routes every other field to `vendorSpecific` ([profile-extensions.md](profile-extensions.md#core-vocabulary)) |
 | Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares-about-itself)) |
-| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
+| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management and extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/assets/{id}/placement`, `/anchors/calibration`, `/capabilities`, `/adapters`, `/blueprint` |
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
 contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The

@@ -7,8 +7,9 @@ info:
     the CAMARA gateway alongside the standard Device Location retrieve/verify
     APIs. These are private-profile extensions, not CAMARA Device Location: the
     Asset Identity Map that binds an asset to its positioning capabilities, the
-    onboarding candidate list, the fused side-panel telemetry, and the anchor RF
-    calibration. On-demand vendor diagnostics are a separate document,
+    onboarding candidate list, the fused side-panel telemetry, the anchor RF
+    calibration, placement of synthetic assets, the deployment capabilities,
+    adapter health, and the read-only venue blueprint. On-demand vendor diagnostics are a separate document,
     device-diagnostics.yaml. The CAMARA core specs are unchanged.
 servers:
   - url: https://{gateway}
@@ -100,6 +101,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AnchorCalibration"
+  /assets/{assetId}/placement:
+    parameters:
+      - name: assetId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      summary: Place a synthetic asset at a point and start it reporting.
+      description: >-
+        Only an asset whose primary source advertises the `placement`
+        capability can be placed. Placing a placed asset moves it. The point
+        is in the frame of the room the source reports in, and the source
+        clamps it into that room.
+      operationId: putAssetPlacement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Placement"
+      responses:
+        "200":
+          description: Where the asset landed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacementResult"
+        "404":
+          description: No such asset for this tenant, or no adapter serves its source.
+        "422":
+          description: The source reports a measured position and cannot be placed.
+        "502":
+          description: The source rejected the placement.
+        "503":
+          description: The positioning fabric or the source is unreachable.
+    delete:
+      summary: Stop a synthetic asset reporting.
+      description: The asset then has no position. Removing an asset that is not placed is not an error.
+      operationId: deleteAssetPlacement
+      responses:
+        "200":
+          description: The asset is not placed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacementResult"
+        "404":
+          description: No such asset for this tenant, or no adapter serves its source.
+  /capabilities:
+    get:
+      summary: What this deployment can do now.
+      description: >-
+        Derived from the capabilities the adapters currently advertise and from
+        the Asset Identity Map. A tenant-scoped token sees the kinds and orgs of
+        its own assets only.
+      operationId: getCapabilities
+      responses:
+        "200":
+          description: The capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+  /adapters:
+    get:
+      summary: Health of each positioning adapter.
+      description: The engine's adapter registry, passed through unchanged.
+      operationId: getAdapters
+      responses:
+        "200":
+          description: One entry per registered adapter.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adapters]
+                properties:
+                  adapters:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdapterStatus"
+  /blueprint:
+    get:
+      summary: The venue blueprint.
+      description: Read-only. The blueprint is authored in the placement editor and stored by the engine.
+      operationId: getBlueprint
+      responses:
+        "200":
+          description: The blueprint, in version 3.
+          content:
+            application/json:
+              schema:
+                $ref: "https://jacobbista.github.io/5g-northbound/schema/layout.schema.json"
+        "404":
+          description: The engine holds no blueprint.
 components:
   securitySchemes:
     bearerAuth:
@@ -192,3 +289,71 @@ components:
               txPowerRef: { type: number }
               pathLossExponent: { type: number }
               calibrated: { type: boolean }
+    Placement:
+      type: object
+      required: [x, y]
+      description: A point in metres from the room's lower-left corner, x along the width, y along the depth.
+      properties:
+        x: { type: number, format: double, x-unit: m }
+        y: { type: number, format: double, x-unit: m }
+    PlacementResult:
+      type: object
+      required: [assetId, placed]
+      properties:
+        assetId: { type: string }
+        placed: { type: boolean }
+        room:
+          type: string
+          nullable: true
+          description: The room whose frame x and y are in. Absent when the asset is not placed.
+        x: { type: number, format: double, x-unit: m, nullable: true }
+        y: { type: number, format: double, x-unit: m, nullable: true }
+    AdapterCapabilities:
+      type: object
+      description: >-
+        What an adapter declares about itself. The keys are listed in
+        docs/adapters.md, "What an adapter declares about itself".
+      additionalProperties: true
+    Capabilities:
+      type: object
+      required: [profile, kinds, sources, orgs, streaming, altitude, accuracyClasses, adapters]
+      properties:
+        profile: { type: string }
+        kinds: { type: array, items: { type: string } }
+        sources: { type: array, items: { type: string } }
+        orgs: { type: array, items: { type: string } }
+        streaming:
+          type: boolean
+          description: At least one adapter pushes its fixes.
+        altitude:
+          type: boolean
+          description: At least one adapter declares `z`, so an altitude can be reported.
+        accuracyClasses: { type: array, items: { type: string } }
+        adapters:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              source: { type: string, nullable: true }
+              state: { type: string, nullable: true }
+              capabilities:
+                $ref: "#/components/schemas/AdapterCapabilities"
+    AdapterStatus:
+      type: object
+      required: [name, state]
+      properties:
+        name: { type: string }
+        baseUrl: { type: string }
+        kind: { type: string }
+        registeredVia: { type: string }
+        state:
+          type: string
+          enum: [live, stale, unreachable]
+        failCount: { type: integer }
+        inCooldown: { type: boolean }
+        cooldownSecondsRemaining: { type: number, x-unit: s }
+        lastSeenSAgo: { type: number, x-unit: s }
+        capabilities:
+          $ref: "#/components/schemas/AdapterCapabilities"

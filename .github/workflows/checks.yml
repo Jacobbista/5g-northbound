@@ -19,6 +19,24 @@ jobs:
       # variables its env.contract.yaml marks required. Fails on contract drift
       # (a new required var that the compose file forgets to set).
       - run: python3 deploy/tools/contracts.py validate
+      # The sensitivity manifest is derived from the env contracts. Regenerate
+      # it and fail when the committed copy differs.
+      - run: |
+          python3 deploy/tools/contracts.py sensitivity-manifest
+          git diff --exit-code deploy/contracts/sensitivity-manifest.json
+
+  positioning-fabric:
+    name: positioning fabric
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml jsonschema
+      # Adapter declarations, compose capabilities, the accuracy-class
+      # vocabulary and the seed asset map agree. Static: reads files only.
+      - run: python3 deploy/tools/positioning_check.py
 
   compose-config:
     name: compose config

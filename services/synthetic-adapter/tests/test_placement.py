@@ -71,6 +71,7 @@ async def test_removing_a_device_stops_it_reporting(spawn_client):
     r = await spawn_client.delete("/devices/synthetic-demo-01/placement")
     assert r.status_code == 200
     assert r.json()["placed"] is False
+    assert r.json()["x"] is None and r.json()["y"] is None
     assert (await spawn_client.get("/measurement/synthetic-demo-01")).status_code == 404
 
 

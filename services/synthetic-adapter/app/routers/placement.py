@@ -30,10 +30,11 @@ class Placement(BaseModel):
 
 class PlacementResult(BaseModel):
     id: str
-    # The room whose frame x and y are in.
+    # The room whose frame x and y are in. Room and point are absent when the
+    # device is not placed.
     room: Optional[str] = None
-    x: float
-    y: float
+    x: Optional[float] = None
+    y: Optional[float] = None
     placed: bool
 
 
@@ -72,4 +73,4 @@ async def remove(device_id: str, request: Request):
     existed = request.app.state.walker.remove(device_id)
     if existed:
         log.info("removed %s", device_id)
-    return PlacementResult(id=device_id, x=0.0, y=0.0, placed=False)
+    return PlacementResult(id=device_id, placed=False)
