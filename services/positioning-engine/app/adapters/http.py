@@ -4,7 +4,10 @@ from typing import Callable, Optional
 
 import httpx
 
+from pydantic import ValidationError
+
 from .base import Adapter, Measurement
+from ..wire import DevicesBody, MeasurementBody
 from ..obs import corr_headers
 
 log = logging.getLogger(__name__)
@@ -13,26 +16,6 @@ log = logging.getLogger(__name__)
 COOLDOWN_FAIL_THRESHOLD = 3       # consecutive failures before cooldown kicks in
 COOLDOWN_BASE_S = 2.0             # first cooldown window
 COOLDOWN_MAX_S = 60.0             # cap on the exponential backoff
-
-_FRAMES = ("venue", "room", "wgs84")
-
-
-def _frame(value: str) -> str:
-    """The frame a measurement declares. An unknown frame is a malformed
-    measurement: its coordinates cannot be placed."""
-    if value not in _FRAMES:
-        raise ValueError(f"unknown frame {value!r}")
-    return value
-
-
-def _position(body: dict) -> dict:
-    """The frame and the coordinates it requires. A missing coordinate is a
-    malformed measurement, never a position at the origin."""
-    frame = _frame(body.get("frame", "venue"))
-    if frame == "wgs84":
-        return {"frame": frame, "latitude": float(body["latitude"]), "longitude": float(body["longitude"])}
-    return {"frame": frame, "x": float(body["x"]), "y": float(body["y"])}
-
 
 class HttpAdapter(Adapter):
     """Generic HTTP adapter - pulls a Measurement from any service that speaks
@@ -119,28 +102,26 @@ class HttpAdapter(Adapter):
                 self._record_failure()
             return None
         try:
-            body = r.json()
-            measurement = Measurement(
-                source=body.get("source", self.name),
-                accuracy=(
-                    float(body["accuracy"]) if body.get("accuracy") is not None else None
-                ),
-                confidence=(
-                    float(body["confidence"]) if body.get("confidence") is not None else None
-                ),
-                room=body.get("room"),
-                z=float(body["z"]) if body.get("z") is not None else None,
-                **_position(body),
-                timestamp=body.get("timestamp"),
-                lastSeen=(
-                    float(body["lastSeen"]) if body.get("lastSeen") is not None else None
-                ),
-                diagnostics=body.get("diagnostics") or {},
-            )
-        except (KeyError, ValueError, TypeError) as exc:
+            body = MeasurementBody.model_validate(r.json())
+        except (ValueError, ValidationError) as exc:
             log.warning("adapter %s returned malformed body: %s", self.name, exc)
             self._record_failure()
             return None
+        measurement = Measurement(
+            source=body.source or self.name,
+            accuracy=body.accuracy,
+            confidence=body.confidence,
+            frame=body.frame,
+            room=body.room,
+            x=body.x if body.x is not None else 0.0,
+            y=body.y if body.y is not None else 0.0,
+            z=body.z,
+            latitude=body.latitude if body.latitude is not None else 0.0,
+            longitude=body.longitude if body.longitude is not None else 0.0,
+            timestamp=body.timestamp,
+            lastSeen=body.lastSeen,
+            diagnostics=body.diagnostics,
+        )
         self._record_success()
         return measurement
 
@@ -162,10 +143,11 @@ class HttpAdapter(Adapter):
         if r.status_code != 200:
             return None
         try:
-            body = r.json()
-        except ValueError:
+            body = DevicesBody.model_validate(r.json())
+        except (ValueError, ValidationError) as exc:
+            log.warning("adapter %s /devices malformed: %s", self.name, exc)
             return None
-        return body if isinstance(body, dict) else None
+        return body.model_dump(exclude_none=True)
 
     async def aclose(self):
         await self._client.aclose()

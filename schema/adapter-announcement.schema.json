@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-announcement.schema.json",
+  "$defs": {
+    "AdapterCapabilities": {
+      "additionalProperties": true,
+      "description": "What an adapter declares about itself. Unknown keys are carried as\ndeclared.",
+      "properties": {
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Technology tag the adapter reports under.",
+          "title": "Source"
+        },
+        "kinds": {
+          "description": "Asset kinds this source can position.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Kinds",
+          "type": "array"
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "enum": [
+                "venue",
+                "room",
+                "wgs84"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Frame of the measurements it sends.",
+          "title": "Frame"
+        },
+        "streaming": {
+          "default": false,
+          "description": "The adapter pushes its fixes instead of being polled.",
+          "title": "Streaming",
+          "type": "boolean"
+        },
+        "z": {
+          "default": false,
+          "description": "The source measures height.",
+          "title": "Z",
+          "type": "boolean"
+        },
+        "accuracy_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Band from spec/private-profile/accuracy-class-vocabulary.json.",
+          "title": "Accuracy Class"
+        },
+        "nominalAccuracy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nominal accuracy for an open-ended accuracy class.",
+          "title": "Nominalaccuracy",
+          "x-unit": "m"
+        },
+        "calibration": {
+          "default": false,
+          "description": "Serves the calibration tool.",
+          "title": "Calibration",
+          "type": "boolean"
+        },
+        "devices": {
+          "default": false,
+          "description": "Serves GET /devices for onboarding.",
+          "title": "Devices",
+          "type": "boolean"
+        },
+        "discover": {
+          "default": false,
+          "description": "Serves GET /discover, the vendor device list.",
+          "title": "Discover",
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "default": false,
+          "description": "Serves GET /diagnostics/{positioningId}.",
+          "title": "Diagnostics",
+          "type": "boolean"
+        },
+        "placement": {
+          "default": false,
+          "description": "Accepts a placement, for a synthetic source.",
+          "title": "Placement",
+          "type": "boolean"
+        }
+      },
+      "title": "Adapter capabilities",
+      "type": "object"
+    }
+  },
+  "description": "Body of POST /adapters, with which an adapter registers with the engine and declares its capabilities. See docs/adapter-registry.md.",
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "baseUrl": {
+      "description": "Where the engine reaches the adapter.",
+      "title": "Baseurl",
+      "type": "string"
+    },
+    "kind": {
+      "default": "adapter",
+      "title": "Kind",
+      "type": "string"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/AdapterCapabilities"
+    }
+  },
+  "required": [
+    "name",
+    "baseUrl"
+  ],
+  "title": "Adapter announcement",
+  "type": "object"
+}

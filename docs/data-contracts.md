@@ -274,7 +274,7 @@ The cadence is set by the engine's `WEBSOCKET_INTERVAL_MS` (default 500 ms). The
 
 The boundary between `camara-gateway` and any positioning engine is this REST contract. Any engine that honours it is a drop-in replacement; the gateway stays geometry-agnostic.
 
-`GET /position/{positioning_id}?source=<source>` → `EnginePosition`:
+`GET /position/{positioning_id}?source=<source>` → `EnginePosition`, machine-readable in [`schema/engine-position.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/engine-position.schema.json):
 
 ```json
 {

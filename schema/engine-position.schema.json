@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/blob/main/schema/engine-position.schema.json",
+  "$defs": {
+    "FusionOutput": {
+      "description": "One strategy's output, in WGS84. Used inside EnginePosition.fusions for\nside-by-side comparison when FUSION_COMPARE is set.",
+      "properties": {
+        "latitude": {
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "title": "Longitude",
+          "type": "number"
+        },
+        "accuracy": {
+          "title": "Accuracy",
+          "type": "number"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude",
+        "accuracy",
+        "sources"
+      ],
+      "title": "FusionOutput",
+      "type": "object"
+    }
+  },
+  "description": "Body of the engine's GET /position/{positioningId}, read by the CAMARA gateway.",
+  "properties": {
+    "positioningId": {
+      "title": "Positioningid",
+      "type": "string"
+    },
+    "latitude": {
+      "title": "Latitude",
+      "type": "number"
+    },
+    "longitude": {
+      "title": "Longitude",
+      "type": "number"
+    },
+    "accuracy": {
+      "title": "Accuracy",
+      "type": "number",
+      "x-unit": "m"
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "strategy": {
+      "default": "weighted_avg",
+      "title": "Strategy",
+      "type": "string"
+    },
+    "fusions": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/FusionOutput"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fusions"
+    },
+    "altitude": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Altitude",
+      "x-unit": "m"
+    }
+  },
+  "required": [
+    "positioningId",
+    "latitude",
+    "longitude",
+    "accuracy",
+    "timestamp",
+    "sources"
+  ],
+  "title": "EnginePosition",
+  "type": "object"
+}

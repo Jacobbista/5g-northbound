@@ -149,11 +149,19 @@ Take each `<path>` and prefix it with a base above.
 | Asset map schema | `schema/asset.schema.json` | this project + operator data | Asset Identity Map entries (`GET/PUT /assets`); an asset binds ≥1 positioning capability, fused |
 | Blueprint schema | `schema/layout.schema.json` | operator data | Venue geometry (`layout.json`) |
 | Hop-log schema | `schema/hop-log.schema.json` | this project | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
+| Adapter measurement | `schema/adapter-measurement.schema.json` | this project | `GET /measurement/{positioningId}`, what an adapter sends the engine ([adapters.md](adapters.md)) |
+| Adapter announcement | `schema/adapter-announcement.schema.json` | this project | `POST /adapters`, registration and declared capabilities ([adapter-registry.md](adapter-registry.md)) |
+| Adapter devices | `schema/adapter-devices.schema.json` | this project | `GET /devices`, the devices a source knows, for onboarding |
+| Engine position | `schema/engine-position.schema.json` | this project | `GET /position/{positioningId}`, what the engine sends the gateway |
 | Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
 | Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | The core diagnostics names, their units and the standard each is anchored to, and the rule that routes every other field to `vendorSpecific` ([profile-extensions.md](profile-extensions.md#core-vocabulary)) |
 | Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares-about-itself)) |
 | Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management and extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/assets/{id}/placement`, `/anchors/calibration`, `/capabilities`, `/adapters`, `/blueprint` |
+
+The four engine schemas are generated from the engine's models with
+`make contract-schemas`. The engine parses with the same models, and its test
+suite fails when a committed schema differs from them.
 
 Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
 contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The

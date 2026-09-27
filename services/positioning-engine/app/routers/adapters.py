@@ -11,23 +11,11 @@ its existing internal-trust model. See docs/adapter-registry.md.
 import logging
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict
-
 from ..registry import SELF, _safe_aclose
+from ..wire import Announcement
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["adapters"])
-
-
-class RegisterRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    name: str
-    baseUrl: str
-    kind: str = "adapter"
-    # Self-advertised positioning traits (frame, streaming, z, accuracy_class,
-    # kinds). Optional: an adapter that omits it contributes no capability
-    # hints to the gateway's GET /capabilities.
-    capabilities: dict = {}
 
 
 @router.get("/adapters")
@@ -39,11 +27,12 @@ async def list_adapters(request: Request):
 
 
 @router.post("/adapters")
-async def register_adapter(req: RegisterRequest, request: Request):
+async def register_adapter(req: Announcement, request: Request):
     """Register or heartbeat a self-registering adapter. Idempotent: same
     name+baseUrl just refreshes lastSeen."""
     registry = request.app.state.registry
-    orphan = registry.upsert(req.name, req.baseUrl, req.kind, SELF, req.capabilities)
+    # Stored as declared: an omitted trait stays omitted.
+    orphan = registry.upsert(req.name, req.baseUrl, req.kind, SELF, req.capabilities.model_dump(exclude_unset=True))
     registry.persist()
     if orphan is not None:
         await _safe_aclose(orphan)

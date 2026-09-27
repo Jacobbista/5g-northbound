@@ -121,8 +121,8 @@ positioning-check:
 	@python3 deploy/tools/positioning_check.py
 
 # Apply the private-asset profile overlays to the pinned CAMARA base specs,
-# producing the profiled OpenAPI documents (derived artefacts, gitignored). The
-# committed contribution is the overlays under spec/private-profile/.
+# producing the profiled OpenAPI documents. They are derived but committed, as
+# the pinnable contract; CI fails when they drift from base + overlays.
 .PHONY: profile-spec
 profile-spec:
 	@mkdir -p spec/private-profile/generated
@@ -135,6 +135,14 @@ profile-spec:
 	  spec/private-profile/overlay-verification.yaml \
 	  spec/private-profile/generated/location-verification.profiled.yaml
 	@echo "  profiled specs written to spec/private-profile/generated/"
+
+# Write the engine's wire contracts (adapter measurement, announcement, devices,
+# engine position) as JSON Schema under schema/, from the engine's models. The
+# engine test suite fails when the committed copies drift. Runs in the engine's
+# venv: the schema text depends on the pinned pydantic.
+.PHONY: contract-schemas
+contract-schemas:
+	@services/positioning-engine/.venv/bin/python deploy/tools/export-engine-schemas.py
 
 # Contract hygiene + the machine-readable sensitivity manifest KELT consumes
 # (var -> tier -> Secret/ConfigMap + provenance). Lint fails on hard problems.

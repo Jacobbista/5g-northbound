@@ -48,7 +48,7 @@ jobs:
           python-version: "3.11"
       # These tests read both ends of every contract that crosses a service
       # boundary, so they belong to no single service and run from the root.
-      - run: pip install pytest httpx pyyaml
+      - run: pip install pytest httpx pyyaml jsonschema
       - run: pytest -q deploy/tools
 
   test-frontend:

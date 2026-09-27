@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-measurement.schema.json",
+  "allOf": [
+    {
+      "else": {
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "if": {
+        "properties": {
+          "frame": {
+            "const": "wgs84"
+          }
+        },
+        "required": [
+          "frame"
+        ]
+      },
+      "then": {
+        "required": [
+          "latitude",
+          "longitude"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "frame": {
+            "const": "room"
+          }
+        },
+        "required": [
+          "frame"
+        ]
+      },
+      "then": {
+        "required": [
+          "room"
+        ]
+      }
+    }
+  ],
+  "description": "Body of an adapter's GET /measurement/{positioningId}, read by the positioning engine. See docs/adapters.md.",
+  "properties": {
+    "source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Short tag of the positioning technology. Defaults to the adapter's registered name.",
+      "title": "Source"
+    },
+    "frame": {
+      "default": "venue",
+      "description": "Reference of the horizontal position. `room`: x, y from the lower-left corner of the room named by `room`. `venue`: x, y from the lower-left corner of the floor plan. `wgs84`: latitude, longitude.",
+      "enum": [
+        "venue",
+        "room",
+        "wgs84"
+      ],
+      "title": "Frame",
+      "type": "string"
+    },
+    "room": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Blueprint room id. Required with frame `room`.",
+      "title": "Room"
+    },
+    "x": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Along the width. Required with frame `room` or `venue`.",
+      "title": "X",
+      "x-unit": "m"
+    },
+    "y": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Along the depth. Required with frame `room` or `venue`.",
+      "title": "Y",
+      "x-unit": "m"
+    },
+    "latitude": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Required with frame `wgs84`.",
+      "title": "Latitude",
+      "x-unit": "deg"
+    },
+    "longitude": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Required with frame `wgs84`.",
+      "title": "Longitude",
+      "x-unit": "deg"
+    },
+    "z": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Height above the venue floor, in every frame. Sent only by a source that declares `z: true`, and only when measured for this fix.",
+      "title": "Z",
+      "x-unit": "m"
+    },
+    "accuracy": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One-sigma horizontal error radius. When absent, the engine uses the nominal accuracy of the adapter's declared accuracy class.",
+      "title": "Accuracy",
+      "x-unit": "m"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The source's own reliability score, a multiplier on the fusion weight.",
+      "title": "Confidence"
+    },
+    "timestamp": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the fix was taken, Unix epoch seconds.",
+      "title": "Timestamp",
+      "x-unit": "s"
+    },
+    "lastSeen": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the device last communicated with its source, Unix epoch seconds.",
+      "title": "Lastseen",
+      "x-unit": "s"
+    },
+    "diagnostics": {
+      "description": "Stream-tier diagnostics, carried to the position stream.",
+      "title": "Diagnostics",
+      "type": "object"
+    }
+  },
+  "title": "Adapter measurement",
+  "type": "object"
+}

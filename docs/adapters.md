@@ -72,6 +72,8 @@ Every level uses the same axes, the local frame of omlox: x along the width, y a
 }
 ```
 
+The machine-readable contract is [`schema/adapter-measurement.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-measurement.schema.json), generated from the model the engine parses with. A body that fails it is dropped as malformed.
+
 | Field                  | Type             | Notes |
 |------------------------|------------------|-------|
 | `source`               | string           | Short tag identifying the technology (`wifi`, `uwb`, `fiveg`, …). Surfaces in the engine response under `sources[]` |

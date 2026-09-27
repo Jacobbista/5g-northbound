@@ -32,15 +32,17 @@ def _names(path: Path, pattern: str) -> set[str]:
 
 
 def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
-    """`GET /measurement/{id}`: three producers, one consumer."""
-    engine = ROOT / "services/positioning-engine/app/adapters/http.py"
-    # A key read under a `.get()` guard is optional: wifi and synthetic have no
-    # last-communication signal to report and legitimately omit it.
-    optional = _names(engine, r'body\.get\("([a-zA-Z_]+)"')
+    """`GET /measurement/{id}`: three producers, one consumer.
+
+    The consumer side is the published schema, which the engine test suite
+    keeps equal to the model the engine parses with."""
+    import json
+
+    schema = json.loads((ROOT / "schema/adapter-measurement.schema.json").read_text())
+    optional = set(schema["properties"])
     # Coordinates are required per frame: a producer emits the pair of the
     # frame it reports in.
     pairs = ({"x", "y"}, {"latitude", "longitude"})
-    required = _names(engine, r'body\["([a-zA-Z_]+)"\]') - optional - set().union(*pairs)
 
     produced: set[str] = set()
     for adapter, emit_file, pattern in (
@@ -50,8 +52,6 @@ def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
     ):
         emitted = set(re.findall(pattern, (ROOT / emit_file).read_text(), re.M))
         emitted |= _names(ROOT / emit_file, r'out\["([a-zA-Z_]+)"\]')
-        missing = required - emitted
-        assert not missing, f"{adapter} does not emit {sorted(missing)}"
         assert any(p <= emitted for p in pairs), f"{adapter} emits no coordinate pair"
         produced |= emitted
 
@@ -107,6 +107,7 @@ def test_no_internal_contract_still_carries_a_unit_in_a_field_name():
     """One convention across everything this project names."""
     offenders: list[str] = []
     for f in ("services/positioning-engine/app/adapters/base.py",
+              "services/positioning-engine/app/wire.py",
               "services/positioning-engine/app/models.py",
               "services/wifi-adapter/app/models.py",
               "services/synthetic-adapter/app/models.py"):
@@ -132,10 +133,10 @@ def _load(path: Path, name: str):
     return mod
 
 
-def _register_request_fields() -> set[str]:
-    src = (ROOT / "services/positioning-engine/app/routers/adapters.py").read_text()
-    body = re.search(r"class RegisterRequest\(BaseModel\):(.*?)\n\n", src, re.S).group(1)
-    return set(re.findall(r"^    ([a-zA-Z_]+):", body, re.M))
+def _announcement_schema() -> dict:
+    import json
+
+    return json.loads((ROOT / "schema/adapter-announcement.schema.json").read_text())
 
 
 async def _announce_once(mod, env: dict[str, str]) -> dict:
@@ -180,8 +181,11 @@ async def _announce_once(mod, env: dict[str, str]) -> dict:
 
 
 def test_every_adapter_announces_itself_with_the_body_the_engine_accepts():
-    accepted = _register_request_fields()
-    assert "baseUrl" in accepted
+    from jsonschema import Draft202012Validator
+
+    schema = _announcement_schema()
+    accepted = set(schema["properties"])
+    validator = Draft202012Validator(schema)
     env = {
         "POSITIONING_ENGINE_URL": "http://engine:8000",
         "ADAPTER_NAME": "probe",
@@ -204,6 +208,8 @@ def test_every_adapter_announces_itself_with_the_body_the_engine_accepts():
         assert body["kind"] == family, f"{adapter} registers kind {body['kind']!r}, not {family!r}"
         unknown = set(body) - accepted
         assert not unknown, f"{adapter} announces fields the engine drops: {sorted(unknown)}"
+        errors = [e.message for e in validator.iter_errors(body)]
+        assert not errors, f"{adapter} announcement breaks the published schema: {errors}"
 
 
 # --- the gateway reads what the engine writes -----------------------------

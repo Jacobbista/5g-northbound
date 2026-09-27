@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-devices.schema.json",
+  "$defs": {
+    "DeviceEntry": {
+      "properties": {
+        "id": {
+          "description": "The source's device id. Becomes a capability's positioningId on onboarding.",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "asset",
+                "infrastructure"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "sourceClass": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "uwb, ble, wifi, gnss, cellular or other.",
+          "title": "Sourceclass"
+        },
+        "deviceType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The vendor's own device type.",
+          "title": "Devicetype"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "lastSeen": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the device last communicated with its source, Unix epoch seconds.",
+          "title": "Lastseen",
+          "x-unit": "s"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last known position, with the coordinate fields of a measurement.",
+          "title": "Position"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "DeviceEntry",
+      "type": "object"
+    }
+  },
+  "description": "Body of an adapter's GET /devices, the devices a source knows, read by the engine for onboarding.",
+  "properties": {
+    "origin": {
+      "description": "`inventory`: the vendor's registry. `observed`: seen by activity.",
+      "enum": [
+        "inventory",
+        "observed"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "devices": {
+      "items": {
+        "$ref": "#/$defs/DeviceEntry"
+      },
+      "title": "Devices",
+      "type": "array"
+    }
+  },
+  "required": [
+    "origin",
+    "devices"
+  ],
+  "title": "Adapter devices",
+  "type": "object"
+}
