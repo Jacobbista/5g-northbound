@@ -18,7 +18,7 @@ async def test_adapters_returns_empty_when_engine_not_configured(client, make_to
 
 
 @pytest.mark.asyncio
-async def test_adapters_proxies_engine_response(client, make_token, monkeypatch, respx_mock):
+async def test_adapters_reports_name_state_and_capabilities_only(client, make_token, monkeypatch, respx_mock):
     monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
     from app.config import get_settings
 
@@ -27,20 +27,12 @@ async def test_adapters_proxies_engine_response(client, make_token, monkeypatch,
     respx_mock.get("http://engine.test/adapters").mock(
         return_value=httpx.Response(200, json={
             "adapters": [
-                {
-                    "name": "wifi",
-                    "base_url": "http://wifi-adapter:8080",
-                    "fail_count": 0,
-                    "in_cooldown": False,
-                    "cooldown_seconds_remaining": 0.0,
-                },
-                {
-                    "name": "wittra",
-                    "base_url": "https://api.wittra.example.com",
-                    "fail_count": 5,
-                    "in_cooldown": True,
-                    "cooldown_seconds_remaining": 8.0,
-                },
+                {"name": "wifi", "baseUrl": "http://wifi-adapter:8080", "failCount": 0,
+                 "inCooldown": False, "lastSeenSAgo": 1.2, "state": "live",
+                 "capabilities": {"source": "wifi"}},
+                {"name": "wittra", "baseUrl": "http://vendor-adapter:8080", "failCount": 5,
+                 "inCooldown": True, "lastSeenSAgo": 40.0, "state": "unreachable",
+                 "capabilities": {"source": "wittra"}},
             ]
         })
     )
@@ -49,10 +41,11 @@ async def test_adapters_proxies_engine_response(client, make_token, monkeypatch,
     r = await client.get("/adapters", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     body = r.json()
-    assert {a["name"] for a in body["adapters"]} == {"wifi", "wittra"}
-    wittra = next(a for a in body["adapters"] if a["name"] == "wittra")
-    assert wittra["in_cooldown"] is True
-    assert wittra["fail_count"] == 5
+    # The cluster address and the engine's bookkeeping stay internal.
+    assert body["adapters"] == [
+        {"name": "wifi", "state": "live", "capabilities": {"source": "wifi"}},
+        {"name": "wittra", "state": "unreachable", "capabilities": {"source": "wittra"}},
+    ]
 
 
 @pytest.mark.asyncio

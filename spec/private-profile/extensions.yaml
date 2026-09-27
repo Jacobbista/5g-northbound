@@ -35,7 +35,9 @@ paths:
           description: Missing or invalid bearer token.
     put:
       summary: Replace the Asset Identity Map.
-      description: Replaces the whole map. Read, merge, write back; never blind-write.
+      description: >-
+        Replaces the whole map. Read, merge, write back, never blind-write.
+        Operator only. A tenant-scoped token is refused with 403.
       operationId: putAssets
       requestBody:
         required: true
@@ -52,9 +54,12 @@ paths:
                 $ref: "https://jacobbista.github.io/5g-northbound/schema/asset.schema.json"
         "401":
           description: Missing or invalid bearer token.
+        "403":
+          description: The token is tenant-scoped. This operation is reserved to the operator.
   /assets/discoverable:
     get:
       summary: Devices the sources report that are not yet onboarded as assets.
+      description: Operator only. A tenant-scoped token is refused with 403.
       operationId: getDiscoverable
       responses:
         "200":
@@ -65,6 +70,8 @@ paths:
                 $ref: "#/components/schemas/DiscoverableResponse"
         "401":
           description: Missing or invalid bearer token.
+        "403":
+          description: The token is tenant-scoped. This operation is reserved to the operator.
   /assets/{assetId}/details:
     get:
       summary: Fused side-panel telemetry for one asset.
@@ -168,7 +175,7 @@ paths:
   /adapters:
     get:
       summary: Health of each positioning adapter.
-      description: The engine's adapter registry, passed through unchanged.
+      description: One entry per registered adapter, with its state and declared capabilities.
       operationId: getAdapters
       responses:
         "200":
@@ -239,9 +246,11 @@ components:
         label:
           type: string
           nullable: true
-        lastSeen:
-          type: number
+        lastCommunicationTime:
+          type: string
+          format: date-time
           nullable: true
+          description: When the device last communicated with its source. Absent when the source exposes no such signal.
     AssetDetails:
       type: object
       required: [assetId, positioningId, kind, source, org, label]
@@ -342,18 +351,14 @@ components:
                 $ref: "#/components/schemas/AdapterCapabilities"
     AdapterStatus:
       type: object
-      required: [name, state]
+      required: [name, state, capabilities]
       properties:
         name: { type: string }
-        baseUrl: { type: string }
-        kind: { type: string }
-        registeredVia: { type: string }
         state:
           type: string
           enum: [live, stale, unreachable]
-        failCount: { type: integer }
-        inCooldown: { type: boolean }
-        cooldownSecondsRemaining: { type: number, x-unit: s }
-        lastSeenSAgo: { type: number, x-unit: s }
+          description: >-
+            `live` answers, `unreachable` fails and is in back-off, `stale`
+            stopped announcing itself.
         capabilities:
           $ref: "#/components/schemas/AdapterCapabilities"

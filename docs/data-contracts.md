@@ -147,7 +147,7 @@ The list is read from the [Asset Identity Map](#asset-identity-map) and filtered
 
 The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic-adapter); no per-asset flag carries it.
 
-`PUT /assets` replaces the map (operator action; the editor proxies it). Body is `{"assets":[…]}` conforming to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json).
+`PUT /assets` replaces the map. It is an operator action: a token with an `org` claim is refused with `403 PERMISSION_DENIED`. Body is `{"assets":[…]}` conforming to [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json).
 
 ### Asset details
 
@@ -213,20 +213,20 @@ Exposes the *measured* RF (from the calibration tool, persisted in the bindings)
 
 ### Adapter health
 
-`GET /adapters` → operator diagnostic, proxied from the engine's [`/adapters`](#engine-adapter-status) snapshot. Lets the demo show "wittra: degraded" without bypassing the gateway (the demo is not allowed to talk to the engine directly).
+`GET /adapters` → name, state and declared capabilities of each positioning adapter, so an application can show "wittra: degraded" without reaching past the gateway.
 
 ```json
 {
   "adapters": [
-    { "name": "wifi",   "baseUrl": "http://wifi-adapter:8080",   "failCount": 0, "inCooldown": false, "cooldownSecondsRemaining": 0.0 },
-    { "name": "wittra", "baseUrl": "https://api.wittra.example.com", "failCount": 5, "inCooldown": true,  "cooldownSecondsRemaining": 23.5 }
+    { "name": "wifi",   "state": "live",        "capabilities": { "source": "wifi", "frame": "room", "z": false } },
+    { "name": "wittra", "state": "unreachable", "capabilities": { "source": "wittra", "frame": "wgs84", "z": true } }
   ]
 }
 ```
 
-- `failCount` resets to 0 on the next successful adapter response.
-- `inCooldown=true` means the engine is **not** issuing HTTP requests to that adapter right now; `cooldownSecondsRemaining` is how long the cooldown still has to run. See [`adapters.md`](adapters.md#http-contract) for the cooldown policy.
+- `state` is `live` (answers), `unreachable` (fails, and the engine has paused requests to it) or `stale` (stopped announcing itself).
 - Empty list (`{"adapters": []}`) when the engine is unreachable or has no adapters configured, not a 502/503.
+- The engine's own [`/adapters`](#engine-adapter-status) carries the cluster address and the failure counters. It is internal and not served here.
 
 ### Live positions WebSocket
 

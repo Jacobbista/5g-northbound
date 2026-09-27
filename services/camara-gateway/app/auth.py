@@ -1,7 +1,7 @@
 import logging
 
 import httpx
-from fastapi import Request
+from fastapi import Depends, Request
 from jose import JWTError, jwt
 
 from .config import get_settings
@@ -104,4 +104,13 @@ async def require_location_role(request: Request) -> dict:
         if s.required_role not in roles:
             raise CamaraError(403, "PERMISSION_DENIED", _PERMISSION_DENIED)
         raise CamaraError(401, "UNAUTHENTICATED", _UNAUTHENTICATED)
+    return claims
+
+
+async def require_operator(claims: dict = Depends(require_location_role)) -> dict:
+    """Writes to the Asset Identity Map and onboarding belong to the operator,
+    whose token carries no `org` claim. A tenant-scoped consumer reads its own
+    assets and changes nothing shared."""
+    if consumer_org(claims):
+        raise CamaraError(403, "PERMISSION_DENIED", _PERMISSION_DENIED)
     return claims

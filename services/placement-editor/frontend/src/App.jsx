@@ -906,7 +906,6 @@ export function App() {
           technology: tech,
           x: snap((r.width_m || 10) / 2, snapEnabled ? DEFAULT_SNAP_M : 0),
           y: snap((r.height_m || 10) / 2, snapEnabled ? DEFAULT_SNAP_M : 0),
-          height_m: meta.default_height_m,
           coverage_m: meta.default_coverage_m,
           vendor: "",
           model: "",
@@ -1324,7 +1323,6 @@ export function App() {
           technology: tech,
           x,
           y,
-          height_m: meta.default_height_m,
           coverage_m: meta.default_coverage_m,
           vendor: "",
           model: "",
@@ -4584,8 +4582,10 @@ export function App() {
                   <div style={field}>
                     <span style={label}>height</span>
                     <NumberInput
-                      value={selectedAp.height_m ?? apTechMeta.default_height_m}
+                      value={selectedAp.height_m ?? null}
                       step="0.1"
+                      nullable
+                      placeholder={`not measured, typical ${apTechMeta.default_height_m}`}
                       onCommit={(v) => updateAp(selectedAp.id, { height_m: v })}
                     />
                   </div>

@@ -48,3 +48,18 @@ async def test_assets_list_filtered_by_org(client, make_token):
 async def test_details_cross_tenant_404(client, make_token):
     resp = await client.get(f"{ASSETS}/pkg-4471/details", headers=_hdr(make_token, org="atlas"))
     assert resp.status_code == 404
+
+
+async def test_tenant_cannot_replace_the_asset_map(client, make_token):
+    # A tenant could otherwise overwrite every other tenant's assets.
+    resp = await client.put(ASSETS, json={"version": 4, "assets": []}, headers=_hdr(make_token, org="acme"))
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "PERMISSION_DENIED"
+    still = await client.get(ASSETS, headers=_hdr(make_token))
+    assert len(still.json()["assets"]) == 3
+
+
+async def test_tenant_cannot_list_unclaimed_devices(client, make_token):
+    resp = await client.get(f"{ASSETS}/discoverable", headers=_hdr(make_token, org="acme"))
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "PERMISSION_DENIED"

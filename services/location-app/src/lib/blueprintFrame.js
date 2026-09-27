@@ -131,7 +131,10 @@ export function canvasToBlueprint(model) {
         out.anchors = room.anchors.map((a) => {
           const r = { ...a };
           if (plainNumber(a.y)) r.y = d - a.y;
-          return rename(r, "height_m", "z");
+          const out = rename(r, "height_m", "z");
+          // An unmeasured mounting height is absent, never null.
+          if (out.z == null) delete out.z;
+          return out;
         });
       }
       if (Array.isArray(room.walls)) {

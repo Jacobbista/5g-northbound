@@ -309,9 +309,6 @@ services:
       WIFI_ADAPTER_URL: "http://wifi-adapter:8080"
       # Upstream for the vendor discovery proxy.
       VENDOR_ADAPTER_URL: "http://vendor-adapter:8080"
-      # Asset Identity Map authority, proxied at /api/assets (GET/PUT) for an
-      # onboarding client. Onboarding UI itself is the KELT dashboard's.
-      CAMARA_GATEWAY_URL: "http://camara-gateway:8080"
       # Optional Mapbox public token. When set, the editor exposes a
       # "Satellite (Mapbox)" basemap. Leave empty to keep ESRI only.
       VITE_MAPBOX_TOKEN: "${VITE_MAPBOX_TOKEN:-}"

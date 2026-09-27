@@ -13,14 +13,14 @@ Conforms to schema/asset.schema.json. Authoring shares the read role for now;
 org-scoped write authorisation lands with the 2-legged enterprise-token work.
 """
 
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..assets import AssetMap, asset_by_id, list_assets, load_asset_map, save_asset_map
-from ..auth import consumer_org, require_location_role
+from ..auth import consumer_org, require_location_role, require_operator
 from ..errors import CamaraError
 from ..position import authorize_asset, get_adapter_status, get_engine_devices, get_fused_details
 
@@ -108,7 +108,7 @@ def _reject_unknown_source_or_kind(
 @router.put("", response_model=AssetMap)
 async def put_assets(
     body: AssetMap,
-    _claims: dict = Depends(require_location_role),
+    _claims: dict = Depends(require_operator),
 ) -> AssetMap:
     _reject_duplicate_positioning_ids(body)
     known = await _known_sources_and_kinds()
@@ -143,7 +143,9 @@ class DiscoverableDevice(BaseModel):
     sourceClass: Optional[str] = None
     deviceType: Optional[str] = None
     label: Optional[str] = None
-    lastSeen: Optional[float] = None
+    # When the device last communicated with its source, RFC 3339 UTC. Absent
+    # when the source exposes no such signal.
+    lastCommunicationTime: Optional[str] = None
 
 
 class DiscoverableResponse(BaseModel):
@@ -151,7 +153,7 @@ class DiscoverableResponse(BaseModel):
 
 
 @router.get("/discoverable", response_model=DiscoverableResponse)
-async def discoverable(_claims: dict = Depends(require_location_role)) -> DiscoverableResponse:
+async def discoverable(_claims: dict = Depends(require_operator)) -> DiscoverableResponse:
     """Vendor extension: devices the live sources report that are NOT yet
     onboarded as assets. KELT's Assets tab offers these for one-click
     onboarding with `source` prefilled, so the operator picks from discovery
@@ -175,7 +177,10 @@ async def discoverable(_claims: dict = Depends(require_location_role)) -> Discov
                 sourceClass=d.get("sourceClass"),
                 deviceType=d.get("deviceType"),
                 label=d.get("label"),
-                lastSeen=d.get("lastSeen"),
+                lastCommunicationTime=(
+                    _rfc3339(datetime.fromtimestamp(d["lastSeen"], timezone.utc))
+                    if d.get("lastSeen") is not None else None
+                ),
             )
         )
     return DiscoverableResponse(candidates=candidates)

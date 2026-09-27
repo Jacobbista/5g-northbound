@@ -275,7 +275,7 @@ Full field reference and the schema (`schema/asset.schema.json`) are in [`data-c
 | compose     | [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json) seed → persisted to the writable store on first boot |
 | Kubernetes  | `ASSET_SEED_FILE` (ConfigMap) seeds a **PVC** at `ASSET_STORE_FILE` once; thereafter the store is the source of truth |
 
-Register or update an asset at runtime with `PUT /assets` (the placement-editor proxies it via `/api/assets`), no restart. The demo discovers the tenant's assets via `GET /assets`. Because the store is a PVC, runtime changes survive restart and upgrade.
+Register or update an asset at runtime with `PUT /assets` and the operator token, no restart. The demo discovers the tenant's assets via `GET /assets`. Because the store is a PVC, runtime changes survive restart and upgrade.
 
 ## Adding a new adapter to a running cluster
 

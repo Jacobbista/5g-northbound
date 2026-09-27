@@ -158,6 +158,10 @@ un-scoped), not a default for consumers: every consumer client MUST carry an
 misconfigured without the claim falls back to operator scope rather than failing
 closed, so consumer minting must always set `org`.
 
+Changes to shared state belong to the operator token alone. `PUT /assets` and
+`GET /assets/discoverable`, which lists devices of every tenant, refuse a token
+with an `org` claim with `403 PERMISSION_DENIED`.
+
 **Who owns what.** KELT provisions the IAM (Keycloak realm, per-consumer OIDC
 clients, roles, and the `org` attribute on each principal); this gateway is the
 enforcement point (validate the JWT, check the role, join `org` against the

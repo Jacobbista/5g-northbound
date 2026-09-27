@@ -65,16 +65,18 @@ data source is gone. The derived `state` keeps these distinct:
 | `stale`       | a `self` entry that has not re-announced within one heartbeat interval (still within TTL) |
 | (evicted)     | past TTL - removed from the registry, no longer listed                  |
 
-`GET /adapters` returns, per adapter: `name`, `baseUrl`, `kind`,
+The engine's `GET /adapters` returns, per adapter: `name`, `baseUrl`, `kind`,
 `registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`,
-`cooldownSecondsRemaining`, `state`. The gateway proxies this unchanged so
-the demo renders OK / degraded; it never reshapes the contract.
+`cooldownSecondsRemaining`, `state`. It is an internal surface, read by the
+operator tooling. The gateway's `GET /adapters` carries only `name`, `state` and
+`capabilities` to applications. The cluster address and the engine's
+bookkeeping stay internal.
 
 ## API
 
 | Method | Path               | Who    | Notes                                            |
 |--------|--------------------|--------|--------------------------------------------------|
-| GET    | `/adapters`        | engine | membership + reachability snapshot (also proxied by the gateway) |
+| GET    | `/adapters`        | engine | membership + reachability snapshot. The gateway serves a reduced view |
 | POST   | `/adapters`        | engine | `{name, baseUrl, kind}` register / heartbeat (upsert) |
 | DELETE | `/adapters/{name}` | engine | deregister                                       |
 

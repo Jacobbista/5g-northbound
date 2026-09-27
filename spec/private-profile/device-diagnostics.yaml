@@ -41,6 +41,10 @@ paths:
           description: Missing or invalid bearer token.
         "404":
           description: No asset behind the id, or the source exposes no diagnostics.
+        "502":
+          description: The source failed to answer.
+        "503":
+          description: The source is unreachable.
 components:
   securitySchemes:
     bearerAuth:

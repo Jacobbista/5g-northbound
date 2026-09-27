@@ -224,21 +224,6 @@
       ]
     },
     {
-      "name": "CAMARA_GATEWAY_URL",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "type": "url",
-      "consumed_by": [
-        "placement-editor"
-      ],
-      "services": [
-        "placement-editor"
-      ]
-    },
-    {
       "name": "DEVICE_DISCOVERY_INTERVAL_S",
       "sensitive": false,
       "tier": "configmap",

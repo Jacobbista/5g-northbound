@@ -28,4 +28,15 @@ describe("blueprintFrame", () => {
     blueprintToCanvas(v3);
     expect(JSON.stringify(v3)).toBe(before);
   });
+
+  it("writes no z for an anchor whose height is not measured", () => {
+    const model = {
+      version: 2,
+      floor_plans: [{ id: "fp", georef: { width_m: 10, height_m: 10 } }],
+      rooms: [{ id: "r", floor_plan_id: "fp", x_m: 0, y_m: 0, width_m: 10, height_m: 10,
+        anchors: [{ id: "a", x: 1, y: 1, height_m: null }, { id: "b", x: 1, y: 1 }] }],
+    };
+    const anchors = canvasToBlueprint(model).rooms[0].anchors;
+    expect(anchors.every((a) => !("z" in a))).toBe(true);
+  });
 });

@@ -43,6 +43,7 @@ async def test_device_diagnostics_resolves_and_proxies(client, respx_mock, auth_
 async def test_device_diagnostics_404_when_asset_unknown(client, auth_headers):
     r = await client.get("/device-diagnostics/v0/nope-999", headers=auth_headers)
     assert r.status_code == 404
+    assert r.json() == {"status": 404, "code": "IDENTIFIER_NOT_FOUND", "message": "Asset not found."}
 
 
 @pytest.mark.asyncio

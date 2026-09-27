@@ -132,7 +132,8 @@ Runtime is authoritative, so add through the gateway - do **not** edit a file on
 the running pod.
 
 `PUT /assets` **replaces the whole map**. Never blind-write: read, merge your
-new entry, write back.
+new entry, write back. Only the operator token, which carries no `org` claim,
+may write. A tenant-scoped token gets `403 PERMISSION_DENIED`.
 
 ```bash
 # 1. read the current map
@@ -146,8 +147,8 @@ curl -s -X PUT -H "Authorization: Bearer $JWT" \
      --data @assets.json $GW/assets
 ```
 
-The KELT dashboard does this for you (the editor proxies it at `/api/assets`);
-onboarding discovered tags is the dashboard's job, not the editor's.
+The KELT dashboard does this for you with the operator token. Onboarding
+discovered tags is the dashboard's job, not the editor's.
 
 ### Seeding a fresh deployment
 
@@ -164,7 +165,7 @@ devices exist. Each adapter that advertises the `devices` capability exposes
 `GET /devices`; the engine aggregates them (`GET /devices`), and the gateway
 surfaces the ones **not yet onboarded** at `GET /assets/discoverable`. KELT's
 Assets tab lists those as candidates for one-click onboarding, with `source`
-prefilled.
+prefilled. Discovery spans every tenant, so it answers the operator token only.
 
 ```mermaid
 flowchart LR

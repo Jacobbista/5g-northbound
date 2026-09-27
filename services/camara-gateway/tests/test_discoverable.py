@@ -41,7 +41,7 @@ async def test_discoverable_subtracts_onboarded(client, respx_mock, auth_headers
     assert cands["wifi-new"]["source"] == "wifi"
     assert cands["wifi-new"]["role"] == "asset"
     assert cands["wifi-new"]["sourceClass"] == "wifi"
-    assert cands["wifi-new"]["lastSeen"] == 12.0
+    assert cands["wifi-new"]["lastCommunicationTime"] == "1970-01-01T00:00:12Z"
     assert cands["D002"]["label"] == "Tag 2"
     # role + sourceClass pass through so KELT separates infrastructure + badges tech.
     assert cands["D002"]["role"] == "infrastructure"

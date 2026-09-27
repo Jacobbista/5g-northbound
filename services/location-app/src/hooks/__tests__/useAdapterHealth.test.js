@@ -17,8 +17,8 @@ describe("useAdapterHealth", () => {
       ok: true,
       json: async () => ({
         adapters: [
-          { name: "wifi", baseUrl: "u", failCount: 0, inCooldown: false, cooldownSecondsRemaining: 0 },
-          { name: "wittra", baseUrl: "u", failCount: 5, inCooldown: true, cooldownSecondsRemaining: 8 },
+          { name: "wifi", state: "live", capabilities: {} },
+          { name: "wittra", state: "unreachable", capabilities: {} },
         ],
       }),
     });
@@ -26,7 +26,7 @@ describe("useAdapterHealth", () => {
     const { result } = renderHook(() => useAdapterHealth("tok"));
     await waitFor(() => expect(result.current).toHaveLength(2));
 
-    expect(result.current.find((a) => a.name === "wittra").inCooldown).toBe(true);
+    expect(result.current.find((a) => a.name === "wittra").severity).toBe("warn");
   });
 
   it("returns [] when the gateway is unreachable", async () => {

@@ -1,7 +1,8 @@
-"""Vendor extension: proxy of the engine's adapter health snapshot.
+"""Vendor extension: health of each positioning adapter.
 
-Lets the demo (which talks only to the gateway, per architecture) surface
-"wittra: degraded" without reaching past the gateway.
+Lets an application, which talks only to the gateway, show "wittra: degraded"
+without reaching past it. Each entry carries the adapter's name, its state and
+its declared capabilities. How the engine reaches the adapter stays internal.
 """
 
 from typing import Any
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/adapters", tags=["Adapter health (vendor extension)"
 
 @router.get("")
 async def adapter_status(_claims: dict = Depends(require_location_role)) -> dict[str, Any]:
-    """Pass the engine's adapter registry snapshot through unchanged so the demo
-    sees every field (state, kind, registeredVia, lastSeenSAgo, cooldown).
-    The gateway does not reshape it - the engine owns the contract."""
-    raw = await get_adapter_status()
-    return {"adapters": raw or []}
+    raw = await get_adapter_status() or []
+    return {"adapters": [
+        {"name": a.get("name", ""), "state": a.get("state"), "capabilities": a.get("capabilities") or {}}
+        for a in raw
+    ]}
