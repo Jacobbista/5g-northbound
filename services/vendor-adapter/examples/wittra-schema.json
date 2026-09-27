@@ -78,8 +78,7 @@
         "path": "fixedLocation.longitude"
       },
       "z": {
-        "path": "fixedLocation.height",
-        "default": 0
+        "path": "fixedLocation.height"
       },
       "deviceType": {
         "path": "deviceType"

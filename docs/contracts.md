@@ -34,8 +34,7 @@ with no auth, so an integrator reads them from the gateway it already talks to,
 pinned to the deployed image, with no external fetch. This is authoritative for a
 live integration (it matches the running behaviour); Pages and raw are the public
 mirror for anyone without a running gateway. Each service also serves its env
-contract this way at `GET /contract`. See
-[self-describing contracts](superpowers/specs/2026-09-03-self-describing-contracts-design.md).
+contract this way at `GET /contract`.
 
 ## Who governs which surface
 
@@ -152,6 +151,7 @@ Take each `<path>` and prefix it with a base above.
 | Hop-log schema | `schema/hop-log.schema.json` | this project | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
 | Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
+| Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | The core diagnostics names, their units and the standard each is anchored to, and the rule that routes every other field to `vendorSpecific` ([profile-extensions.md](profile-extensions.md#core-vocabulary)) |
 | Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares-about-itself)) |
 | Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management + extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/anchors/calibration` |
 

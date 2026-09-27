@@ -25,6 +25,15 @@ def _frame(value: str) -> str:
     return value
 
 
+def _position(body: dict) -> dict:
+    """The frame and the coordinates it requires. A missing coordinate is a
+    malformed measurement, never a position at the origin."""
+    frame = _frame(body.get("frame", "venue"))
+    if frame == "wgs84":
+        return {"frame": frame, "latitude": float(body["latitude"]), "longitude": float(body["longitude"])}
+    return {"frame": frame, "x": float(body["x"]), "y": float(body["y"])}
+
+
 class HttpAdapter(Adapter):
     """Generic HTTP adapter - pulls a Measurement from any service that speaks
     the contract: GET {base_url}/measurement/{device_id}.
@@ -116,14 +125,12 @@ class HttpAdapter(Adapter):
                 accuracy=(
                     float(body["accuracy"]) if body.get("accuracy") is not None else None
                 ),
-                confidence=float(body["confidence"]),
-                frame=_frame(body.get("frame", "venue")),
+                confidence=(
+                    float(body["confidence"]) if body.get("confidence") is not None else None
+                ),
                 room=body.get("room"),
-                x=float(body.get("x", 0.0)),
-                y=float(body.get("y", 0.0)),
                 z=float(body["z"]) if body.get("z") is not None else None,
-                latitude=float(body.get("latitude", 0.0)),
-                longitude=float(body.get("longitude", 0.0)),
+                **_position(body),
                 timestamp=body.get("timestamp"),
                 lastSeen=(
                     float(body["lastSeen"]) if body.get("lastSeen") is not None else None

@@ -25,7 +25,10 @@ class Measurement:
     # the source's accuracy_class before fusion; fusion itself never sees
     # None - see position_service.py).
     accuracy: Optional[float] = None
-    confidence: float = 0.0
+    # Source's own reliability score in [0, 1], a multiplier on the fusion
+    # weight. None when the source reports none: the weight then rests on
+    # the accuracy alone.
+    confidence: Optional[float] = None
     frame: Literal["venue", "room", "wgs84"] = "venue"
     room: Optional[str] = None
     x: float = 0.0

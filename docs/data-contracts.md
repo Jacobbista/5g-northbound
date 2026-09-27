@@ -346,7 +346,7 @@ GET /measurement/{device_id}  → 200 OK
 }
 ```
 
-`frame` declares the reference of the horizontal position: `"room"` (`x`, `y` in the room named by `room`), `"venue"` (`x`, `y` in the floor-plan frame, the default), or `"wgs84"` (`latitude`, `longitude`). The engine places every measurement in the venue frame before fusion. `z` is optional: the height above the venue floor in metres, in every frame, sent only by a source that declares `z: true`. `lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
+`frame` declares the reference of the horizontal position: `"room"` (`x`, `y` in the room named by `room`), `"venue"` (`x`, `y` in the floor-plan frame, the default), or `"wgs84"` (`latitude`, `longitude`). The coordinates of the declared frame are required, and a measurement without them is dropped as malformed. `accuracy` and `confidence` are optional. The engine places every measurement in the venue frame before fusion. `z` is optional: the height above the venue floor in metres, in every frame, sent only by a source that declares `z: true`. `lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
 
 `{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 

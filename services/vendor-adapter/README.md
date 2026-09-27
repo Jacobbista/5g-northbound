@@ -43,8 +43,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
     "frame":      { "const": "wgs84" },
     "latitude":   { "path": "payload.location.latitude" },
     "longitude":  { "path": "payload.location.longitude" },
-    "accuracy": { "const": 5.0 },
-    "confidence": { "path": "payload.location.accuracy", "default": 0.5 },
+    "confidence": { "path": "payload.location.accuracy" },
     "z":          { "path": "payload.location.height" },
     "timestamp":  { "path": "timestamp", "format": "iso8601" }
   }

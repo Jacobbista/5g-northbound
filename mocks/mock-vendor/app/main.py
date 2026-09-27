@@ -107,7 +107,7 @@ async def serve(full_path: str, request: Request):
             "frame": "wgs84",
             "latitude": lat,
             "longitude": lon,
-            "accuracy_m": round(0.6 + random.random() * 0.35, 2),
+            "accuracy": round(0.6 + random.random() * 0.35, 2),
             "confidence": 0.5,
             "z": _HEIGHT_M,
             "timestamp": datetime.now(timezone.utc).isoformat(),

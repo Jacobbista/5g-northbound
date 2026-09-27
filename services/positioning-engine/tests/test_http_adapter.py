@@ -325,3 +325,32 @@ async def test_http_adapter_rejects_an_unknown_frame():
     a = HttpAdapter("a", "http://a")
     assert await a.get_measurement("d") is None
     await a.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+@pytest.mark.parametrize("body", [
+    {"frame": "venue", "x": 1.0},
+    {"frame": "room", "room": "room-01", "y": 2.0},
+    {"frame": "wgs84", "latitude": 59.4},
+])
+async def test_http_adapter_rejects_a_measurement_without_its_coordinates(body):
+    # A missing coordinate is a malformed measurement, not a fix at the origin.
+    respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
+        "source": "a", "accuracy": 1.0, **body,
+    }))
+    a = HttpAdapter("a", "http://a")
+    assert await a.get_measurement("d") is None
+    await a.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_leaves_confidence_absent_when_missing():
+    respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
+        "source": "a", "frame": "venue", "x": 1.0, "y": 2.0, "accuracy": 1.0,
+    }))
+    a = HttpAdapter("a", "http://a")
+    m = await a.get_measurement("d")
+    await a.aclose()
+    assert m is not None and m.confidence is None

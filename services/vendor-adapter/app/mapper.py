@@ -99,9 +99,11 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     out: dict[str, Any] = {
         "source": vendor_name,
         "frame": frame,
-        # confidence is optional in the mapping; absent -> 0.0.
-        "confidence": float(_resolve_optional(mapping.confidence, payload) or 0.0),
     }
+    # confidence is carried only when the record resolves it.
+    confidence = _resolve_optional(mapping.confidence, payload)
+    if confidence is not None:
+        out["confidence"] = float(confidence)
     # accuracy is optional: a vendor with no genuine per-fix radius omits the
     # mapping entirely rather than fabricate one. Present-and-zero (a real
     # reported value, however suspect) is kept, matching the coordinate rule

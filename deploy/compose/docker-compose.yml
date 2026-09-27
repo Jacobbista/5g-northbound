@@ -141,9 +141,8 @@ services:
     ports:
       - "8090:8080"
     volumes:
-      # Walk inside the operator's actual room: the walker reads room bounds +
-      # walls AND the floor-plan frame (room base + georef height) so it emits
-      # in the engine's `local` frame (floor-plan-local, north-up). Same seed
+      # Walk inside the operator's actual room: the walker reads the first
+      # room's bounds and walls and reports in that room's frame. Same seed
       # blueprint the engine boots from, so the synthetic device lands among the
       # anchors instead of in an arbitrary box.
       - ./services/location-app/public/layout.json:/app/config/layout.json:ro

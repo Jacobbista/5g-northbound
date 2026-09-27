@@ -37,7 +37,10 @@ def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
     # A key read under a `.get()` guard is optional: wifi and synthetic have no
     # last-communication signal to report and legitimately omit it.
     optional = _names(engine, r'body\.get\("([a-zA-Z_]+)"')
-    required = _names(engine, r'body\["([a-zA-Z_]+)"\]') - optional
+    # Coordinates are required per frame: a producer emits the pair of the
+    # frame it reports in.
+    pairs = ({"x", "y"}, {"latitude", "longitude"})
+    required = _names(engine, r'body\["([a-zA-Z_]+)"\]') - optional - set().union(*pairs)
 
     produced: set[str] = set()
     for adapter, emit_file, pattern in (
@@ -46,8 +49,10 @@ def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
         ("synthetic-adapter", "services/synthetic-adapter/app/models.py", r"^    ([a-zA-Z_]+):"),
     ):
         emitted = set(re.findall(pattern, (ROOT / emit_file).read_text(), re.M))
+        emitted |= _names(ROOT / emit_file, r'out\["([a-zA-Z_]+)"\]')
         missing = required - emitted
         assert not missing, f"{adapter} does not emit {sorted(missing)}"
+        assert any(p <= emitted for p in pairs), f"{adapter} emits no coordinate pair"
         produced |= emitted
 
     # An optional key still has to be spelled the same on both sides wherever a

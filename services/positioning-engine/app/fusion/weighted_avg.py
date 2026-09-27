@@ -15,7 +15,8 @@ _MIN_ACCURACY_M = 0.01
 
 
 class WeightedAvgFusion:
-    """Baseline strategy: weighted mean with w = confidence / accuracy.
+    """Baseline strategy: weighted mean with w = confidence / accuracy, and
+    w = 1 / accuracy for a source that reports no confidence.
 
     Output accuracy is the inverse-RMS of input accuracies. Both use each
     measurement's accuracy floored at `_MIN_ACCURACY_M`.
@@ -34,7 +35,10 @@ class WeightedAvgFusion:
             return None
 
         accuracies = [max(m.accuracy, _MIN_ACCURACY_M) for m in measurements]
-        weights = [m.confidence / a for m, a in zip(measurements, accuracies)]
+        weights = [
+            (1.0 if m.confidence is None else m.confidence) / a
+            for m, a in zip(measurements, accuracies)
+        ]
         total_w = sum(weights)
         if total_w <= 0:
             return None

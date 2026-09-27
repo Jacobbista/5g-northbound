@@ -158,7 +158,7 @@ class Mapping(BaseModel):
     )
     confidence: Optional[FieldSpec] = Field(
         default=None,
-        description="Optional fix confidence in [0,1]. Omit when the vendor reports only an accuracy radius; defaults to 0.",
+        description="Optional fix confidence in [0,1]. Omit when the vendor reports none: the engine then weights the fix by its accuracy alone.",
     )
     z: Optional[FieldSpec] = Field(
         default=None,

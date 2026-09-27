@@ -184,3 +184,17 @@ def test_to_measurement_picks_the_pair_of_the_resolved_frame():
     geo = to_measurement(m, {"f": "wgs84", "lat": 59.4, "lon": 17.9, "ts": 1.0}, vendor_name="v")
     assert (geo["frame"], geo["latitude"], geo["longitude"]) == ("wgs84", 59.4, 17.9)
     assert to_measurement(m, {"f": "ecef", "x": 2.0, "y": 3.0, "ts": 1.0}, vendor_name="v") is None
+
+
+def test_to_measurement_omits_confidence_the_vendor_does_not_report():
+    from app.schema import Mapping, ConstSpec, PathSpec
+
+    mapping = Mapping(
+        frame=ConstSpec(const="wgs84"),
+        latitude=PathSpec(path="lat"),
+        longitude=PathSpec(path="lon"),
+        accuracy=PathSpec(path="acc"),
+        timestamp=ConstSpec(const=0.0),
+    )
+    out = to_measurement(mapping, {"lat": 59.4, "lon": 17.9, "acc": 3.0}, vendor_name="x")
+    assert "confidence" not in out

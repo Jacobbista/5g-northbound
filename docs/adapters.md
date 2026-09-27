@@ -77,11 +77,11 @@ Every level uses the same axes, the local frame of omlox: x along the width, y a
 | `source`               | string           | Short tag identifying the technology (`wifi`, `uwb`, `fiveg`, …). Surfaces in the engine response under `sources[]` |
 | `frame`                | `"room"`/`"venue"`/`"wgs84"` | Defaults to `"venue"` when omitted. Any other value is a malformed measurement |
 | `room`                 | string           | With `frame = room`: the id of the blueprint room. A room the blueprint does not hold leaves the measurement unplaced, and the engine drops it |
-| `x`, `y`               | float, metres    | With `frame = room` or `venue`: the horizontal position, x along the width and y along the depth from the lower-left corner |
-| `latitude`, `longitude`| float, degrees   | With `frame = wgs84`: the absolute position. The adapter does not need the venue georef, the engine applies it |
+| `x`, `y`               | float, metres    | Required with `frame = room` or `venue`: the horizontal position, x along the width and y along the depth from the lower-left corner. A measurement without them is malformed |
+| `latitude`, `longitude`| float, degrees   | Required with `frame = wgs84`: the absolute position. The adapter does not need the venue georef, the engine applies it. A measurement without them is malformed |
 | `z`                    | float, metres, optional | Height above the venue floor, in every frame. Sent only by a source that declares `z: true`, and only when measured for this fix. The engine discards it from a source that does not declare `z: true` |
-| `accuracy`             | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
-| `confidence`           | float, 0.0–1.0   | Adapter's self-reported reliability. Used as a multiplicative weight in fusion |
+| `accuracy`             | float, metres, optional | One-sigma error radius. When absent, the engine uses the nominal accuracy of the adapter's declared `accuracy_class`. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
+| `confidence`           | float, 0.0–1.0, optional | The source's own reliability score, a multiplier on the fusion weight. When absent, the weight is `1 / accuracy` |
 | `timestamp`            | float, optional  | Unix epoch seconds when the underlying measurement was taken. Omit for "now". The engine uses this to decide staleness |
 | `lastSeen`             | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
 
@@ -400,9 +400,13 @@ from typing import Optional
 
 class Measurement(BaseModel):
     source: str = "my-source"
-    x: float; y: float = 0.0; z: float
-    accuracy: float
-    confidence: float
+    frame: str = "room"
+    room: str = "room-01"
+    x: float
+    y: float
+    z: Optional[float] = None
+    accuracy: Optional[float] = None
+    confidence: Optional[float] = None
     timestamp: Optional[float] = None
 
 app = FastAPI()

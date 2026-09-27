@@ -88,3 +88,12 @@ def test_weighted_avg_height_is_absent_when_no_measurement_carries_it(floor_plan
     strat = get_strategy("weighted_avg")
     flat = Measurement(source="a", x=0.0, y=0.0, z=None, accuracy=1.0, confidence=1.0, frame="venue")
     assert strat.fuse("d", [flat], floor_plan).z is None
+
+
+def test_weighted_avg_weights_a_source_without_confidence_by_accuracy(floor_plan):
+    strat = get_strategy("weighted_avg")
+    alone = Measurement(source="a", x=4.0, y=6.0, accuracy=2.0, confidence=None, frame="venue")
+    assert (strat.fuse("d", [alone], floor_plan).x, strat.fuse("d", [alone], floor_plan).y) == (4.0, 6.0)
+    near = Measurement(source="a", x=0.0, y=0.0, accuracy=1.0, confidence=None, frame="venue")
+    far = Measurement(source="b", x=10.0, y=0.0, accuracy=1.0, confidence=1.0, frame="venue")
+    assert strat.fuse("d", [near, far], floor_plan).x == 5.0

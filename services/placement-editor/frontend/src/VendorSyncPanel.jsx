@@ -158,7 +158,7 @@ export function VendorSyncPanel({
         label: sample.label,
         x: +sample.local.x.toFixed(2),
         y: +sample.local.y.toFixed(2),
-        height_m: sample.height_m ?? 0,
+        height_m: sample.height_m,
         // Device class and vendor name from the active schema.
         device_type: sample.device_type,
         vendor,
@@ -180,7 +180,7 @@ export function VendorSyncPanel({
         label: sample.label,
         x: +sample.local.x.toFixed(2),
         y: +sample.local.y.toFixed(2),
-        height_m: sample.height_m ?? 0,
+        height_m: sample.height_m,
         device_type: sample.device_type,
         vendor,
       });

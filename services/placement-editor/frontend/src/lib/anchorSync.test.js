@@ -54,6 +54,13 @@ describe("upsertVendorAnchor", () => {
     expect(noType[0].model).toBe("beacon");
   });
 
+  it("leaves the height unset when the cloud reports none", () => {
+    const out = upsertVendorAnchor([], { ...spec, height_m: null }, "AP01");
+    expect("height_m" in out[0]).toBe(false);
+    const existing = [{ id: "AP03", technology: "wittra", vendor_device_id: "DEVTAG00000000001", x: 1, y: 1, height_m: 2.1 }];
+    expect(upsertVendorAnchor(existing, { ...spec, height_m: null }, "AP99")[0].height_m).toBe(2.1);
+  });
+
   it("does not crash when the cloud device has no device_type (model empty)", () => {
     const out = upsertVendorAnchor([], { ...spec, device_type: undefined }, "AP01");
     expect(out[0].model).toBe("");

@@ -101,8 +101,8 @@ def test_to_discover_entry_handles_missing_optional_fields(wittra_schema):
     assert out["label"] is None
     assert out["latitude"] is None
     assert out["longitude"] is None
-    # height falls back to the mapping default (0) when fixedLocation is absent.
-    assert out["z"] == 0
+    # No fixedLocation -> the height is unmeasured, not the floor.
+    assert out["z"] is None
     assert out["deviceType"] is None
 
 
