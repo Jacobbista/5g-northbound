@@ -2,6 +2,8 @@
 
 Conventions for contributors and AI assistants working in this repository. Architecture, data contracts, deployment shape, and the adapter contract live under [`docs/`](docs/), and the CAMARA private-asset profile under [`spec/private-profile/`](spec/private-profile/) - read those first; this file covers only how to write code that fits in cleanly.
 
+Work in progress lives outside git, in `.local/`: specs, plans, progress and references, never committed. If that folder exists, read `.local/README.md` and the newest `.local/plans/*-state-and-next.md` first: they say what is done, what waits on others, and what comes next.
+
 ## Layout
 
 The repo is organised by tier (see [`STRUCTURE.md`](STRUCTURE.md) for the full map):
@@ -81,6 +83,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 - Mock external HTTP with `respx` (already a dev dependency where needed).
 - CI runs each service's test suite independently in a matrix; a failure in one service does not block another's image build.
 - A contract that crosses a service boundary is pinned in `deploy/tools/test_wire_contracts.py`, which reads both ends and runs the producer where a rename can only fail at runtime. A per-service suite tests its own side against its own fixture, so it cannot see the other side move: rename a wire field and add the pin here.
+- Examples and fixtures use the Stockholm venue in `schema/examples/`.
 
 ## Frontend (location-app)
 
@@ -94,10 +97,14 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 - The CAMARA OpenAPI documents under [`services/camara-gateway/spec/`](services/camara-gateway/spec/) are pinned to the meta-release recorded in `services/camara-gateway/spec/VERSION`. Treat them as source of truth; do not hand-edit. To bump the pin: refetch from upstream at the new commit and update `VERSION`.
 - The adapter contract (`GET /measurement/{device_id}` → `Measurement`) is the only stable surface between the engine and any positioning source. A REST vendor reaches it through the generic `vendor-adapter` and a schema document, with no service written; a separate implementation is for what a schema cannot express. Changing the contract requires updating every implementation. See [`docs/adapters.md`](docs/adapters.md).
 - The engine-gateway contract (`GET /position/{device_id}` → `EnginePosition`, in WGS84) is geometry-agnostic on the gateway side. The engine owns coordinate conversion; the gateway does not project or rotate.
-- Do not add `gps_origin` to the production `floor-plan.json` ConfigMap until a real GPS reference for the lab has been measured. The engine degrades gracefully (`latitude: 0, longitude: 0` with a warning) when it is absent.
+- A value a source does not measure stays absent. Code never fills a georef, a height or a timestamp with a default. The contract carries the absence, and the consumer takes the conservative outcome.
 - `location-app` is a MEC application - it talks to the CAMARA gateway only. It must not call the engine, Keycloak admin APIs, or any internal cluster service.
 - Consumers read live surfaces. Where a fact exists both as a committed file and as an endpoint on a running instance, the endpoint is authoritative and the file is a build-time source or a human-readable mirror: `GET /contract` over `env.contract.yaml`, the gateway's `GET /contracts` over the Pages mirror, the engine's `GET /adapters` over `adapter.contract.yaml`. A question a consumer cannot answer from a live surface is an endpoint to add here.
 - Vendor SDKs, NDA material, and proprietary RTLS code do not enter this repository. They ship as private adapter images implementing the public HTTP contract.
+
+## Commits
+
+Conventional Commits with a one-line subject. A breaking change is declared with `BREAKING CHANGE:` in the body. No co-author trailers.
 
 ## Local development quick reference
 

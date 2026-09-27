@@ -53,9 +53,6 @@ docker-compose.override.yml
 **/.vscode/
 site/
 
-# Local-only reference documents (papers, thesis drafts, working notes).
-reference/
+# Local working material (specs, plans, state, references): never committed.
+.local/
 *.pdf
-
-# Agent working docs (specs/plans), not repo deliverables
-docs/superpowers/
