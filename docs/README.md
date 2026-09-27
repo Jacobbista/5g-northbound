@@ -39,6 +39,7 @@ Read these to understand how the system is designed.
 | [Architecture](architecture.md) | Services, request flow, adapter routing, coordinate frames; the 3GPP-to-CAMARA mapping |
 | [Blueprint vs bindings](blueprint-vs-bindings.md) | Portable venue geometry vs per-venue secrets (BSSIDs, MACs) |
 | [Georeferencing](georeferencing.md) | Anchoring the local metric frame to the world: datums, tile drift, N-point calibration |
+| [Authentication](authentication.md) | How the browser apps sign in against the Keycloak realm: in-browser OIDC and the proxy-gated pattern |
 
 ## Guides
 
@@ -63,6 +64,35 @@ Look up exact formats once you know the model.
 | [Machine-readable contracts](contracts.md) | Every published contract (profiled spec, schemas, overlays) and its raw URL - how to fetch and pin |
 | [API reference](api-reference.md) | One row per endpoint across every service |
 | [Latency instrumentation](latency-instrumentation.md) | The per-hop latency trace: x-correlator propagation and the hop log-line contract |
+| [Profile extensions](profile-extensions.md) | The surfaces beside CAMARA, how extension data is contained, and the core diagnostics vocabulary |
+
+## Documentation map
+
+Every topic has one document that owns it. The owner holds the facts, and
+other documents link to it instead of restating them. To change a fact, change
+it at its owner.
+
+| Topic | Owner |
+|-------|-------|
+| What the stack is, the sense, fuse, expose model | [Overview](overview.md) |
+| Services, request flow, coordinate frames | [Architecture](architecture.md) |
+| The CAMARA private-asset profile: identity, extensions, authorisation model, conformance | [Private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) |
+| Surfaces beside CAMARA and the diagnostics vocabulary | [Profile extensions](profile-extensions.md) |
+| Published contract files, who governs each, the naming convention, how to fetch them | [Machine-readable contracts](contracts.md) |
+| JSON examples of every wire body | [Data contracts](data-contracts.md) |
+| The list of endpoints per service | [API reference](api-reference.md) |
+| The adapter contract and how to write an adapter | [Adapters](adapters.md) |
+| Adapter registration, health and routing | [Adapter registry](adapter-registry.md) |
+| The schema-driven vendor adapter | [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) |
+| The Asset Identity Map | [Asset registry](asset-registry.md) |
+| What is portable venue geometry and what is per-venue binding | [Blueprint vs bindings](blueprint-vs-bindings.md) |
+| Anchoring the venue frame to the world | [Georeferencing](georeferencing.md) |
+| Browser sign-in against the Keycloak realm | [Authentication](authentication.md) |
+| Fusion algorithms | [Fusion strategies](fusion-strategies.md) |
+| Images, environment, storage, probes | [Deployment](deployment.md) |
+| Per-hop latency trace | [Latency instrumentation](latency-instrumentation.md) |
+| Code conventions, constraints, commits | `AGENTS.md` at the repository root |
+| Repository layout | `STRUCTURE.md` at the repository root |
 
 ---
 
