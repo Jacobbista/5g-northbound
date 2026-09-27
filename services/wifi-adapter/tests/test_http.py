@@ -25,7 +25,10 @@ async def test_ingest_then_measurement(app_with_adapter):
         assert r2.status_code == 200
         body = r2.json()
         assert body["source"] == "wifi"
-        assert "x" in body and "z" in body
+        assert body["frame"] == "room" and body["room"]
+        assert "x" in body and "y" in body
+        # RSSI trilateration measures no height.
+        assert "z" not in body
         assert body["accuracy"] >= 1.0
         assert 0.0 < body["confidence"] <= 1.0
 

@@ -22,7 +22,9 @@ def spawn_app(monkeypatch):
                    device_ids="synthetic-demo-01", anchor_ids="synthetic-anchor-01")
     for mod in (routers.measurement, routers.devices, routers.placement):
         monkeypatch.setattr(mod, "settings", cfg)
-    _app.state.walker = WaypointWalker(cfg)
+    walker = WaypointWalker(cfg)
+    walker.room_id = "room-01"
+    _app.state.walker = walker
     return _app
 
 
@@ -41,15 +43,13 @@ async def test_an_unplaced_device_reports_no_fix(spawn_client):
 
 
 async def test_placing_a_device_starts_it_reporting_from_that_point(spawn_client):
-    put = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "z": 9.0})
+    put = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "y": 9.0})
     assert put.status_code == 200
-    assert put.json() == {"id": "synthetic-demo-01", "x": 4.0, "z": 9.0, "placed": True}
+    assert put.json() == {"id": "synthetic-demo-01", "room": "room-01", "x": 4.0, "y": 9.0, "placed": True}
 
     r = await spawn_client.get("/measurement/synthetic-demo-01")
     assert r.status_code == 200
-    # The first fix is the drop point, lifted into the engine's frame. Without
-    # a blueprint the walker has no frame to mirror about and passes it
-    # through, so the drop point is directly readable here.
+    # The first fix is the drop point, in the room frame.
     assert r.json()["x"] == pytest.approx(4.0, abs=0.5)
 
 
@@ -57,15 +57,15 @@ async def test_a_drop_outside_the_room_lands_just_inside(spawn_client):
     # A raycast can land slightly off the floor. Seeding the walk somewhere the
     # walk could never reach would strand the device, so the point is clamped
     # into the same inset the walk itself respects.
-    put = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": -50.0, "z": 999.0})
+    put = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": -50.0, "y": 999.0})
     assert put.status_code == 200
     body = put.json()
     assert 0.0 < body["x"] < 13.0
-    assert 0.0 < body["z"] < 32.0
+    assert 0.0 < body["y"] < 32.0
 
 
 async def test_removing_a_device_stops_it_reporting(spawn_client):
-    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "z": 9.0})
+    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "y": 9.0})
     assert (await spawn_client.get("/measurement/synthetic-demo-01")).status_code == 200
 
     r = await spawn_client.delete("/devices/synthetic-demo-01/placement")
@@ -82,9 +82,9 @@ async def test_removing_a_device_that_is_not_placed_is_not_an_error(spawn_client
 
 
 async def test_placing_twice_moves_the_device(spawn_client):
-    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 2.0, "z": 2.0})
-    second = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 9.0, "z": 20.0})
-    assert second.json()["x"] == 9.0 and second.json()["z"] == 20.0
+    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 2.0, "y": 2.0})
+    second = await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 9.0, "y": 20.0})
+    assert second.json()["x"] == 9.0 and second.json()["y"] == 20.0
 
 
 async def test_devices_reports_which_are_placed(spawn_client):
@@ -96,7 +96,7 @@ async def test_devices_reports_which_are_placed(spawn_client):
     before = _assets((await spawn_client.get("/devices")).json())
     assert before == {"synthetic-demo-01": False}
 
-    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "z": 9.0})
+    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "y": 9.0})
     after = _assets((await spawn_client.get("/devices")).json())
     assert after == {"synthetic-demo-01": True}
 
@@ -120,7 +120,7 @@ async def test_a_freshly_placed_device_reports_the_drop_point_not_a_step_away(sp
     # after placement, so by the time the fix reached a consumer the device was
     # most of a metre from where it was dropped, and the placement read as
     # imprecise.
-    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "z": 9.0})
+    await spawn_client.put("/devices/synthetic-demo-01/placement", json={"x": 4.0, "y": 9.0})
     first = (await spawn_client.get("/measurement/synthetic-demo-01")).json()
     second = (await spawn_client.get("/measurement/synthetic-demo-01")).json()
-    assert (first["x"], first["z"]) == (second["x"], second["z"])
+    assert (first["x"], first["y"]) == (second["x"], second["y"])

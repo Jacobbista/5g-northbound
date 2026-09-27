@@ -2,8 +2,8 @@
 //
 // The gateway surface is asset-shaped: the caller names an assetId and the
 // gateway resolves the positioning id and the source behind it. Coordinates
-// are room-local metres, origin top-left, x right, z down, which is the frame
-// the 3D scene already renders, so a point picked on screen travels unchanged.
+// are in the room frame: metres from the room's lower-left corner, x along the
+// width, y along the depth. The response names the room.
 import { CAMARA_API_BASE } from "../config";
 import { sourcesAdvertising } from "./capabilities";
 
@@ -35,8 +35,8 @@ async function call(method, token, assetId, body) {
 // Put the asset at a point and start it reporting from there. Placing an
 // already-placed asset moves it. Returns where it actually landed, since the
 // source clamps the point into the room.
-export function placeAsset(token, assetId, { x, z }) {
-  return call("PUT", token, assetId, { x, z });
+export function placeAsset(token, assetId, { x, y }) {
+  return call("PUT", token, assetId, { x, y });
 }
 
 // Stop the asset reporting. It then has no position, the same as any source

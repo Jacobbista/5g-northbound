@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadLayout, saveLayout } from "./api.js";
+import { canvasPlanDepth } from "./blueprintFrame.js";
 import { CalibrationPanel } from "./CalibrationPanel.jsx";
 import { FloorPlanImageInput, GeorefMap, localToGps } from "./GeorefMap.jsx";
 import { PlanCanvas } from "./PlanCanvas.jsx";
@@ -13,7 +14,7 @@ import {
   DEFAULT_OPENING_HEIGHT_M,
   DEFAULT_ROOM_ID,
   DEFAULT_WALL_HEIGHT_M,
-  denormalizeForCompat,
+  toBlueprint,
   emptyLayoutV2,
   findFloorPlan,
   findRoom,
@@ -199,25 +200,34 @@ function deepEqual(a, b) {
 
 // Controlled numeric input that commits to history only on blur / Enter,
 // not on every keystroke. Keeps the keyboard-typing path from flooding undo.
-function NumberInput({ value, onCommit, invalid, step = "0.1", min, ...rest }) {
-  const [draft, setDraft] = useState(String(value));
+// `nullable`: an empty field commits null, for a value that may be unknown.
+function NumberInput({ value, onCommit, invalid, step = "0.1", min, nullable = false, ...rest }) {
+  const shown = (v) => (v == null ? "" : String(v));
+  const [draft, setDraft] = useState(shown(value));
   const lastValueRef = useRef(value);
 
   useEffect(() => {
     // External change (undo/redo/load) - resync.
     if (value !== lastValueRef.current) {
       lastValueRef.current = value;
-      setDraft(String(value));
+      setDraft(shown(value));
     }
   }, [value]);
 
   function commitDraft() {
+    if (nullable && draft.trim() === "") {
+      if (value != null) {
+        lastValueRef.current = null;
+        onCommit(null);
+      }
+      return;
+    }
     const n = Number(draft);
     if (Number.isFinite(n) && (min === undefined || n >= min) && n !== value) {
       lastValueRef.current = n;
       onCommit(n);
     } else {
-      setDraft(String(value));
+      setDraft(shown(value));
     }
   }
 
@@ -236,7 +246,7 @@ function NumberInput({ value, onCommit, invalid, step = "0.1", min, ...rest }) {
           e.preventDefault();
           e.currentTarget.blur();
         } else if (e.key === "Escape") {
-          setDraft(String(value));
+          setDraft(shown(value));
           e.currentTarget.blur();
         }
       }}
@@ -602,6 +612,10 @@ export function App() {
   // render + mutation logic keeps working unchanged.
   const currentFp = findFloorPlan(layout, selectedFpId) || layout.floor_plans?.[0] || null;
   const currentRoom = findRoom(layout, selectedRoomId) || layout.rooms?.[0] || null;
+  // Mirror axes between the canvas (y down) and the venue frame (y up) that
+  // the numeric fields show: the depth of the room's floor plan and of the room.
+  const planDepth = canvasPlanDepth(layout, findFloorPlan(layout, currentRoom?.floor_plan_id) || currentFp);
+  const roomDepth = Number(currentRoom?.height_m) || 0;
   const aps = currentRoom?.anchors || [];
   const walls = currentRoom?.walls || [];
 
@@ -707,7 +721,7 @@ export function App() {
         latitude: 0,
         longitude: 0,
         azimuth_deg: 0,
-        altitude_m: 0,
+        altitude_m: null,
         width_m: 0,
         height_m: 0,
       },
@@ -1399,7 +1413,7 @@ export function App() {
   // per-venue secrets. The cluster operator joins it to a separate
   // bindings file at deploy time (see docs/data-contracts.md).
   const onExportBlueprint = useCallback(() => {
-    const payload = denormalizeForCompat(layout);
+    const payload = toBlueprint(layout);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
@@ -1445,7 +1459,7 @@ export function App() {
     setSaving(true);
     setSaveMessage(null);
     try {
-      await saveLayout(denormalizeForCompat(layout));
+      await saveLayout(toBlueprint(layout));
       setSavedSnapshot(layout);
       setSaveMessage("saved");
     } catch (err) {
@@ -2230,15 +2244,19 @@ export function App() {
         <div style={field}>
           <span style={label}>altitude m</span>
           <NumberInput
-            value={Number(currentFp?.georef?.altitude_m ?? 0)}
+            value={currentFp?.georef?.altitude_m ?? null}
             step="0.5"
+            nullable
+            placeholder="not surveyed"
             onCommit={(v) => updateGeo("altitude_m", v)}
           />
         </div>
         <div style={{ fontSize: 10, color: "#7a8aab", padding: "0 4px 6px", lineHeight: 1.4 }}>
-          This floor's height above sea level: terrain plus the floor's height
-          above ground. Added to each fix's local vertical to give its
-          altitude. Entered by hand: no calibration or map gesture updates it.
+          Height of this floor above the WGS84 ellipsoid, as a GNSS receiver
+          reports it. A height read from a map is above mean sea level: add the
+          geoid undulation at the origin. Added to the measured
+          height of each fix to give its altitude. Left empty, fixes carry no
+          altitude.
         </div>
           </>
         )}
@@ -2623,7 +2641,7 @@ export function App() {
                     margin: "10px 4px 4px",
                   }}
                 >
-                  · position (m, from floor plan ⌐)
+                  · position (m, lower-left corner from floor plan ⌙)
                 </div>
                 <div style={field}>
                   <span style={label}>x</span>
@@ -2633,12 +2651,14 @@ export function App() {
                     onCommit={(v) => mutateRoom((r) => ({ ...r, x_m: v }))}
                   />
                 </div>
+                {/* The canvas keeps y down from the top edge; the field shows
+                    the venue frame, y up from the bottom edge, as stored. */}
                 <div style={field}>
                   <span style={label}>y</span>
                   <NumberInput
-                    value={Number(currentRoom.y_m)}
+                    value={planDepth - Number(currentRoom.y_m) - Number(currentRoom.height_m)}
                     step="0.1"
-                    onCommit={(v) => mutateRoom((r) => ({ ...r, y_m: v }))}
+                    onCommit={(v) => mutateRoom((r) => ({ ...r, y_m: planDepth - v - Number(r.height_m) }))}
                   />
                 </div>
 
@@ -4389,6 +4409,7 @@ export function App() {
                 active
                 pendingClick={pendingCalibrationClick}
                 onPendingHandled={() => setPendingCalibrationClick(null)}
+                roomDepth={Number(currentRoom?.height_m) || 0}
                 anchors={aps}
                 onSamplesChanged={setCalibrationSamples}
                 onClose={() => setTool("select")}
@@ -4541,7 +4562,7 @@ export function App() {
                     </select>
                   </div>
 
-                  <div style={subHeader}>· position (m, from room ⌐)</div>
+                  <div style={subHeader}>· position (m, from room ⌙)</div>
                   <div style={field}>
                     <span style={label}>x</span>
                     <NumberInput
@@ -4553,9 +4574,9 @@ export function App() {
                   <div style={field}>
                     <span style={label}>y</span>
                     <NumberInput
-                      value={selectedAp.y}
+                      value={roomDepth - selectedAp.y}
                       step="0.1"
-                      onCommit={(v) => updateAp(selectedAp.id, { y: v })}
+                      onCommit={(v) => updateAp(selectedAp.id, { y: roomDepth - v })}
                     />
                   </div>
 
@@ -4722,7 +4743,7 @@ export function App() {
                 </div>
                 <div style={field}>
                   <span style={label}>y1</span>
-                  <NumberInput value={selectedWall.y1} step="0.1" onCommit={(v) => updateWall(selectedWall.id, { y1: v })} />
+                  <NumberInput value={roomDepth - selectedWall.y1} step="0.1" onCommit={(v) => updateWall(selectedWall.id, { y1: roomDepth - v })} />
                 </div>
                 <div style={field}>
                   <span style={label}>x2</span>
@@ -4730,7 +4751,7 @@ export function App() {
                 </div>
                 <div style={field}>
                   <span style={label}>y2</span>
-                  <NumberInput value={selectedWall.y2} step="0.1" onCommit={(v) => updateWall(selectedWall.id, { y2: v })} />
+                  <NumberInput value={roomDepth - selectedWall.y2} step="0.1" onCommit={(v) => updateWall(selectedWall.id, { y2: roomDepth - v })} />
                 </div>
                 <div style={field}>
                   <span style={label}>thick</span>

@@ -45,7 +45,7 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
     "longitude":  { "path": "payload.location.longitude" },
     "accuracy": { "const": 5.0 },
     "confidence": { "path": "payload.location.accuracy", "default": 0.5 },
-    "y":          { "path": "payload.location.height", "default": 0.0 },
+    "z":          { "path": "payload.location.height" },
     "timestamp":  { "path": "timestamp", "format": "iso8601" }
   }
 }
@@ -64,7 +64,9 @@ Live OpenAPI docs at `http://localhost:8092/docs` (compose port).
 
 `transform.type = "linear"` (`scale * x + offset`) is the only transform supported today. `format = "iso8601"` converts an ISO timestamp string to a Unix epoch float. List indices in paths use digits (`a.b.0.c`).
 
-`mapping.frame` may be `"wgs84"` (`latitude` and `longitude` carry the coordinates) or `"local"` (the values carried by the `latitude` and `longitude` specs are written into `x` and `z` respectively).
+`mapping.frame` selects the horizontal pair: `"wgs84"` maps `latitude` and `longitude`, `"venue"` maps `x` and `y` in the venue frame (metres from the floor-plan lower-left corner, x along the width, y along the depth). A constant frame requires its own pair and rejects the other. A frame read from the payload admits both pairs, and each record uses the pair of its resolved frame.
+
+`mapping.z` is the height above the venue floor, in either frame. Map it only for a source that measures height, and declare `z: true` in `ADAPTER_CAPABILITIES`. A vendor that reports height against another reference is translated with a `linear` transform. A record where it resolves to null carries no height.
 
 ## Operator workflow
 

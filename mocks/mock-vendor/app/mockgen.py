@@ -132,7 +132,7 @@ def build_discover(discover: dict, lat: float, lon: float, height: float) -> Any
         if s["fixed"]:
             _set_if_path(entry, dmap.get("latitude"), lat)
             _set_if_path(entry, dmap.get("longitude"), lon)
-            _set_if_path(entry, dmap.get("height"), height)
+            _set_if_path(entry, dmap.get("z"), height)
         entries.append(entry)
 
     list_path = discover.get("listPath", "")

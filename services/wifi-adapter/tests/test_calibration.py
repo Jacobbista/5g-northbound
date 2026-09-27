@@ -13,7 +13,7 @@ from app.models import CalibrationSample, Router, WifiConfig
 def _cfg(routers):
     return WifiConfig(
         room_w=20,
-        room_h=10,
+        room_id="room-01", room_d=10,
         tx_power=-42,
         path_loss_n=2.7,
         routers=routers,

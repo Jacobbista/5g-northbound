@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import keycloak, { initOptions } from "../keycloak";
-import { GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
 import { useAdapterHealth } from "../hooks/useAdapterHealth";
 import { useDevices } from "../hooks/useDevices";
 import { useIdlePrompt } from "../hooks/useIdlePrompt";
@@ -11,47 +10,10 @@ import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
 import { livenessFor, recordLastSeen } from "../lib/liveness";
 import { sourcesAdvertising } from "../lib/capabilities";
 import { placeAsset, placeableSources, removeAsset } from "../lib/placement";
+import { blueprintToCanvas } from "../lib/blueprintFrame";
+import { frameFromBlueprint, gpsToRoom, gpsToScene, roomToScene, sceneToRoom } from "../lib/venueFrame";
 import { FloorPlanScene, TECH_KEYS } from "./FloorPlanScene";
 import { DetailPanel } from "./DetailPanel";
-
-const M_PER_DEG = 111320;
-
-// Convert a (lat, lng) from the gateway into room-local (x, y) metres for the
-// sidebar's lat/lon <-> x/z toggle. Uses the blueprint's floor-plan georef
-// (passed as `frame`) so it matches the 3D scene and the engine; falls back to
-// the legacy env GPS_ORIGIN only when no blueprint is loaded.
-function gpsToLocal(lat, lon, frame) {
-  if (frame?.georef) {
-    const { lat0, lon0, az, roomX, roomY, fpH } = frame;
-    const east = (lon - lon0) * M_PER_DEG * Math.cos((lat0 * Math.PI) / 180);
-    const north = (lat - lat0) * M_PER_DEG;
-    const xFp = east * Math.cos(az) - north * Math.sin(az);
-    const yFp = east * Math.sin(az) + north * Math.cos(az);
-    // Match the editor / stored anchors (canvas-y, top-left origin): mirror the
-    // georef-frame y about the floor-plan height, then subtract the room base.
-    const x = xFp - roomX;
-    const z = (fpH - yFp) - roomY;
-    return { x, z };
-  }
-  const x = (lon - GPS_ORIGIN_LON) * M_PER_DEG * Math.cos((GPS_ORIGIN_LAT * Math.PI) / 180);
-  const z = (lat - GPS_ORIGIN_LAT) * M_PER_DEG;
-  return { x, z };
-}
-
-// Build the projection frame from the loaded blueprint, or null.
-function frameFromLayout(layout) {
-  const g = layout?.floor_plans?.[0]?.georef;
-  if (!g || g.latitude == null || g.longitude == null) return null;
-  return {
-    georef: true,
-    lat0: Number(g.latitude),
-    lon0: Number(g.longitude),
-    az: ((Number(g.azimuth_deg) || 0) * Math.PI) / 180,
-    roomX: Number(layout?.rooms?.[0]?.x_m) || 0,
-    roomY: Number(layout?.rooms?.[0]?.y_m) || 0,
-    fpH: Number(g.height_m) || 0,
-  };
-}
 
 const TECH_LABEL = { wifi: "WiFi", wittra: "UWB", fiveg: "5G", gnss: "GNSS" };
 // Human-readable names for the engine fusion strategies (see
@@ -683,8 +645,8 @@ export function DeviceItem({ device, position, shown, detailOpen, onOpenDetail, 
   const coordStr = (() => {
     if (!center) return null;
     const ll = `${center.latitude.toFixed(5)}, ${center.longitude.toFixed(5)}`;
-    const p = gpsToLocal(center.latitude, center.longitude, frame);
-    return p ? `${ll} · x=${p.x.toFixed(1)} z=${p.z.toFixed(1)}` : ll;
+    const p = gpsToRoom(center.latitude, center.longitude, frame);
+    return p ? `${ll} · x=${p.x.toFixed(1)} y=${p.y.toFixed(1)}` : ll;
   })();
   return (
     <div
@@ -893,7 +855,11 @@ export function App() {
   const [token, setToken] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [selection, setSelection] = useState(null);
-  const [layout, setLayout] = useState(null);
+  // The blueprint as served (version 3), the canvas model the scene draws, and
+  // the frame that places fixes in the room.
+  const [blueprint, setBlueprint] = useState(null);
+  const layout = useMemo(() => blueprintToCanvas(blueprint), [blueprint]);
+  const frame = useMemo(() => frameFromBlueprint(blueprint), [blueprint]);
   const [recenterSignal, setRecenterSignal] = useState(0);
   // Collapse the device rail to give the 3D world the full width. Starts closed
   // on a narrow viewport so the scene is usable on small screens.
@@ -1000,13 +966,16 @@ export function App() {
     setPlacing(null);
     setSettling({ assetId, x: point.x, z: point.z, color });
     try {
-      const landed = await placeAsset(token, assetId, point);
+      // The scene picks the point in screen axes; the source takes it in the
+      // room frame.
+      const landed = await placeAsset(token, assetId, sceneToRoom(point.x, point.z, frame));
       setPlacementError(null);
       setPlacedIntent((cur) => ({ ...cur, [assetId]: true }));
       // The source clamps the point into the room, so move the mark to where
       // it actually went rather than where it was asked to go.
-      if (typeof landed?.x === "number") {
-        setSettling((cur) => (cur?.assetId === assetId ? { ...cur, x: landed.x, z: landed.z } : cur));
+      if (typeof landed?.x === "number" && typeof landed?.y === "number") {
+        const at = roomToScene(landed.x, landed.y, frame);
+        setSettling((cur) => (cur?.assetId === assetId ? { ...cur, x: at.x, z: at.z } : cur));
       }
     } catch (err) {
       setPlacementError(err.message);
@@ -1018,7 +987,7 @@ export function App() {
     // Where it stood, before the entry goes. A marker that simply stops being
     // drawn reads as a glitch rather than as something the operator did.
     const center = byAsset[assetId]?.position?.area?.center;
-    const at = center && gpsToLocal(center.latitude, center.longitude, frameFromLayout(layout));
+    const at = center && gpsToScene(center.latitude, center.longitude, frame);
     try {
       await removeAsset(token, assetId);
       setPlacementError(null);
@@ -1313,7 +1282,7 @@ export function App() {
                   detailOpen={detailOpen}
                   onOpenDetail={(dev) => setSelection({ kind: "device", device: dev })}
                   onToggleShown={toggle}
-                  frame={frameFromLayout(layout)}
+                  frame={frame}
                   placeable={placeable.has(d.source)}
                   placed={isPlaced(d.assetId, entry?.position)}
                   placing={placing?.assetId === d.assetId}
@@ -1343,7 +1312,7 @@ export function App() {
           recenterSignal={recenterSignal}
           onSelectDevice={(d) => setSelection(d ? { kind: "device", device: d } : null)}
           onSelectAp={(ap) => setSelection({ kind: "ap", ap })}
-          onLayoutLoaded={setLayout}
+          onLayoutLoaded={setBlueprint}
           placing={placing}
           settling={settling}
           vanishing={vanishing}
@@ -1382,7 +1351,7 @@ export function App() {
               <DetailPanel
                 selection={renderedSelection}
                 token={token}
-                frame={frameFromLayout(layout)}
+                frame={frame}
                 // Same state function the sidebar row uses, so the pill and
                 // the row can never disagree about one asset.
                 state={

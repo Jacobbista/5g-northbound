@@ -69,16 +69,21 @@ const pill = (color) => ({
 //
 // Props:
 //   active                 boolean
-//   pendingClick           { x_m, y_m } | null     where the operator just clicked
+//   pendingClick           { x_m, y_m } | null     where the operator just clicked (canvas axes)
 //   onPendingHandled       () => void              clear pendingClick after start
-//   roomBounds             { w, h }                used to mark recommended spots
+//   roomDepth              number                  room depth, to convert canvas <-> room frame
 //   anchors                [{ id, x, y, technology }]
-//   onSamplesChanged       (samples) => void       lets the canvas redraw markers
+//   onSamplesChanged       (samples) => void       lets the canvas redraw markers (canvas axes)
 //   onClose                () => void
+//
+// The wifi-adapter stores samples in the room frame (y up from the room's
+// bottom edge). The canvas draws y down from the top edge. The panel lists
+// samples in the room frame and hands the canvas its own axes.
 export function CalibrationPanel({
   active,
   pendingClick,
   onPendingHandled,
+  roomDepth = 0,
   anchors,
   onSamplesChanged,
   onClose,
@@ -98,13 +103,14 @@ export function CalibrationPanel({
   const reloadState = useCallback(async () => {
     try {
       const s = await getState();
-      setSamples(s.samples || []);
-      onSamplesChanged?.(s.samples || []);
+      const inRoom = s.samples || [];
+      setSamples(inRoom);
+      onSamplesChanged?.(inRoom.map((p) => ({ ...p, y_m: roomDepth - p.y_m })));
       setError(null);
     } catch (e) {
       setError(e.message);
     }
-  }, [onSamplesChanged]);
+  }, [onSamplesChanged, roomDepth]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -185,7 +191,7 @@ export function CalibrationPanel({
         setError(null);
         const created = await startCapture({
           x_m: pendingClick.x_m,
-          y_m: pendingClick.y_m,
+          y_m: roomDepth - pendingClick.y_m,
           target_scans: 10,
         });
         if (cancelled) return;
@@ -200,7 +206,7 @@ export function CalibrationPanel({
     return () => {
       cancelled = true;
     };
-  }, [pendingClick, active, onPendingHandled]);
+  }, [pendingClick, active, onPendingHandled, roomDepth]);
 
   useEffect(() => {
     if (!session || session.done) return;

@@ -151,7 +151,7 @@ The two contracts an operator must get right (see step 5):
     "latitude":   { "path": "latest.data.location.value.latitude" },
     "longitude":  { "path": "latest.data.location.value.longitude" },
     "confidence": { "path": "latest.data.location.value.accuracy" },
-    "y":          { "path": "latest.data.location.value.height", "default": 0.0 },
+    "z":          { "path": "latest.data.location.value.height" },
     "timestamp":  { "path": "latest.data.location.timestamp", "format": "iso8601" },
     "lastSeen":   { "path": "lastSeen", "format": "iso8601" }
   },
@@ -170,11 +170,12 @@ The two contracts an operator must get right (see step 5):
       "totalPath": "total"
     },
     "mapping": {
-      "vendorDeviceId": { "path": "id" },
-      "label":            { "path": "name" },
-      "latitude":         { "path": "location.value.latitude" },
-      "longitude":        { "path": "location.value.longitude" },
-      "height":         { "path": "location.value.height", "default": 0 }
+      "vendorDeviceId": { "path": "deviceId" },
+      "label":          { "path": "name", "default": null },
+      "latitude":       { "path": "fixedLocation.latitude" },
+      "longitude":      { "path": "fixedLocation.longitude" },
+      "z":              { "path": "fixedLocation.height", "default": 0 },
+      "deviceType":     { "path": "deviceType" }
     }
   }
 }
@@ -201,11 +202,11 @@ When a vendor exposes a "list all devices" endpoint, declaring a `discover` bloc
 | `listPath`          | JSON dotted path to the array inside the response body. Empty (`""`) means the body itself is the array.           |
 | `pathVars`          | Per-variable `{env: NAME}` resolution, same shape as the top-level.                                                |
 | `pagination.type`    | `"none"` (one GET) or `"page"` (1-indexed page+size query params, walk until accumulated count reaches `totalPath`). |
-| `mapping`            | Per-entry field map. `vendorDeviceId` is required; `label`, `latitude`, `longitude`, `height`, `deviceType` are optional.  |
+| `mapping`            | Per-entry field map. `vendorDeviceId` is required; `label`, `latitude`, `longitude`, `z` (mounting height), `deviceType` are optional.  |
 | `filter`             | The editor's anchor-only include rule (`requirePath`). Applied to the editor sync only; asset onboarding reads the list **unfiltered**.  |
 | `classify`           | Role + `sourceClass` classification for asset onboarding (below). Optional; omit to leave candidates unclassified.  |
 
-Vendors that expose no positions omit `latitude`, `longitude` and `height`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
+Vendors that expose no positions omit `latitude`, `longitude` and `z`. The editor lists those devices with a "place manually" warning instead of dropping them somewhere arbitrary. Vendors with no list endpoint omit the `discover` block; the editor falls back to fully manual placement for that technology.
 
 The full HTTP surface is `GET /discover` on the vendor-adapter, proxied by the placement editor at `GET /api/vendor/discover`. The editor's "↻ sync vendor" toolbar button drives the flow end to end.
 

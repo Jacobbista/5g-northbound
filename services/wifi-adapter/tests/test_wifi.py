@@ -8,7 +8,7 @@ def test_compute_position_in_bounds(cfg):
     assert res is not None
     x, y, conf, acc = res
     assert 0 <= x <= cfg.room_w
-    assert 0 <= y <= cfg.room_h
+    assert 0 <= y <= cfg.room_d
     assert 0 < conf <= 100
     assert acc >= 1.0
 

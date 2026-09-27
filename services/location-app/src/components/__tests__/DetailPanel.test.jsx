@@ -72,9 +72,12 @@ describe("DetailPanel · device diagnostics vocabulary", () => {
   });
 });
 
-// A georef frame (inverse of gpsToRoomLocal): identity-ish so the anchor's
-// room-local (x, y) maps to a finite lat/lon and both rows render.
-const FRAME = { georef: true, lat0: 59.4, lon0: 17.9, az: 0, roomX: 0, roomY: 0, fpH: 13.5 };
+// A georef'd room so the anchor's room coordinates map to a finite lat/lon
+// and both rows render.
+const FRAME = {
+  lat0: 59.4, lon0: 17.9, az: 0,
+  room: { id: "room-01", x_m: 0, y_m: 0, width_m: 10, depth_m: 13.5, rot: 0 },
+};
 
 describe("DetailPanel · anchor identity (P1)", () => {
   it("shows the real vendor hardware id and device class", () => {

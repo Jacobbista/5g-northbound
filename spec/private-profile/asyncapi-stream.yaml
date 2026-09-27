@@ -99,6 +99,10 @@ components:
           type: number
           format: double
           nullable: true
+          description: |
+            Height above the WGS84 ellipsoid in metres: the ellipsoidal height
+            of the venue origin plus the measured height of the asset above the
+            venue floor. Null when no source measures height.
         accuracy:
           type: number
           format: double

@@ -1,79 +1,107 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Jacobbista/5g-northbound/schema/layout.schema.json",
-  "title": "Venue layout / blueprint (v2)",
-  "description": "The blueprint shape the placement-editor authors and the engine serves (GET/PUT /blueprint), consumed by the engine, synthetic-adapter, wifi-adapter and the demo. Pinned in schema/VERSION. FRAME CONVENTION (the single source of truth, do not reinterpret per consumer): room-local + anchors + walls + calibration samples are in CANVAS-Y - origin top-left, x right, y DOWN. The floor-plan georef is LOWER-LEFT origin with z = NORTH-UP; `azimuth_deg` is the bearing of the floor-plan +z (image vertical) clockwise from true north. Conversion canvas-y -> georef-north-up happens once, at the engine `local` boundary: north_up = height_m - canvas_y. Adapters emit floor-plan-local north-up; the demo inverts the same way to render. Lenient (additionalProperties allowed) so additive editor fields don't break validation; the required keys below are the contract.",
+  "title": "Venue blueprint (v3)",
+  "description": "The blueprint the placement-editor authors and the engine serves (GET/PUT /blueprint). It places each level in its parent: the floor plan in the world (georef), each room in its floor plan, anchors and walls in their room. Every level uses the venue-frame convention, the local frame of omlox: x along the width, y along the depth, z up, right-handed, origin at the lower-left corner of the parent. Horizontal extents are width_m (x) and depth_m (y). height_m is vertical only. A room is placed in its floor plan by its lower-left corner (x_m, y_m) and a rotation clockwise on the plan about its centre (rotation_deg). The engine migrates version 1 and 2 documents to this version at load and on PUT. Lenient (additionalProperties allowed) so additive editor fields do not break validation.",
   "type": "object",
   "required": ["version", "rooms"],
   "properties": {
-    "version": { "type": "integer", "const": 2 },
+    "version": { "type": "integer", "const": 3 },
     "floor_plans": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
           "georef": { "$ref": "#/$defs/georef" },
-          "image": { "type": "object" }
+          "image": { "type": ["object", "null"] },
+          "scale_calibration_refs": {
+            "type": "array",
+            "description": "Scale-calibration references: two floor-plan points and their known distance in metres.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "p1": { "$ref": "#/$defs/point" },
+                "p2": { "$ref": "#/$defs/point" },
+                "knownM": { "type": "number" }
+              }
+            }
+          }
         }
       }
     },
     "rooms": {
       "type": "array",
-      "minItems": 1,
       "items": { "$ref": "#/$defs/room" }
     }
   },
   "$defs": {
+    "point": {
+      "type": "array",
+      "description": "[x, y] in metres in the frame of the enclosing level.",
+      "items": { "type": "number" },
+      "minItems": 2
+    },
     "georef": {
       "type": "object",
-      "description": "Links the floor-plan-local frame to WGS84. Lower-left origin, z = north-up, azimuth_deg clockwise from true north.",
+      "description": "Places the floor plan in the world. latitude/longitude locate its lower-left corner, azimuth_deg is the bearing of +y clockwise from true north.",
       "properties": {
         "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
         "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
         "azimuth_deg": { "type": "number" },
-        "width_m": { "type": "number", "exclusiveMinimum": 0 },
-        "height_m": { "type": "number", "exclusiveMinimum": 0, "description": "Floor-plan metric height. The mirror axis for canvas-y <-> north-up." },
-        "altitude_m": { "type": ["number", "null"] }
+        "width_m": { "type": "number", "exclusiveMinimum": 0, "description": "Floor-plan extent along x." },
+        "depth_m": { "type": "number", "exclusiveMinimum": 0, "description": "Floor-plan extent along y." },
+        "altitude_m": {
+          "type": ["number", "null"],
+          "description": "Height of the origin above the WGS84 ellipsoid, in metres. Null when not surveyed. A value read from a map or a DEM is above mean sea level and takes the geoid undulation at the origin."
+        }
       }
     },
     "room": {
       "type": "object",
-      "required": ["x_m", "y_m", "width_m", "height_m"],
-      "description": "Room rectangle placed on the floor plan, in canvas-y (top-left origin). x_m/y_m = top-left corner offset within the floor plan.",
+      "required": ["x_m", "y_m", "width_m", "depth_m"],
+      "description": "Room placed in its floor plan. Its own frame has the origin at its lower-left corner.",
       "properties": {
         "id": { "type": "string" },
         "label": { "type": "string" },
-        "x_m": { "type": "number" },
-        "y_m": { "type": "number" },
+        "floor_plan_id": { "type": "string" },
+        "x_m": { "type": "number", "description": "Lower-left corner along the floor-plan x." },
+        "y_m": { "type": "number", "description": "Lower-left corner along the floor-plan y." },
         "width_m": { "type": "number", "exclusiveMinimum": 0 },
-        "height_m": { "type": "number", "exclusiveMinimum": 0 },
+        "depth_m": { "type": "number", "exclusiveMinimum": 0 },
+        "rotation_deg": { "type": "number", "description": "Rotation clockwise on the plan about the room centre." },
         "wall_height_m": { "type": "number" },
         "shape": {
           "type": "array",
-          "description": "Optional polygon [[x,y],...] in floor-plan canvas-y; overrides the rectangle.",
-          "items": { "type": "array", "items": { "type": "number" }, "minItems": 2 }
+          "description": "Optional outline in room coordinates; overrides the rectangle. Edge i runs from shape[i] to shape[i+1].",
+          "items": { "$ref": "#/$defs/point" }
         },
         "anchors": { "type": "array", "items": { "$ref": "#/$defs/anchor" } },
         "walls": { "type": "array", "items": { "$ref": "#/$defs/wall" } },
-        "perimeter_openings": { "type": "array", "items": { "type": "object" } }
+        "perimeter_openings": {
+          "type": "array",
+          "description": "Openings along the room outline. For a rectangle the sides are N (0,depth)->(width,depth), E (width,depth)->(width,0), S (0,0)->(width,0), W (0,depth)->(0,0), and an offset is measured from the first corner.",
+          "items": { "type": "object" }
+        }
       }
     },
     "anchor": {
       "type": "object",
       "required": ["id", "x", "y"],
-      "description": "Positioning anchor in ROOM-LOCAL canvas-y (origin top-left, y down). `technology` selects the adapter family.",
+      "description": "Positioning anchor in room coordinates. `technology` selects the adapter family.",
       "properties": {
         "id": { "type": "string" },
         "x": { "type": "number" },
         "y": { "type": "number" },
-        "height_m": { "type": "number" },
+        "z": { "type": "number", "description": "Mounting height above the room floor, in metres." },
         "technology": { "type": "string", "enum": ["wifi", "wittra", "fiveg", "gnss"] }
       }
     },
     "wall": {
       "type": "object",
       "required": ["x1", "y1", "x2", "y2"],
-      "description": "Wall segment in room-local canvas-y. openings are 1-D pass-through ranges along the segment.",
+      "description": "Wall segment in room coordinates. Openings are ranges along the segment, measured from (x1, y1).",
       "properties": {
         "x1": { "type": "number" },
         "y1": { "type": "number" },

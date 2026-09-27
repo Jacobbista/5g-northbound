@@ -22,16 +22,12 @@ describe("config", () => {
     expect(CAMARA_API_BASE).toBe("http://override:9999");
   });
 
-  it("GPS origin and floor dims parse to numbers", async () => {
+  it("floor dims parse to numbers", async () => {
     window.__ENV__ = {
-      VITE_GPS_ORIGIN_LAT: "45.1",
-      VITE_GPS_ORIGIN_LON: "7.2",
       VITE_FLOOR_W: "13",
       VITE_FLOOR_D: "32",
     };
     const m = await import("./config.js");
-    expect(m.GPS_ORIGIN_LAT).toBe(45.1);
-    expect(m.GPS_ORIGIN_LON).toBe(7.2);
     expect(m.FLOOR_W).toBe(13);
     expect(m.FLOOR_D).toBe(32);
   });

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -10,7 +10,7 @@ from ..accuracy_classes import nominal_for_class
 from ..adapters.base import Adapter, Measurement
 from ..fusion.base import FusedPosition, FusionStrategy
 from ..models import FloorPlan
-from .geo import gps_to_local
+from .geo import gps_to_local, room_to_venue
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class PositionService:
       - If `device_map` lists the device, only the named adapter is polled.
       - Otherwise all adapters are polled.
 
-    Measurements are normalised to the floor-plan-local frame before fusion.
+    Measurements are normalised to the venue frame before fusion.
     """
 
     def __init__(
@@ -114,32 +114,31 @@ class PositionService:
                 m.source,
             )
             return None
-        return Measurement(
-            source=m.source,
-            accuracy=nominal,
-            confidence=m.confidence,
-            frame=m.frame,
-            x=m.x, y=m.y, z=m.z,
-            latitude=m.latitude, longitude=m.longitude,
-            timestamp=m.timestamp,
-            lastSeen=m.lastSeen,
-            diagnostics=m.diagnostics,
-        )
+        return replace(m, accuracy=nominal)
 
-    def _normalise(self, m: Measurement) -> Measurement:
-        if m.frame == "local":
+    def _apply_height_declaration(self, m: Measurement) -> Measurement:
+        """A height counts only from a source that declares `z: true`. A source
+        that declares no height, or declares nothing, contributes a horizontal
+        fix only."""
+        if m.z is None or self._capabilities_for(m.source).get("z") is True:
             return m
-        x, z = gps_to_local(m.latitude, m.longitude, self._floor_plan.gps_origin)
-        return Measurement(
-            source=m.source,
-            accuracy=m.accuracy,
-            confidence=m.confidence,
-            frame="local",
-            x=x, y=m.y, z=z,
-            timestamp=m.timestamp,
-            lastSeen=m.lastSeen,
-            diagnostics=m.diagnostics,
-        )
+        return replace(m, z=None)
+
+    def _normalise(self, m: Measurement) -> Optional[Measurement]:
+        """Express a measurement in the venue frame. A room measurement is
+        placed through its room; one naming a room the blueprint does not hold
+        cannot be placed and is dropped."""
+        if m.frame == "venue":
+            return m
+        if m.frame == "room":
+            room = self._floor_plan.rooms.get(m.room or "")
+            if room is None:
+                log.warning("measurement from '%s' names unknown room %r; dropping", m.source, m.room)
+                return None
+            x, y = room_to_venue(m.x, m.y, room)
+        else:
+            x, y = gps_to_local(m.latitude, m.longitude, self._floor_plan.gps_origin)
+        return replace(m, frame="venue", room=None, x=x, y=y)
 
     async def get_position(self, device_id: str, source: Optional[str] = None) -> Optional[PositionResult]:
         adapters = self._select_adapters(device_id, source)
@@ -158,7 +157,10 @@ class PositionService:
                 continue
             if r is None:
                 continue
-            filled = self._fill_nominal_accuracy(self._normalise(r))
+            placed = self._normalise(r)
+            if placed is None:
+                continue
+            filled = self._fill_nominal_accuracy(self._apply_height_declaration(placed))
             if filled is not None:
                 measurements.append(filled)
 

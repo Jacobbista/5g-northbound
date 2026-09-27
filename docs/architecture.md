@@ -254,25 +254,29 @@ split is per technology, with selection and hybrid combination in the engine.
 
 ## Coordinate frame
 
-All adapters, the engine, and the floor plan share a single right-handed local frame:
+The blueprint places each level in its parent: the floor plan in the world, the room in the floor plan, anchors, walls and devices in the room. Every level uses the same convention, the local frame of [omlox](https://omlox.com/):
 
-- **Origin:** lower-left corner of the room.
-- **x:** east (along `width_m`).
-- **z:** north (along `depth_m`).
-- **y:** vertical (height).
+- **Origin:** lower-left corner of the parent level.
+- **x:** metres along the width (`width_m`).
+- **y:** metres along the depth (`depth_m`).
+- **z:** metres up, the height above the floor. Right-handed.
 
-Adapters may report measurements in this local frame (the default) or in WGS84 latitude/longitude. WGS84-native sources (typically commercial RTLS platforms anchored on a real map) are projected into the local frame by the engine using the floor plan's `gps_origin` before fusion. The engine then converts the fused result back to WGS84 at the northbound boundary so the gateway stays geometry-agnostic. The demo recovers room-local coordinates by inverting this conversion against the same `gps_origin`. If `gps_origin` is absent (production deployments may legitimately omit it until a real lab GPS reference has been measured), the engine returns `latitude: 0, longitude: 0` and logs a warning.
+Two transforms link the levels. A room sits in its floor plan at its lower-left corner (`x_m`, `y_m`), rotated by `rotation_deg` clockwise about its centre. The floor plan sits in the world through its georef: the WGS84 position of its origin, `azimuth_deg` for the bearing of +y from true north, and `altitude_m` for the height of the origin above the WGS84 ellipsoid.
+
+An adapter reports in one of three frames (see [adapters.md](adapters.md#get-measurementdevice_id)): a room, the venue (the floor plan), or WGS84. The engine, which holds the blueprint, places every measurement in the venue frame before fusion and converts the fused result to WGS84 at the northbound boundary, so the gateway stays geometry-agnostic. `altitude` is the ellipsoidal height of the origin plus the fused height, present when both exist. Without a georef the engine returns `latitude: 0, longitude: 0` and logs a warning.
+
+Screen conventions stay in the code that draws: the placement editor keeps its canvas in screen axes (y down) and converts when it reads and writes the blueprint, and the location-app converts fixes into its three.js scene. No contract carries them.
 
 ```mermaid
 flowchart LR
   subgraph in[Adapter replies]
-    L["wifi-adapter<br/>frame=local<br/>(x, z)"]
-    G["wittra-uwb<br/>frame=wgs84<br/>(lat, lon)"]
+    R["wifi-adapter<br/>frame=room<br/>(room, x, y)"]
+    G["vendor-adapter<br/>frame=wgs84<br/>(lat, lon)"]
   end
-  G -- "gps_to_local(lat,lon, gps_origin)" --> N(["local (x, z)"])
-  L --> N
+  R -- "room_to_venue(x, y, room)" --> N(["venue (x, y, z)"])
+  G -- "gps_to_local(lat, lon, georef)" --> N
   N --> F["FUSION_STRATEGY.fuse(...)<br/>weighted_avg by default"]
-  F --> P["local_to_gps(x, z, gps_origin)"]
+  F --> P["local_to_gps(x, y, georef)<br/>venue_altitude(z, georef)"]
   P --> OUT([EnginePosition · WGS84])
 ```
 

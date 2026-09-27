@@ -37,9 +37,8 @@
     "confidence": {
       "path": "latest.data.location.value.accuracy"
     },
-    "y": {
-      "path": "latest.data.location.value.height",
-      "default": 0.0
+    "z": {
+      "path": "latest.data.location.value.height"
     },
     "timestamp": {
       "path": "latest.data.location.timestamp",
@@ -78,7 +77,7 @@
       "longitude": {
         "path": "fixedLocation.longitude"
       },
-      "height": {
+      "z": {
         "path": "fixedLocation.height",
         "default": 0
       },

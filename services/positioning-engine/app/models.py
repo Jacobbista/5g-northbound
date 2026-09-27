@@ -4,15 +4,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class GpsOrigin(BaseModel):
-    """Single georeference linking the floor-plan local frame to WGS84.
+    """Georeference of the venue frame: the WGS84 position of the floor-plan
+    origin (its lower-left corner).
 
-    `azimuth_deg` is the bearing of the floor-plan +z axis (the "north" of
-    the SVG / top-down view) measured clockwise from true north. Default 0
-    means the floor plan is already north-aligned. A real building rotated
-    30° east of north would have azimuth_deg=30.
+    `azimuth_deg` is the bearing of the venue +y axis, clockwise from true
+    north. 0 means the floor plan is north-aligned.
 
-    `altitude_m` is the altitude of the local origin above sea level; carried
-    for completeness, not used in the 2D projection.
+    `altitude_m` is the height of the origin above the WGS84 ellipsoid, the
+    datum of latitude and longitude. None when it has not been surveyed.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -22,39 +21,27 @@ class GpsOrigin(BaseModel):
     altitude_m: Optional[float] = None
 
 
-class Wall(BaseModel):
+class RoomPlacement(BaseModel):
+    """Where a room sits in its floor plan: lower-left corner, extents, and a
+    rotation clockwise on the plan about the room centre."""
+
     model_config = ConfigDict(extra="ignore")
-    x: float
-    z: float
-    w: float
-    d: float
-    h: float
-
-
-class UwbAnchor(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    x: float
-    y: float
-    z: float
-
-
-class Floor(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: int
-    label: str
-    width_m: float
-    depth_m: float
-    height_m: float
-    walls: list[Wall] = []
-    uwb_anchors: list[UwbAnchor] = []
+    x_m: float = 0.0
+    y_m: float = 0.0
+    width_m: float = 0.0
+    depth_m: float = 0.0
+    rotation_deg: float = 0.0
 
 
 class FloorPlan(BaseModel):
+    """What the engine needs from the blueprint: the georeference, the
+    floor-plan extent, and the placement of each room."""
+
     model_config = ConfigDict(extra="ignore")
-    version: int = 1
     gps_origin: Optional[GpsOrigin] = None
-    floors: list[Floor]
+    width_m: float = 0.0
+    depth_m: float = 0.0
+    rooms: dict[str, RoomPlacement] = {}
 
 
 class FusionOutput(BaseModel):

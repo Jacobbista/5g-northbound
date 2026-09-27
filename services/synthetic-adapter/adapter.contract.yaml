@@ -8,14 +8,14 @@ description: Synthetic waypoint walker for demos. Never shipped to production.
 capabilities:
   source: synthetic          # modality tag surfaced on fixes
   kinds: [forklift, asset]   # asset kinds this adapter can locate
-  frame: local          # Measurement frame it emits (floor-plan-local, north-up)
+  frame: room           # fixes in the frame of the room it walks
   devices: true         # exposes /devices (configured device inventory for onboarding)
   # Exposes PUT/DELETE /devices/{id}/placement. Only a source that synthesises
   # its position can offer this: a real one reports where its hardware is, and
   # there is nothing to place. Consumers read it to know what is draggable.
   placement: true
   streaming: false      # pull-only (no push channel)
-  z: true               # provides a vertical (height) component
+  z: true               # measures height above the venue floor
   # The band it reports inside, per spec/private-profile/accuracy-class-vocabulary.json.
   # It was `coarse` while it emitted a fixed 1.5m, which is not coarse under any
   # reading. `coarse` is not a way to say "this source is fake": that is what

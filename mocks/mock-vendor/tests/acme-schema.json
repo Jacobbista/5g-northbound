@@ -33,9 +33,8 @@
     "confidence": {
       "const": 0.5
     },
-    "y": {
-      "path": "data.alt",
-      "default": 0.0
+    "z": {
+      "path": "data.alt"
     },
     "timestamp": {
       "path": "data.ts",
@@ -63,7 +62,7 @@
       "longitude": {
         "path": "anchor.lng"
       },
-      "height": {
+      "z": {
         "path": "anchor.h"
       },
       "deviceType": {

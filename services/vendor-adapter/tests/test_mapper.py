@@ -32,7 +32,7 @@ def test_to_measurement_wgs84(wittra_schema, wittra_sample_payload):
     # all, so the key is absent rather than a fabricated number.
     assert "accuracy" not in out
     assert out["confidence"] == 0.85
-    assert out["y"] == 1.2
+    assert out["z"] == 1.2
     assert isinstance(out["timestamp"], float)
 
 
@@ -67,7 +67,6 @@ def test_to_measurement_applies_linear_transform():
         # accuracy = (1 - conf) * 50 expressed via linear y = -50x + 50
         accuracy=PathSpec(path="conf", transform=LinearTransform(type="linear", scale=-50.0, offset=50.0)),
         confidence=PathSpec(path="conf"),
-        y=ConstSpec(const=0.0),
         timestamp=ConstSpec(const=0.0),
     )
     out = to_measurement(mapping, {"conf": 0.8}, vendor_name="x")
@@ -75,22 +74,22 @@ def test_to_measurement_applies_linear_transform():
     assert out["confidence"] == 0.8
 
 
-def test_to_measurement_local_frame_maps_lat_to_x_and_lon_to_z():
+def test_to_measurement_venue_frame_maps_x_and_y():
     from app.schema import Mapping, ConstSpec, PathSpec
 
     mapping = Mapping(
-        frame=ConstSpec(const="local"),
-        latitude=PathSpec(path="px"),
-        longitude=PathSpec(path="pz"),
+        frame=ConstSpec(const="venue"),
+        x=PathSpec(path="px"),
+        y=PathSpec(path="py"),
         accuracy=ConstSpec(const=1.0),
         confidence=ConstSpec(const=0.5),
-        y=ConstSpec(const=0.0),
         timestamp=ConstSpec(const=0.0),
     )
-    out = to_measurement(mapping, {"px": 3.0, "pz": 4.0}, vendor_name="x")
-    assert out["frame"] == "local"
+    out = to_measurement(mapping, {"px": 3.0, "py": 4.0}, vendor_name="x")
+    assert out["frame"] == "venue"
     assert out["x"] == 3.0
-    assert out["z"] == 4.0
+    assert out["y"] == 4.0
+    assert "z" not in out
     assert "latitude" not in out
     assert "longitude" not in out
 
@@ -104,7 +103,6 @@ def test_to_measurement_iso8601_parses_to_epoch():
         longitude=ConstSpec(const=0.0),
         accuracy=ConstSpec(const=1.0),
         confidence=ConstSpec(const=0.5),
-        y=ConstSpec(const=0.0),
         timestamp=PathSpec(path="ts", format="iso8601"),
     )
     out = to_measurement(mapping, {"ts": "1970-01-01T00:00:10+00:00"}, vendor_name="x")
@@ -163,3 +161,26 @@ def test_to_measurement_omits_last_seen_when_unmapped(wittra_schema_dict):
         }}},
     }, vendor_name="wittra")
     assert "lastSeen" not in out
+
+
+def test_to_measurement_carries_no_height_when_the_record_has_none(wittra_schema):
+    payload = {"latest": {"data": {"location": {"timestamp": "2026-01-01T00:00:00Z",
+               "value": {"latitude": 45.0, "longitude": 7.0}}}}}
+    out = to_measurement(wittra_schema.mapping, payload, vendor_name="wittra")
+    assert "z" not in out
+
+
+def test_to_measurement_picks_the_pair_of_the_resolved_frame():
+    from app.schema import Mapping
+
+    m = Mapping.model_validate({
+        "frame": {"path": "f"},
+        "latitude": {"path": "lat"}, "longitude": {"path": "lon"},
+        "x": {"path": "x"}, "y": {"path": "y"},
+        "timestamp": {"path": "ts"},
+    })
+    venue = to_measurement(m, {"f": "venue", "x": 2.0, "y": 3.0, "ts": 1.0}, vendor_name="v")
+    assert (venue["frame"], venue["x"], venue["y"]) == ("venue", 2.0, 3.0)
+    geo = to_measurement(m, {"f": "wgs84", "lat": 59.4, "lon": 17.9, "ts": 1.0}, vendor_name="v")
+    assert (geo["frame"], geo["latitude"], geo["longitude"]) == ("wgs84", 59.4, 17.9)
+    assert to_measurement(m, {"f": "ecef", "x": 2.0, "y": 3.0, "ts": 1.0}, vendor_name="v") is None

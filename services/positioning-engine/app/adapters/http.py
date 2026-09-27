@@ -14,6 +14,16 @@ COOLDOWN_FAIL_THRESHOLD = 3       # consecutive failures before cooldown kicks i
 COOLDOWN_BASE_S = 2.0             # first cooldown window
 COOLDOWN_MAX_S = 60.0             # cap on the exponential backoff
 
+_FRAMES = ("venue", "room", "wgs84")
+
+
+def _frame(value: str) -> str:
+    """The frame a measurement declares. An unknown frame is a malformed
+    measurement: its coordinates cannot be placed."""
+    if value not in _FRAMES:
+        raise ValueError(f"unknown frame {value!r}")
+    return value
+
 
 class HttpAdapter(Adapter):
     """Generic HTTP adapter - pulls a Measurement from any service that speaks
@@ -107,10 +117,11 @@ class HttpAdapter(Adapter):
                     float(body["accuracy"]) if body.get("accuracy") is not None else None
                 ),
                 confidence=float(body["confidence"]),
-                frame=body.get("frame", "local"),
+                frame=_frame(body.get("frame", "venue")),
+                room=body.get("room"),
                 x=float(body.get("x", 0.0)),
                 y=float(body.get("y", 0.0)),
-                z=float(body.get("z", 0.0)),
+                z=float(body["z"]) if body.get("z") is not None else None,
                 latitude=float(body.get("latitude", 0.0)),
                 longitude=float(body.get("longitude", 0.0)),
                 timestamp=body.get("timestamp"),

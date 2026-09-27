@@ -8,7 +8,7 @@ from app.wifi import WifiAdapter
 def cfg():
     return WifiConfig(
         room_w=13,
-        room_h=32,
+        room_id="room-01", room_d=32,
         routers=[
             {"id": "A", "x": 3.5, "y": 13, "bssids": ["AA:AA:AA:AA:AA:01"]},
             {"id": "B", "x": 11.5, "y": 31, "bssids": ["BB:BB:BB:BB:BB:01"]},
@@ -20,7 +20,7 @@ def cfg():
 def cfg3():
     return WifiConfig(
         room_w=20,
-        room_h=20,
+        room_id="room-01", room_d=20,
         algorithm="trilateration",
         routers=[
             {"id": "A", "x": 0, "y": 0, "bssids": ["AA:AA:AA:AA:AA:01"]},

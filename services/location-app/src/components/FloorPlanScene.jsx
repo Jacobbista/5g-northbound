@@ -9,7 +9,9 @@ import {
 } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { CAMARA_API_BASE, FLOOR_D, FLOOR_W, GPS_ORIGIN_LAT, GPS_ORIGIN_LON } from "../config";
+import { CAMARA_API_BASE, FLOOR_D, FLOOR_W } from "../config";
+import { blueprintToCanvas } from "../lib/blueprintFrame";
+import { frameFromBlueprint, gpsToScene } from "../lib/venueFrame";
 import { ema2d } from "../lib/smoothing";
 import { shortLabel } from "../lib/label";
 
@@ -25,7 +27,6 @@ const LABEL_Z = [30, 0];
 const NO_RAYCAST = () => null;
 const MESH_RAYCAST = THREE.Mesh.prototype.raycast;
 
-const M_PER_DEG = 111320;
 
 // Per-technology visual palette. Anchors with unknown technology fall back to
 // the wifi entry. Mirrors the registry on the placement-editor side.
@@ -66,33 +67,11 @@ const DEFAULT_WALL_THICK = 0.2;
 // EMA weight: 0=no update, 1=no smoothing. ~0.35 absorbs ~3 samples worth of jitter.
 const EMA_ALPHA = 0.35;
 
-// Project a CAMARA fix (lat, lon) into THE canonical room frame the anchors use:
-// room-local metres, origin top-left, x right, y down (canvas-y). This is the
-// frame the placement editor stores and the engine speaks; the demo renders 3D
-// z = canvas-y directly (no mirror). gpsToFloorPlanLocal yields georef-frame y
-// (lower-left origin, north-up), so convert once: canvas-y = fpH - yFp, then
-// subtract the room base. Uses the blueprint georef, NOT the legacy env
-// GPS_ORIGIN (which pinned the demo to the wrong venue, throwing devices a
-// million metres off-scene).
+// A CAMARA fix (lat, lon) in the scene's room coordinates: x right, z down
+// from the room's top edge, the frame the anchors and walls are drawn in.
 function toLocal(center, frame) {
   if (!center) return null;
-  if (frame?.georef) {
-    const { lat0, lon0, az, roomX, roomY, fpH } = frame;
-    const mLat = M_PER_DEG;
-    const mLon = M_PER_DEG * Math.cos((lat0 * Math.PI) / 180);
-    const east = (center.longitude - lon0) * mLon;
-    const north = (center.latitude - lat0) * mLat;
-    const xFp = east * Math.cos(az) - north * Math.sin(az);
-    const yFp = east * Math.sin(az) + north * Math.cos(az);
-    const x = xFp - roomX;
-    const z = (fpH - yFp) - roomY;
-    return { x, z };
-  }
-  // Legacy fallback (no blueprint georef available).
-  const x =
-    (center.longitude - GPS_ORIGIN_LON) * M_PER_DEG * Math.cos((GPS_ORIGIN_LAT * Math.PI) / 180);
-  const z = (center.latitude - GPS_ORIGIN_LAT) * M_PER_DEG;
-  return { x, z };
+  return gpsToScene(center.latitude, center.longitude, frame);
 }
 
 const labelStyle = {
@@ -1455,7 +1434,7 @@ function GradientDome({ cx = 0, cz = 0, radius = 220 }) {
   );
 }
 
-function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp, inert = false }) {
+function Scene({ positions, layout, frame, visibleTechs, relevantAnchorIds, onSelectDevice, onSelectAp, inert = false }) {
   // Prefer v2 layout fields (rooms[0]) when present; legacy v1 (room_w / room_h /
   // aps / walls) still works as a fallback.
   const room = layout?.rooms?.[0] || null;
@@ -1482,22 +1461,6 @@ function Scene({ positions, layout, visibleTechs, relevantAnchorIds, onSelectDev
   const extraD = d + 2 * MARGIN;
   const span = Math.max(extraW, extraD);
 
-  // Frame for projecting live device fixes (lat/lon) into this same room frame,
-  // using the blueprint's floor-plan georef (shared by the engine/editor).
-  const georef = layout?.floor_plans?.[0]?.georef || null;
-  const frame =
-    georef && georef.latitude != null && georef.longitude != null
-      ? {
-          georef: true,
-          lat0: Number(georef.latitude),
-          lon0: Number(georef.longitude),
-          az: ((Number(georef.azimuth_deg) || 0) * Math.PI) / 180,
-          roomX: Number(room?.x_m) || 0,
-          roomY: Number(room?.y_m) || 0,
-          fpH: Number(georef.height_m) || 0,
-          d,
-        }
-      : null;
 
   return (
     <>
@@ -1617,7 +1580,10 @@ function CameraRig({ homePos, target, signal, controlsRef }) {
 }
 
 export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAnchorIds, recenterSignal = 0, onSelectDevice, onSelectAp, onLayoutLoaded, placing = null, settling = null, vanishing = null, onPlaced, onCancelPlacing, onSettled, onVanished }) {
-  const [layout, setLayout] = useState(null);
+  // The blueprint as served (version 3) and the canvas model the scene draws.
+  const [blueprint, setBlueprint] = useState(null);
+  const layout = useMemo(() => blueprintToCanvas(blueprint), [blueprint]);
+  const frame = useMemo(() => frameFromBlueprint(blueprint), [blueprint]);
   const controlsRef = useRef();
   // True while the block is being carried. The scene stops taking pointer
   // events for as long as it is: the carry is driven from the window, so
@@ -1641,7 +1607,7 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
         });
         const data = r.ok ? await r.json() : null;
         if (cancelled) return;
-        setLayout(data);
+        setBlueprint(data);
         if (onLayoutLoaded) onLayoutLoaded(data);
       } catch {
         // Transient failure: keep the last-known layout rather than dropping
@@ -1749,6 +1715,7 @@ export function FloorPlanScene({ token, positions = [], visibleTechs, relevantAn
           inert={Boolean(placing)}
           positions={positions}
           layout={layout}
+          frame={frame}
           visibleTechs={visibleTechs}
           relevantAnchorIds={relevantAnchorIds}
           onSelectDevice={pickDevice}

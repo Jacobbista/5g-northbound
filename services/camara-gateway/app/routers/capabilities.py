@@ -59,7 +59,7 @@ async def capabilities(claims: dict = Depends(require_location_role)) -> Capabil
         if caps.get("accuracy_class"):
             accuracy.add(caps["accuracy_class"])
         streaming = streaming or bool(caps.get("streaming"))
-        altitude = altitude or bool(caps.get("z"))
+        altitude = altitude or caps.get("z") is True
         adapter_caps.append(
             AdapterCapability(
                 name=ad.get("name", ""),

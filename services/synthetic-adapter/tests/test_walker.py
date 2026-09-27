@@ -16,15 +16,15 @@ def test_walker_clamps_to_bounds():
     for _ in range(200):
         x, y, z, _ = walker.step("dev1")
         assert 0.0 <= x <= 10.0
-        assert 0.0 <= y <= 3.0
-        assert 0.0 <= z <= 10.0
+        assert 0.0 <= y <= 10.0
+        assert 0.0 <= z <= 3.0
 
 
 def test_walker_seeds_each_device_at_centre():
     cfg = Settings(width_m=10.0, depth_m=20.0, height_m=2.0, speed_mps=0.0)
     walker = WaypointWalker(cfg)
     x, y, z, _ = walker.step("d1")
-    assert (x, y, z) == (5.0, 1.0, 10.0)
+    assert (x, y, z) == (5.0, 10.0, 1.0)
 
 
 def test_walker_devices_independent():
@@ -58,9 +58,9 @@ def test_wall_blocks_step_without_opening():
     wall = _Segment(x1=5.0, y1=0.0, x2=5.0, y2=10.0, thickness=0.2)
     cfg = Settings(width_m=10.0, depth_m=10.0, height_m=3.0, speed_mps=100.0, rng_seed=1)
     walker = WaypointWalker(cfg, segments=[wall])
-    walker.step("d1")  # seed at centre (5, 1.5, 5) - on the wall; OK for the test
+    walker.step("d1")  # seed at centre (5, 5, 1.5) - on the wall; OK for the test
     walker._state["d1"].x = 2.0
-    walker._state["d1"].z = 5.0
+    walker._state["d1"].y = 5.0
     walker._state["d1"].waypoint = (8.0, 5.0)
     walker._state["d1"].last_ts -= 1.0
     walker.step("d1")
@@ -76,7 +76,7 @@ def test_opening_lets_step_through():
     walker = WaypointWalker(cfg, segments=[wall])
     walker.step("d1")
     walker._state["d1"].x = 2.0
-    walker._state["d1"].z = 5.0
+    walker._state["d1"].y = 5.0
     walker._state["d1"].waypoint = (8.0, 5.0)
     walker._state["d1"].last_ts -= 1.0
     walker.step("d1")
@@ -166,3 +166,30 @@ def test_quality_degrades_in_episodes_not_per_tick():
         run = run + 1 if a > threshold else 0
         longest = max(longest, run)
     assert longest >= 3, "degradation is flickering per tick, not lasting"
+
+
+def _example():
+    import json
+    from pathlib import Path
+
+    return json.loads(
+        (Path(__file__).resolve().parents[3] / "schema" / "examples" / "layout.example.json").read_text()
+    )
+
+
+def test_walls_and_perimeter_come_from_the_v3_room_frame():
+    from app.walker import _load_segments_from_data
+
+    segments, bounds = _load_segments_from_data(_example())
+    assert bounds == (10, 8)
+    # One inner wall plus four perimeter sides. The north side runs along the
+    # top edge of the room, y = depth.
+    assert len(segments) == 5
+    north = segments[1]
+    assert (north.x1, north.y1, north.x2, north.y2) == (0.0, 8, 10, 8)
+
+
+def test_a_blueprint_older_than_version_3_is_not_read():
+    from app.walker import _load_segments_from_data
+
+    assert _load_segments_from_data({**_example(), "version": 2}) == ([], None)

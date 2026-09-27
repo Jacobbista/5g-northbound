@@ -6,41 +6,46 @@ from app.blueprint import floor_plan_from_blueprint, load_blueprint, save_bluepr
 from app.main import app
 
 
-def test_gps_origin_from_floor_plan_georef():
+def test_floor_plan_from_a_v3_blueprint():
     raw = {
+        "version": 3,
         "floor_plans": [
-            {"label": "6th floor", "georef": {
+            {"id": "fp", "label": "6th floor", "georef": {
                 "latitude": 59.4042, "longitude": 17.9492,
-                "azimuth_deg": -36.4, "altitude": 0, "width_m": 40, "height_m": 40}}
+                "azimuth_deg": -36.4, "altitude_m": 31.0, "width_m": 40, "depth_m": 30}}
         ],
-        "rooms": [{"width_m": 13, "height_m": 32}],
+        "rooms": [{"id": "r1", "floor_plan_id": "fp", "x_m": 4, "y_m": 16, "width_m": 10,
+                   "depth_m": 8, "rotation_deg": 15}],
     }
     fp = floor_plan_from_blueprint(raw)
-    assert fp.gps_origin is not None
     assert fp.gps_origin.latitude == 59.4042
     assert fp.gps_origin.azimuth_deg == -36.4
-    assert fp.floors[0].width_m == 40 and fp.floors[0].depth_m == 40
-    assert fp.floors[0].label == "6th floor"
-
-
-def test_falls_back_to_legacy_top_level_gps_origin():
-    raw = {"gps_origin": {"latitude": 45.0, "longitude": 7.0, "azimuth_deg": 0},
-           "rooms": [{"width_m": 13, "height_m": 32}]}
-    fp = floor_plan_from_blueprint(raw)
-    assert fp.gps_origin.latitude == 45.0
-    assert fp.floors[0].width_m == 13 and fp.floors[0].depth_m == 32
+    assert fp.gps_origin.altitude_m == 31.0
+    assert (fp.width_m, fp.depth_m) == (40, 30)
+    assert fp.rooms["r1"].y_m == 16 and fp.rooms["r1"].rotation_deg == 15
 
 
 def test_no_georef_yields_none_origin_not_crash():
-    fp = floor_plan_from_blueprint({"rooms": [{"width_m": 10, "height_m": 10}]})
+    fp = floor_plan_from_blueprint({"version": 3, "rooms": [{"id": "r", "width_m": 10, "depth_m": 10}]})
     assert fp.gps_origin is None
-    assert fp.floors[0].width_m == 10
+    assert "r" in fp.rooms
+
+
+def test_a_stored_v2_blueprint_is_migrated_and_persisted_once(tmp_path):
+    store = tmp_path / "blueprint.json"
+    store.write_text(json.dumps({"version": 2, "floor_plans": [{"id": "fp", "georef": {
+        "latitude": 59.4, "longitude": 17.9, "width_m": 10, "height_m": 20}}],
+        "rooms": [{"id": "r", "floor_plan_id": "fp", "x_m": 0, "y_m": 0, "width_m": 5, "height_m": 4}]}))
+    raw = load_blueprint(str(store), "")
+    assert raw["version"] == 3
+    assert raw["rooms"][0]["y_m"] == 16.0
+    assert json.loads(store.read_text())["version"] == 3
 
 
 def test_load_seeds_from_seed_path_then_persists(tmp_path):
     store = tmp_path / "blueprint.json"
     seed = tmp_path / "seed.json"
-    seed.write_text(json.dumps({"floor_plans": [{"georef": {"latitude": 1.0, "longitude": 2.0}}]}))
+    seed.write_text(json.dumps({"version": 3, "floor_plans": [{"georef": {"latitude": 1.0, "longitude": 2.0}}], "rooms": []}))
     raw = load_blueprint(str(store), str(seed))
     assert raw["floor_plans"][0]["georef"]["latitude"] == 1.0
     # seed migrated into the persisted store
@@ -66,6 +71,7 @@ async def test_get_blueprint_404_when_absent():
 async def test_put_then_get_roundtrip(tmp_path, monkeypatch):
     from app import config
     monkeypatch.setattr(config.settings, "blueprint_path", str(tmp_path / "bp.json"))
+    # A client still writing version 2 is migrated on PUT.
     body = {"version": 2,
             "floor_plans": [{"georef": {"latitude": 59.4, "longitude": 17.9, "azimuth_deg": -36.0}}],
             "rooms": [{"x_m": 0, "y_m": 0, "width_m": 13, "height_m": 32}]}
@@ -76,4 +82,6 @@ async def test_put_then_get_roundtrip(tmp_path, monkeypatch):
         got = await c.get("/blueprint")
     assert got.status_code == 200
     assert got.json()["floor_plans"][0]["georef"]["latitude"] == 59.4
+    assert got.json()["version"] == 3
+    assert got.json()["rooms"][0]["depth_m"] == 32
     assert (tmp_path / "bp.json").is_file()

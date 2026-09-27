@@ -37,7 +37,6 @@ def test_field_spec_rejects_both_const_and_path():
             "longitude":  {"const": 0.0},
             "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
-            "y":          {"const": 0.0},
             "timestamp":  {"const": 0.0},
         },
     }
@@ -45,9 +44,8 @@ def test_field_spec_rejects_both_const_and_path():
         Schema.model_validate(bad)
 
 
-def test_mapping_omits_optional_y_and_confidence():
-    # A wgs84 vendor with no height/confidence source omits both instead of
-    # const-stuffing; they default to None (the mapper emits 0.0).
+def test_mapping_omits_optional_height_and_confidence():
+    # A wgs84 vendor with no height/confidence source omits both.
     s = Schema.model_validate({
         "vendor": "v",
         "baseUrl": {"env": "X_BASE_URL"},
@@ -61,7 +59,7 @@ def test_mapping_omits_optional_y_and_confidence():
             "timestamp":  {"path": "ts"},
         },
     })
-    assert s.mapping.y is None
+    assert s.mapping.z is None
     assert s.mapping.confidence is None
 
 
@@ -77,7 +75,6 @@ def test_schema_accepts_bearer_auth():
             "longitude":  {"path": "lon"},
             "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
-            "y":          {"const": 0.0},
             "timestamp":  {"path": "ts"},
         },
     })
@@ -91,12 +88,11 @@ def test_schema_accepts_header_auth():
         "path": "/devices/{device_id}",
         "auth": {"scheme": "header", "header": "X-API-Key", "value": {"env": "VENDOR_KEY"}},
         "mapping": {
-            "frame":      {"const": "local"},
-            "latitude":   {"path": "x"},
-            "longitude":  {"path": "z"},
+            "frame":      {"const": "venue"},
+            "x":          {"path": "x"},
+            "y":          {"path": "y"},
             "accuracy": {"const": 1.0},
             "confidence": {"const": 0.5},
-            "y":          {"const": 0.0},
             "timestamp":  {"path": "ts"},
         },
     })
@@ -152,3 +148,58 @@ def test_schema_rejects_a_document_carrying_a_vendor_url(wittra_schema_dict):
     doc["default_base_url"] = "https://api.wittra.se"
     with pytest.raises(ValidationError):
         Schema.model_validate(doc)
+
+
+def _mapping(**fields):
+    base = {"timestamp": {"path": "ts"}}
+    base.update(fields)
+    return {
+        "vendor": "v",
+        "baseUrl": {"env": "X_BASE_URL"},
+        "path": "/devices/{device_id}",
+        "auth": {"scheme": "none"},
+        "mapping": base,
+    }
+
+
+def test_constant_venue_frame_rejects_the_geographic_pair():
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(
+            frame={"const": "venue"}, latitude={"path": "a"}, longitude={"path": "b"},
+        ))
+
+
+def test_constant_frame_requires_its_whole_pair():
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(frame={"const": "wgs84"}, latitude={"path": "a"}))
+
+
+def test_unknown_constant_frame_is_rejected():
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(
+            frame={"const": "ecef"}, latitude={"path": "a"}, longitude={"path": "b"},
+        ))
+
+
+def test_frame_from_payload_admits_both_pairs():
+    s = Schema.model_validate(_mapping(
+        frame={"path": "frame"},
+        latitude={"path": "lat"}, longitude={"path": "lon"},
+        x={"path": "x"}, y={"path": "y"},
+    ))
+    assert s.mapping.x is not None and s.mapping.latitude is not None
+
+
+def test_a_geographic_mapping_that_still_maps_y_as_height_is_rejected():
+    # Before the venue frame, `y` was the vertical. In a wgs84 mapping it now
+    # names half of the venue pair, which a constant wgs84 frame refuses.
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(
+            frame={"const": "wgs84"}, latitude={"path": "a"}, longitude={"path": "b"},
+            y={"path": "h"},
+        ))
+
+
+def test_the_retired_local_frame_is_rejected():
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(frame={"const": "local"}, x={"path": "a"}, y={"path": "b"}))

@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..config import settings
 from ..services.discovery import resolve_broadcast_targets
-from ..services.geo import local_to_gps
+from ..services.geo import local_to_gps, venue_altitude
 from ..services.position_service import now_iso, ts_to_iso
 
 log = logging.getLogger(__name__)
@@ -39,11 +39,8 @@ def build_payload_item(did, res, origin):
     `observed_at` (which is fresh on every tick) or `timestamp` (which freezes).
     `diagnostics` (stream tier, e.g. motion) is attached only when the routed
     source reports it."""
-    lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.z, origin)
-    alt = None
-    if res.primary.fused.y is not None:
-        base = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
-        alt = round(base + res.primary.fused.y, 3)
+    lat, lon = local_to_gps(res.primary.fused.x, res.primary.fused.y, origin)
+    alt = venue_altitude(res.primary.fused.z, origin)
     item = {
         "positioningId": did,
         "latitude": lat,

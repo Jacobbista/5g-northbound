@@ -109,7 +109,7 @@ async def serve(full_path: str, request: Request):
             "longitude": lon,
             "accuracy_m": round(0.6 + random.random() * 0.35, 2),
             "confidence": 0.5,
-            "y": _HEIGHT_M,
+            "z": _HEIGHT_M,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return build_telemetry(SCHEMA["mapping"], values)

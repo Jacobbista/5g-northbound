@@ -1,4 +1,6 @@
-// Three-layer placement schema (v2):
+import { blueprintToCanvas, canvasToBlueprint } from "./blueprintFrame.js";
+
+// Three-layer placement model the editor draws:
 //
 //   floor_plans[]  ← architectural drawings positioned on the world map
 //        ↑
@@ -19,10 +21,11 @@
 // engine and section 3 still have a consistent frame; the editor recomputes
 // it on every polygon edit.
 //
-// Legacy v1 layouts (single-room top-level: room_w / room_h / gps_origin /
-// aps / walls / floor_plan_image) are normalised into a single floor_plan +
-// single room so the new shape is fully backward-compatible at read time.
-// Writes always emit v2.
+// The editor draws in screen axes (origin top-left, y down) and holds the
+// model as version 2 of the blueprint. The blueprint it reads and writes is
+// version 3, in the venue-frame convention (origin lower-left, y along the
+// depth): normalizeLayout converts on the way in, toBlueprint on the way out
+// (see blueprintFrame.js). An imported version 1 or 2 file reads unchanged.
 
 export const DEFAULT_FP_ID = "fp-01";
 export const DEFAULT_ROOM_ID = "room-01";
@@ -125,7 +128,7 @@ export function emptyLayoutV2() {
           latitude: 0,
           longitude: 0,
           azimuth_deg: 0,
-          altitude_m: 0,
+          altitude_m: null,
           // 0 → "no area defined yet" - UI prompts the operator to
           // upload a reference image or draw a rectangle in step 1.
           width_m: 0,
@@ -162,11 +165,15 @@ export function emptyLayoutV2() {
 // single room derived from the top-level fields.
 export function normalizeLayout(raw) {
   if (!raw || typeof raw !== "object") return emptyLayoutV2();
-  if (raw.version === 2 && Array.isArray(raw.floor_plans) && Array.isArray(raw.rooms)) {
+  if (raw.version === 3) raw = blueprintToCanvas(raw);
+  // Version 2 files were written as 2 and as "2.1".
+  const major = Number(String(raw.version ?? "").split(".")[0]);
+  if (major === 2 && Array.isArray(raw.floor_plans) && Array.isArray(raw.rooms)) {
     // Lift legacy `side` perimeter openings to `edge_index` in-place so
     // the rest of the editor only deals with one shape.
     return {
       ...raw,
+      version: 2,
       rooms: raw.rooms.map((r) => {
         if (!Array.isArray(r.perimeter_openings)) return r;
         const lifted = r.perimeter_openings
@@ -277,30 +284,7 @@ export function centroidOfPolygon(shape) {
   return { x: cx / (6 * area), y: cy / (6 * area) };
 }
 
-// Save side: emit v2 alongside legacy top-level fields derived from the
-// first floor-plan / first room. The location-app and any v1 consumer
-// keep working unchanged; v2-aware consumers pick up floor_plans / rooms.
-export function denormalizeForCompat(layout) {
-  if (!layout || layout.version !== 2) return layout;
-  const fp = layout.floor_plans?.[0] || null;
-  const room = layout.rooms?.[0] || null;
-  const out = { ...layout };
-  if (room) {
-    out.room_w = room.width_m;
-    out.room_h = room.height_m;
-    out.aps = room.anchors || [];
-    out.walls = room.walls || [];
-  }
-  if (fp) {
-    if (fp.georef) {
-      out.gps_origin = {
-        latitude: fp.georef.latitude,
-        longitude: fp.georef.longitude,
-        azimuth_deg: fp.georef.azimuth_deg,
-        altitude_m: fp.georef.altitude_m,
-      };
-    }
-    if (fp.image) out.floor_plan_image = fp.image;
-  }
-  return out;
+// Save side: the blueprint as the engine stores it, version 3.
+export function toBlueprint(layout) {
+  return canvasToBlueprint(layout);
 }

@@ -1,14 +1,8 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .kalman import DEFAULT_MOTION_MODEL
-
-
-class GpsOrigin(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    latitude: float
-    longitude: float
 
 
 class Router(BaseModel):
@@ -39,9 +33,9 @@ class WifiBinding(BaseModel):
 
 
 class CalibrationSample(BaseModel):
-    """One survey point. The operator stands at (x_m, y_m) inside the
-    room frame; the adapter averages the next N scans and records the
-    mean RSSI per anchor id. Persisted in the bindings file under
+    """One survey point. The operator stands at (x_m, y_m) in the room frame
+    (lower-left origin, y along the depth); the adapter averages the next N
+    scans and records the mean RSSI per anchor id. Persisted in the bindings file under
     `calibration_samples` so a re-fit is possible after schema updates.
     """
 
@@ -66,8 +60,7 @@ class WifiBindings(BaseModel):
 
     NOT in this file:
       - x / y positions  → come from the placement-editor blueprint
-      - room_w / room_h  → come from the blueprint's first room
-      - gps_origin       → derived from the blueprint's floor_plan georef
+      - room extent      → comes from the blueprint's first room
 
     Why the split: BSSIDs are venue-specific and sensitive (real network
     MACs); blueprint geometry is portable. Keeping them in separate files
@@ -90,23 +83,21 @@ class WifiBindings(BaseModel):
     # the guided calibration tool. The tool re-derives `tx_power` and
     # `path_loss_n` (per binding) from these samples on each "apply".
     calibration_samples: list[CalibrationSample] = []
+    # Frame of the stored samples. "room" is the room frame of blueprint
+    # version 3. Absent on files written before it: those samples are in the
+    # version 2 screen frame (y down) and are migrated once at config load.
+    samples_frame: Optional[str] = None
 
 
 class WifiConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    # The room the anchors belong to. Fixes are reported in its frame, and the
+    # engine places the room in the venue.
+    room_id: str
     room_w: float
-    room_h: float
-    # Room origin within the floor plan + floor-plan height, used to lift the
-    # room-local, canvas-y (origin top-left, y down) trilateration result into
-    # the engine's documented `local` frame: floor-plan-local, lower-left
-    # origin, z = north-up. Zero when no georef is known (graceful: the engine
-    # then degrades to (0, 0) WGS84 anyway).
-    base_x: float = 0.0
-    base_y: float = 0.0
-    fp_height_m: float = 0.0
+    room_d: float
     tx_power: float = -42.0
     path_loss_n: float = 2.7
-    gps_origin: Optional[GpsOrigin] = None
     routers: list[Router]
     # "trilateration" (least-squares, uses all ranges) | "centroid" (weighted average)
     algorithm: str = "trilateration"
@@ -119,15 +110,16 @@ class WifiConfig(BaseModel):
 class Measurement(BaseModel):
     """HTTP response of GET /measurement/{device_id}.
 
-    Same shape consumed by positioning-engine's HttpAdapter. `x`,`z` are in the
-    engine's `local` frame: floor-plan-local, lower-left origin, z = north-up
-    (the adapter lifts its room-local fix into this frame before emitting).
+    Same shape consumed by positioning-engine's HttpAdapter. `x`, `y` are in
+    the frame of the room named by `room`: lower-left origin, y along the
+    depth. RSSI trilateration measures no height, so there is no `z`.
     """
 
     source: str = "wifi"
+    frame: Literal["room"] = "room"
+    room: str
     x: float
-    y: float = 0.0  # height; not estimated by RSSI
-    z: float
+    y: float
     accuracy: float = Field(json_schema_extra={"x-unit": "m"})
     confidence: float
     timestamp: Optional[float] = None

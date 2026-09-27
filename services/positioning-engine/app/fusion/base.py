@@ -7,11 +7,13 @@ from ..models import FloorPlan
 
 @dataclass
 class FusedPosition:
-    """Output of a fusion strategy in the floor-plan-local frame."""
+    """Output of a fusion strategy in the venue frame."""
 
     x: float
     y: float
-    z: float
+    # Height above the venue floor, fused over the measurements that carry
+    # one. None when no contributing source measured height.
+    z: Optional[float]
     accuracy: float
     sources: list[str]
     timestamp: Optional[float] = None
@@ -25,7 +27,7 @@ class FusedPosition:
 
 
 class FusionStrategy(Protocol):
-    """Combines N adapter measurements (all in the local frame) into one position.
+    """Combines N adapter measurements (all in the venue frame) into one position.
 
     Implementations may be stateless or hold per-device history (e.g. Kalman).
     """

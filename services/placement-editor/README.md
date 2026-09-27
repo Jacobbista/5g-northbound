@@ -10,8 +10,8 @@ Operator-facing service that owns the floor-plan / room / anchor layout JSON. Li
 
 | Section | Edits | Shows | Output |
 |---|---|---|---|
-| **① World** | Area on the world map: lat/lon, azimuth, width/height, reference image | Satellite or street tiles, address autocomplete, geolocation marker, coords readout | `floor_plans[i].{georef, image}` |
-| **② Plan** | Rooms positioned on the floor plan | Reference image as background, rooms as draggable rectangles | `rooms[i].{x_m, y_m, width_m, height_m, label}` |
+| **① World** | Area on the world map: lat/lon, azimuth, width/depth, reference image | Satellite or street tiles, address autocomplete, geolocation marker, coords readout | `floor_plans[i].{georef, image}` |
+| **② Plan** | Rooms positioned on the floor plan | Reference image as background, rooms as draggable rectangles | `rooms[i].{x_m, y_m, width_m, depth_m, label}` |
 | **③ Room** | Anchors per technology + walls + room dims | Metric SVG of the selected room | `rooms[i].{anchors, walls}` |
 
 A single section never mixes layers: step 1 never shows individual APs; step 3 never lets you move the building. The error budget of the positioning system is therefore bounded by *one* georeference survey instead of being summed across many per-AP placements on a global map.
@@ -51,7 +51,7 @@ The sidebar always shows the numeric truth (lat / lon / azimuth / altitude / wid
 
 Shows the area's reference image (or a dashed rectangle if there is none) as the background, scaled to its real dimensions in metres. Each room belonging to the current floor plan is rendered as a coloured rectangle on top, draggable to position.
 
-The sidebar lists every room, with `+ add room` / remove buttons, and an inspector for the selected room (label, x_m, y_m, width_m, height_m). Inspector numeric inputs commit on blur / Enter only.
+The sidebar lists every room, with `+ add room` / remove buttons, and an inspector for the selected room (label, x_m, y_m, width, depth). Positions in the inspectors are in the venue frame: metres from the lower-left corner of the parent level, as the blueprint stores them. Inspector numeric inputs commit on blur / Enter only.
 
 ## ③ Room - anchors in a single room
 
@@ -87,51 +87,11 @@ Alt during drag              bypass snap-to-grid
 
 A single drag collapses into one undoable step via a transient stack - intermediate pointer-move samples are not pushed. Typing in text/number inputs commits on blur, never per keystroke. After save, the saved snapshot becomes the new clean baseline; history is preserved so you can undo past the save.
 
-## Schema (layout.json, v2)
+## Blueprint
 
-```json
-{
-  "version": 2,
-  "floor_plans": [
-    {
-      "id":    "fp-01",
-      "label": "Polito DAUIN - Floor 1",
-      "image": { "data_url": "data:image/png;base64,…", "opacity": 0.7, "filename": "fp01.png" },
-      "georef": {
-        "latitude":    45.064312,
-        "longitude":   7.659154,
-        "azimuth_deg": 12.0,
-        "altitude":  240.0,
-        "width_m":     85.0,
-        "height_m":    42.0
-      }
-    }
-  ],
-  "rooms": [
-    {
-      "id":            "room-01",
-      "label":         "Lab A",
-      "floor_plan_id": "fp-01",
-      "x_m":           12.0,
-      "y_m":           8.0,
-      "width_m":       13.0,
-      "height_m":      32.0,
-      "rotation_deg":  0.0,
-      "anchors": [
-        { "id": "AP07",  "technology": "wifi",   "x": 2.0, "y": 3.0, "height_m": 2.7, "coverage_m": 30 },
-        { "id": "UWB01", "technology": "wittra", "x": 5.0, "y": 4.0, "height_m": 3.0, "coverage_m": 15 }
-      ],
-      "walls": [
-        { "id": "W01", "x1": 1.0, "y1": 1.0, "x2": 5.0, "y2": 1.0, "thickness": 0.2 }
-      ]
-    }
-  ]
-}
-```
+The editor reads and writes the venue blueprint, version 3, defined by [`schema/layout.schema.json`](../../schema/layout.schema.json) with a complete example in [`schema/examples/layout.example.json`](../../schema/examples/layout.example.json). Every level uses the venue-frame convention: x along the width, y along the depth, z up, origin at the lower-left corner of the parent level. The field reference is in [data-contracts.md](../../docs/data-contracts.md#blueprint).
 
-### Backward compatibility
-
-Legacy v1 layouts (top-level `room_w / room_h / gps_origin / aps / walls / floor_plan_image`) are normalised into a single `floor_plans[0]` + `rooms[0]` at read time, so existing fixtures keep loading. Writes always emit v2 **plus** the legacy top-level keys derived from the first floor plan + first room, so the location-app (which still reads `layout.aps`, `layout.gps_origin`, etc.) keeps working unchanged until it migrates to v2 itself.
+The canvas draws in screen axes, origin top-left and y down, and keeps its working model in that form. `normalizeLayout` converts a blueprint on load and on import, `toBlueprint` converts back on save and on export (`src/blueprintFrame.js`, shared with the location-app and tested against the example pair in `schema/examples`). An imported version 1 or 2 file is read as it was written and saved as version 3.
 
 ## HTTP surface
 

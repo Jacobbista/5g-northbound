@@ -6,16 +6,16 @@ from app.wifi import WifiAdapter
 
 
 def test_observed_devices_newest_first():
-    a = WifiAdapter(WifiConfig(room_w=10, room_h=10, routers=[]))
+    a = WifiAdapter(WifiConfig(room_w=10, room_id="room-01", room_d=10, routers=[]))
     a._cache["d1"] = Measurement(
-        source="wifi", x=1.0, y=0.0, z=2.0, accuracy=1.0, confidence=0.5, timestamp=100.0
+        source="wifi", room="room-01", x=1.0, y=2.0, accuracy=1.0, confidence=0.5, timestamp=100.0
     )
     a._cache["d2"] = Measurement(
-        source="wifi", x=3.0, y=0.0, z=4.0, accuracy=1.0, confidence=0.5, timestamp=200.0
+        source="wifi", room="room-01", x=3.0, y=4.0, accuracy=1.0, confidence=0.5, timestamp=200.0
     )
     out = a.observed_devices()
     assert [d["id"] for d in out] == ["d2", "d1"]  # newest activity first
-    assert out[0]["position"] == {"x": 3.0, "y": 0.0, "z": 4.0}
+    assert out[0]["position"] == {"frame": "room", "room": "room-01", "x": 3.0, "y": 4.0}
     assert out[0]["lastSeen"] == 200.0
     # A device seen on the air is always a tracked asset, never infrastructure.
     assert all(d["role"] == "asset" for d in out)

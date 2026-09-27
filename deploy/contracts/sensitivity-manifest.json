@@ -530,36 +530,6 @@
       ]
     },
     {
-      "name": "VITE_GPS_ORIGIN_LAT",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "type": "number",
-      "consumed_by": [
-        "location-app"
-      ],
-      "services": [
-        "location-app"
-      ]
-    },
-    {
-      "name": "VITE_GPS_ORIGIN_LON",
-      "sensitive": false,
-      "tier": "configmap",
-      "routes_to": "ConfigMap",
-      "set_by": "compose",
-      "writable": false,
-      "type": "number",
-      "consumed_by": [
-        "location-app"
-      ],
-      "services": [
-        "location-app"
-      ]
-    },
-    {
       "name": "VITE_KEYCLOAK_CLIENT_ID",
       "sensitive": false,
       "tier": "configmap",

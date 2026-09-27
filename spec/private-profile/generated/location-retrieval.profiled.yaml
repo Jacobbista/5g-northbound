@@ -392,7 +392,18 @@ components:
         altitude:
           type: number
           format: double
-          description: Fused vertical position in metres (profile extension).
+          description: 'Height above the WGS84 ellipsoid in metres, the datum of latitude
+            and
+
+            longitude, as in W3C Geolocation and 3GPP TS 23.032: the ellipsoidal
+
+            height of the venue origin plus the measured height of the asset
+
+            above the venue floor. Present when both are known, absent when no
+
+            source measures height.
+
+            '
         horizontalAccuracy:
           type: number
           format: double
@@ -407,7 +418,12 @@ components:
         verticalAccuracy:
           type: number
           format: double
-          description: Vertical 1-sigma uncertainty in metres, when available.
+          description: '1-sigma uncertainty of the measured height in metres, as reported
+            by
+
+            the source. The uncertainty of the origin survey is not included.
+
+            '
     Area:
       description: Base schema for all areas
       type: object

@@ -60,7 +60,7 @@ Every adapter pod implements:
 |----------------------------------------|--------------------|----------------------------------------------------------------------------------|
 | `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
 | `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
-| `GET    /measurement/{positioningId}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`local` or `wgs84`); `404` if no measurement |
+| `GET    /measurement/{positioningId}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`room`, `venue` or `wgs84`); `404` if no measurement |
 | `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, sourceClass?, deviceType?, label?, lastSeen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `asset` or `infrastructure` (fixed sensor, not onboardable). `sourceClass`: positioning tech (`uwb`/`ble`/`wifi`/`gnss`/`cellular`/`other`). Advertised via the `devices` capability; aggregated by the engine |
 
 `wifi-adapter` also exposes:

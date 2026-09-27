@@ -6,21 +6,21 @@ from httpx import ASGITransport, AsyncClient
 
 from app.adapters.base import Adapter, Measurement
 from app.fusion.registry import get_strategy
-from app.models import Floor, FloorPlan, GpsOrigin
+from app.models import FloorPlan, GpsOrigin, RoomPlacement
 from app.services.position_service import PositionService
 
-MOCK_FLOOR = Floor(id=0, label="Test", width_m=20.0, depth_m=30.0, height_m=3.0)
 MOCK_FLOOR_PLAN = FloorPlan(
-    version=1,
-    gps_origin=GpsOrigin(latitude=45.064312, longitude=7.659154),
-    floors=[MOCK_FLOOR],
+    gps_origin=GpsOrigin(latitude=59.40, longitude=17.95),
+    width_m=20.0,
+    depth_m=30.0,
+    rooms={"room-01": RoomPlacement(x_m=2.0, y_m=3.0, width_m=10.0, depth_m=8.0)},
 )
 
 
 class RandomWalkAdapter(Adapter):
     """Deterministic-ish test adapter that wanders inside the floor bounds."""
 
-    def __init__(self, source: str, floor: Floor, accuracy: float, confidence: float, step: float = 0.3):
+    def __init__(self, source: str, floor: FloorPlan, accuracy: float, confidence: float, step: float = 0.3):
         self._source = source
         self._floor = floor
         self._accuracy_m = accuracy
@@ -35,21 +35,21 @@ class RandomWalkAdapter(Adapter):
 
     async def get_measurement(self, device_id: str) -> Optional[Measurement]:
         if device_id not in self._state:
-            self._state[device_id] = (self._floor.width_m / 2, self._floor.height_m / 2, self._floor.depth_m / 2)
+            self._state[device_id] = (self._floor.width_m / 2, self._floor.depth_m / 2, 1.5)
         x, y, z = self._state[device_id]
         x = self._clamp(x + self._rng.uniform(-self._step, self._step), 0, self._floor.width_m)
-        y = self._clamp(y + self._rng.uniform(-self._step, self._step), 0, self._floor.height_m)
-        z = self._clamp(z + self._rng.uniform(-self._step, self._step), 0, self._floor.depth_m)
+        y = self._clamp(y + self._rng.uniform(-self._step, self._step), 0, self._floor.depth_m)
+        z = self._clamp(z + self._rng.uniform(-self._step, self._step), 0, 3.0)
         self._state[device_id] = (x, y, z)
         return Measurement(
             source=self._source, accuracy=self._accuracy_m, confidence=self._confidence,
-            frame="local", x=x, y=y, z=z,
+            frame="venue", x=x, y=y, z=z,
         )
 
 
 @pytest.fixture
 def floor():
-    return MOCK_FLOOR
+    return MOCK_FLOOR_PLAN
 
 
 @pytest.fixture

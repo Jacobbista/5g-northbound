@@ -13,6 +13,7 @@ from .schema import (
     LinearTransform,
     Mapping,
     PathSpec,
+    FRAME_FIELDS,
 )
 from .vocabulary import EXTENSION_BAG, MOVING_SPEED_THRESHOLD_MPS, is_core
 
@@ -85,15 +86,20 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     vendor genuinely reports as 0 (a ConstSpec, or a present 0 value) is kept -
     only an absent/unresolvable coordinate means no fix.
     """
-    lat_raw = resolve_field(mapping.latitude, payload)
-    lon_raw = resolve_field(mapping.longitude, payload)
-    if lat_raw is None or lon_raw is None:
+    frame = resolve_field(mapping.frame, payload)
+    if frame not in FRAME_FIELDS:
         return None
-    frame = resolve_field(mapping.frame, payload) or "local"
+    first, second = (getattr(mapping, f) for f in FRAME_FIELDS[frame])
+    if first is None or second is None:
+        return None
+    first_raw = resolve_field(first, payload)
+    second_raw = resolve_field(second, payload)
+    if first_raw is None or second_raw is None:
+        return None
     out: dict[str, Any] = {
         "source": vendor_name,
         "frame": frame,
-        # confidence and y are optional in the mapping; absent -> 0.0.
+        # confidence is optional in the mapping; absent -> 0.0.
         "confidence": float(_resolve_optional(mapping.confidence, payload) or 0.0),
     }
     # accuracy is optional: a vendor with no genuine per-fix radius omits the
@@ -104,14 +110,16 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     if accuracy is not None:
         out["accuracy"] = float(accuracy)
     if frame == "wgs84":
-        out["latitude"] = float(lat_raw)
-        out["longitude"] = float(lon_raw)
+        out["latitude"] = float(first_raw)
+        out["longitude"] = float(second_raw)
     else:
-        # local frame uses x/z; mapping fields named latitude/longitude carry them
-        # by convention so the same spec works for either frame.
-        out["x"] = float(lat_raw)
-        out["z"] = float(lon_raw)
-    out["y"] = float(_resolve_optional(mapping.y, payload) or 0.0)
+        out["x"] = float(first_raw)
+        out["y"] = float(second_raw)
+    # Height is carried only when the record resolves it: an absent height is
+    # an unmeasured one, never the floor.
+    z = _resolve_optional(mapping.z, payload)
+    if z is not None:
+        out["z"] = float(z)
     ts = resolve_field(mapping.timestamp, payload)
     if ts is not None:
         out["timestamp"] = float(ts)
@@ -147,7 +155,7 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
           label:       str|None,
           latitude:    float|None,
           longitude:   float|None,
-          height:    float|None }
+          z:           float|None }
 
     `fixed` is True when the entry resolved a position (a fixed-location
     anchor) and False otherwise (a mobile tag). A single discover list carries
@@ -169,7 +177,7 @@ def to_discover_entry(mapping: DiscoverMapping, entry: Any) -> Optional[dict[str
         "label": str(label_val) if label_val is not None else None,
         "latitude": lat,
         "longitude": lon,
-        "height": _coerce_float(_resolve_optional(mapping.height, entry)),
+        "z": _coerce_float(_resolve_optional(mapping.z, entry)),
         "deviceType": str(device_type_val) if device_type_val is not None else None,
         "fixed": lat is not None and lon is not None,
     }

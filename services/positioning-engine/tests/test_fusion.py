@@ -5,7 +5,7 @@ from app.fusion.registry import get_strategy, STRATEGIES
 
 
 def _m(source: str, x: float, z: float, accuracy: float, confidence: float = 1.0) -> Measurement:
-    return Measurement(source=source, x=x, y=0.0, z=z, accuracy=accuracy, confidence=confidence, frame="local")
+    return Measurement(source=source, x=x, y=z, accuracy=accuracy, confidence=confidence, frame="venue")
 
 
 def test_registry_lists_baseline():
@@ -22,7 +22,7 @@ def test_weighted_avg_single_measurement_passthrough(floor_plan):
     m = _m("wifi", x=5.0, z=10.0, accuracy=2.0)
     out = strat.fuse("dev", [m], floor_plan)
     assert out is not None
-    assert out.x == 5.0 and out.z == 10.0
+    assert out.x == 5.0 and out.y == 10.0
     assert out.sources == ["wifi"]
 
 
@@ -32,7 +32,7 @@ def test_weighted_avg_two_consistent_improves_accuracy(floor_plan):
     b = _m("uwb",  x=5.0, z=10.0, accuracy=2.0)
     out = strat.fuse("dev", [a, b], floor_plan)
     assert out is not None
-    assert out.x == 5.0 and out.z == 10.0
+    assert out.x == 5.0 and out.y == 10.0
     # inverse-RMS: 1/sqrt(2 * 1/4) = sqrt(2) ≈ 1.414 - strictly better than 2.0
     assert out.accuracy < 2.0
 
@@ -44,7 +44,7 @@ def test_weighted_avg_high_confidence_dominates(floor_plan):
     out = strat.fuse("dev", [cheap, good], floor_plan)
     assert out is not None
     # weighted result must lie much closer to the UWB measurement
-    assert out.x > 9.0 and out.z > 9.0
+    assert out.x > 9.0 and out.y > 9.0
 
 
 def test_weighted_avg_empty_returns_none(floor_plan):
@@ -60,7 +60,7 @@ def test_weighted_avg_zero_accuracy_does_not_crash(floor_plan):
     m = _m("wittra", x=5.0, z=10.0, accuracy=0.0)
     out = strat.fuse("dev", [m], floor_plan)
     assert out is not None
-    assert out.x == 5.0 and out.z == 10.0
+    assert out.x == 5.0 and out.y == 10.0
     assert out.accuracy > 0.0
 
 
@@ -74,3 +74,17 @@ def test_weighted_avg_zero_accuracy_does_not_drown_out_a_real_measurement(floor_
     out = strat.fuse("dev", [suspect, good], floor_plan)
     assert out is not None
     assert 0.0 < out.x < 10.0
+
+
+def test_weighted_avg_fuses_height_only_over_measurements_that_carry_it(floor_plan):
+    strat = get_strategy("weighted_avg")
+    with_height = Measurement(source="a", x=0.0, y=0.0, z=2.0, accuracy=1.0, confidence=1.0, frame="venue")
+    flat = Measurement(source="b", x=0.0, y=0.0, z=None, accuracy=1.0, confidence=1.0, frame="venue")
+    out = strat.fuse("d", [with_height, flat], floor_plan)
+    assert out.z == 2.0
+
+
+def test_weighted_avg_height_is_absent_when_no_measurement_carries_it(floor_plan):
+    strat = get_strategy("weighted_avg")
+    flat = Measurement(source="a", x=0.0, y=0.0, z=None, accuracy=1.0, confidence=1.0, frame="venue")
+    assert strat.fuse("d", [flat], floor_plan).z is None

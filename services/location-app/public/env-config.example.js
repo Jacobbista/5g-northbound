@@ -20,8 +20,6 @@ window.__ENV__ = {
   VITE_KEYCLOAK_CLIENT_ID: "location-app",
   // GPS reference for projecting CAMARA area.center back into the local
   // floor frame. MUST match the engine's floor-plan gps_origin.
-  VITE_GPS_ORIGIN_LAT: "45.064312",
-  VITE_GPS_ORIGIN_LON: "7.659154",
   // Floor plan dimensions in metres (must match the engine's room/floor).
   VITE_FLOOR_W: "13",
   VITE_FLOOR_D: "32",

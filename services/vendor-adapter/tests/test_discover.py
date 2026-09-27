@@ -20,8 +20,8 @@ def test_to_discover_entry_extracts_known_fields(wittra_schema, wittra_sample_di
     assert out["deviceType"] == "beacon"
     assert out["latitude"] == pytest.approx(45.064547)
     assert out["longitude"] == pytest.approx(7.659272)
-    # height maps from fixedLocation.height.
-    assert out["height"] == pytest.approx(2.0)
+    # z maps from fixedLocation.height.
+    assert out["z"] == pytest.approx(2.0)
 
 
 def test_classify_entry_role_from_devicetype(wittra_schema):
@@ -102,7 +102,7 @@ def test_to_discover_entry_handles_missing_optional_fields(wittra_schema):
     assert out["latitude"] is None
     assert out["longitude"] is None
     # height falls back to the mapping default (0) when fixedLocation is absent.
-    assert out["height"] == 0
+    assert out["z"] == 0
     assert out["deviceType"] is None
 
 

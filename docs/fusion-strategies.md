@@ -48,7 +48,7 @@ By the time a measurement reaches this strategy `accuracy` is always a real numb
 
 ### 2. Kalman filter (`kalman`)
 
-Maintain per-device state `(x, z, vx, vz)` with a constant-velocity process model. Each measurement is a noisy observation of `(x, z)`. Predict on every fusion cycle (using elapsed time since the last update); update with the weighted measurement (or per-source for sequential update).
+Maintain per-device state `(x, y, vx, vy)` with a constant-velocity process model. Each measurement is a noisy observation of `(x, y)`. Predict on every fusion cycle (using elapsed time since the last update); update with the weighted measurement (or per-source for sequential update).
 
 - **Strengths:** smooth output, principled handling of measurement-rate variation, predicts forward when all adapters drop out for short intervals.
 - **Weaknesses:** introduces lag at direction changes; tuning of process noise `Q` and measurement noise `R` is per-deployment; assumes Gaussian errors.

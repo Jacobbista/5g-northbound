@@ -52,8 +52,8 @@ _SETTLE_S = 2.0
 
 @dataclass
 class _Segment:
-    """Wall segment in floor-plan-local metres. Stores derived geometry
-    once so per-step intersection checks stay cheap."""
+    """Wall segment in room metres. Stores derived geometry once so per-step
+    intersection checks stay cheap."""
 
     x1: float
     y1: float
@@ -72,6 +72,8 @@ class _Segment:
 
 @dataclass
 class _State:
+    # Room frame: x along the width, y along the depth, z the height above the
+    # floor. Origin at the room's lower-left corner.
     x: float
     y: float
     z: float
@@ -129,25 +131,35 @@ def _crossing_blocked(dist_along: float, ranges: list[tuple[float, float]]) -> b
     return True
 
 
-def _load_segments_from_data(data: dict) -> tuple[list[_Segment], Optional[tuple[float, float]]]:
-    """Parse a placement-editor layout / blueprint dict and pull inner walls +
-    the room footprint for the first room. Returns (segments, (w_m, d_m)).
-    Empty / malformed input returns ([], None) so the walker falls back to the
-    configured AABB without crashing the service.
-    """
+BLUEPRINT_VERSION = 3
+
+
+def _first_room(data: dict) -> Optional[dict]:
+    """The first room of a version 3 blueprint, or None. An older document uses
+    another frame and is not read."""
+    if data.get("version") != BLUEPRINT_VERSION:
+        log.warning(
+            "synthetic-adapter: blueprint version %r; this adapter reads version %d",
+            data.get("version"), BLUEPRINT_VERSION,
+        )
+        return None
     rooms = data.get("rooms") or []
-    room = rooms[0] if rooms else None
+    return rooms[0] if rooms and rooms[0].get("id") else None
+
+
+def _load_segments_from_data(data: dict) -> tuple[list[_Segment], Optional[tuple[float, float]]]:
+    """Walls and footprint of the first room of a version 3 blueprint, in the
+    room frame. Returns (segments, (width_m, depth_m)). Empty or malformed input
+    returns ([], None) so the walker falls back to the configured extent without
+    crashing the service.
+    """
+    room = _first_room(data)
     if room is None:
-        # Legacy v1: room dimensions at the top level, walls under "walls".
-        w = float(data.get("room_w", 0) or 0)
-        d = float(data.get("room_h", 0) or 0)
-        wall_data = data.get("walls") or []
-        bounds = (w, d) if w > 0 and d > 0 else None
-    else:
-        w = float(room.get("width_m", 0) or 0)
-        d = float(room.get("height_m", 0) or 0)
-        wall_data = room.get("walls") or []
-        bounds = (w, d) if w > 0 and d > 0 else None
+        return [], None
+    w = float(room.get("width_m", 0) or 0)
+    d = float(room.get("depth_m", 0) or 0)
+    wall_data = room.get("walls") or []
+    bounds = (w, d) if w > 0 and d > 0 else None
     segments: list[_Segment] = []
     for w_obj in wall_data:
         try:
@@ -173,12 +185,11 @@ def _load_segments_from_data(data: dict) -> tuple[list[_Segment], Optional[tuple
                 seg.open_ranges.append((min(a, b), max(a, b)))
         segments.append(seg)
 
-    # Perimeter walls - derived from the room's polygon shape when present
-    # (`room.shape: [[x, y], ...]`), otherwise from the four cardinal sides
-    # of the bbox. Each edge becomes a wall segment whose openings are the
-    # entries in `perimeter_openings` matching its edge_index. Legacy
+    # Perimeter walls, from the room outline when present, otherwise from the
+    # four sides of the rectangle. Each edge becomes a wall segment whose
+    # openings are the `perimeter_openings` entries matching its edge_index.
     # `side` fields are lifted to indices using the rectangle convention.
-    if room is not None and bounds is not None:
+    if bounds is not None:
         edges = _perimeter_edges(room, bounds)
         perim_open = room.get("perimeter_openings") or []
         side_to_index = {"N": 0, "E": 1, "S": 2, "W": 3}
@@ -210,25 +221,23 @@ def _load_segments_from_data(data: dict) -> tuple[list[_Segment], Optional[tuple
 def _perimeter_edges(
     room: dict, bounds: tuple[float, float]
 ) -> list[dict]:
-    """Compute room perimeter edges in floor-local metres.
+    """Room perimeter edges in room metres.
 
-    Polygon-shaped rooms (`shape: [[x, y], ...]`) yield one edge per vertex
-    pair. Rectangle rooms fall back to the four cardinal edges with the
-    convention shared with the placement-editor:
-        0 = N (0,0)→(W,0), 1 = E (W,0)→(W,H),
-        2 = S (0,H)→(W,H), 3 = W (0,0)→(0,H).
+    An outline (`shape: [[x, y], ...]`, room coordinates) yields one edge per
+    vertex pair. A rectangle yields the four sides of blueprint version 3, each
+    starting from the corner its offsets are measured from:
+        0 = N (0,D)->(W,D), 1 = E (W,D)->(W,0),
+        2 = S (0,0)->(W,0), 3 = W (0,D)->(0,0).
     Each edge: {"start": (x,y), "dir": (dx,dy) unit, "length": metres}.
     Degenerate (~0) edges are dropped.
     """
     w_m, d_m = bounds
     shape = room.get("shape") if isinstance(room, dict) else None
     if isinstance(shape, list) and len(shape) >= 3:
-        base_x = float(room.get("x_m") or 0)
-        base_y = float(room.get("y_m") or 0)
         pts = []
         for p in shape:
             try:
-                pts.append((float(p[0]) - base_x, float(p[1]) - base_y))
+                pts.append((float(p[0]), float(p[1])))
             except (IndexError, TypeError, ValueError):
                 continue
         edges = []
@@ -246,10 +255,10 @@ def _perimeter_edges(
             })
         return edges
     return [
-        {"start": (0.0, 0.0), "dir": (1.0, 0.0), "length": w_m},
-        {"start": (w_m, 0.0), "dir": (0.0, 1.0), "length": d_m},
         {"start": (0.0, d_m), "dir": (1.0, 0.0), "length": w_m},
-        {"start": (0.0, 0.0), "dir": (0.0, 1.0), "length": d_m},
+        {"start": (w_m, d_m), "dir": (0.0, -1.0), "length": d_m},
+        {"start": (0.0, 0.0), "dir": (1.0, 0.0), "length": w_m},
+        {"start": (0.0, d_m), "dir": (0.0, -1.0), "length": d_m},
     ]
 
 
@@ -264,67 +273,46 @@ class WaypointWalker:
     the AABB defined by `width_m` × `depth_m`.
     """
 
-    def __init__(
-        self,
-        cfg: Settings,
-        segments: Optional[list[_Segment]] = None,
-        base_x: float = 0.0,
-        base_y: float = 0.0,
-        fp_height_m: float = 0.0,
-    ):
+    def __init__(self, cfg: Settings, segments: Optional[list[_Segment]] = None):
         self._cfg = cfg
         self._state: dict[str, _State] = {}
         self._rngs: dict[str, random.Random] = {}
         self._segments: list[_Segment] = segments or []
-        # Room origin within the floor plan + floor-plan height, used to lift
-        # the walker's room-local, canvas-y (origin top-left, y down) position
-        # into the engine's documented `local` frame: floor-plan-local, origin
-        # lower-left, z = north-up. The engine projects THAT to WGS84.
-        self._base_x = base_x
-        self._base_y = base_y
-        self._fp_height_m = fp_height_m
-        self._frame_attempt = 0.0
+        # The room the walk happens in. Fixes are reported in its frame, and
+        # the engine places the room in the venue. None until the blueprint
+        # names one.
+        self.room_id: Optional[str] = None
+        self._room_attempt = 0.0
 
     def reload_layout(self) -> bool:
-        """(Re)load room bounds + walls + floor-plan frame from the engine
-        blueprint (or the mounted file). Returns True once a usable frame
-        (fp_height > 0) is loaded. Idempotent - safe to call repeatedly."""
+        """(Re)load the room, its extent and its walls from the engine
+        blueprint (or the mounted file). Returns True once a room is known.
+        Idempotent - safe to call repeatedly."""
         data = _load_layout_data(self._cfg)
         if data is None:
+            return False
+        room = _first_room(data)
+        if room is None:
             return False
         segments, bounds = _load_segments_from_data(data)
         self._segments = segments
         if bounds:
             self._cfg.width_m, self._cfg.depth_m = bounds
-        self._base_x, self._base_y, self._fp_height_m = _frame_from_data(data)
-        return self._fp_height_m > 0
+        self.room_id = str(room["id"])
+        return True
 
-    def _ensure_frame(self) -> None:
-        """Self-heal a missing frame: if the engine blueprint was unreachable
-        at boot (startup race), the projection would emit room-local coords and
-        the device lands off-scene. Retry the load - throttled - until the frame
-        is known, then stop."""
-        if self._fp_height_m > 0:
-            return
+    def ensure_room(self) -> Optional[str]:
+        """The room id, retrying the blueprint load (throttled) when the engine
+        was unreachable at boot. A walk with no room cannot be placed in the
+        venue, so the caller reports no fix until one is known."""
+        if self.room_id is not None:
+            return self.room_id
         now = time.time()
-        if now - self._frame_attempt < 10.0:
-            return
-        self._frame_attempt = now
-        if self.reload_layout():
-            log.info(
-                "synthetic-adapter: blueprint frame loaded late - base=(%.1f,%.1f) fpH=%.1f",
-                self._base_x, self._base_y, self._fp_height_m,
-            )
-
-    def project_to_floor_plan(self, x: float, z: float) -> tuple[float, float]:
-        """Room-local (canvas-y) -> floor-plan-local (north-up). When no
-        floor-plan height is known (no georef), the walker has no frame to
-        mirror about, so it falls back to the room-local value unchanged;
-        the engine degrades to (0, 0) WGS84 in that case anyway."""
-        self._ensure_frame()
-        if self._fp_height_m > 0:
-            return self._base_x + x, self._fp_height_m - (self._base_y + z)
-        return self._base_x + x, self._base_y + z
+        if now - self._room_attempt >= 10.0:
+            self._room_attempt = now
+            if self.reload_layout():
+                log.info("synthetic-adapter: blueprint room %s loaded late", self.room_id)
+        return self.room_id
 
     @staticmethod
     def _clamp(v: float, lo: float, hi: float) -> float:
@@ -344,8 +332,8 @@ class WaypointWalker:
         # never picks a point right on a wall.
         inset = _ROOM_INSET_M
         x = rng.uniform(inset, max(inset, self._cfg.width_m - inset))
-        z = rng.uniform(inset, max(inset, self._cfg.depth_m - inset))
-        return x, z
+        y = rng.uniform(inset, max(inset, self._cfg.depth_m - inset))
+        return x, y
 
     def _blocked_advance(
         self,
@@ -360,19 +348,19 @@ class WaypointWalker:
         # Find the nearest blocking intersection along the step.
         best_t: Optional[float] = None
         best_seg: Optional[_Segment] = None
-        sx, sz = src
-        dx, dz = dst
-        step_len = math.hypot(dx - sx, dz - sz)
+        sx, sy = src
+        dx, dy = dst
+        step_len = math.hypot(dx - sx, dy - sy)
         if step_len < 1e-6:
             return dst
         for seg in self._segments:
             hit = _segments_intersect(src, dst, seg)
             if hit is None:
                 continue
-            ix, iz, dist_along = hit
+            ix, iy, dist_along = hit
             if not _crossing_blocked(dist_along, seg.open_ranges):
                 continue  # crossing passes through an opening
-            t = math.hypot(ix - sx, iz - sz) / step_len
+            t = math.hypot(ix - sx, iy - sy) / step_len
             if best_t is None or t < best_t:
                 best_t = t
                 best_seg = seg
@@ -380,17 +368,18 @@ class WaypointWalker:
             return dst
         # Back off so the device doesn't stick to the wall surface.
         safe_t = max(0.0, best_t - _WALL_MARGIN_M / max(step_len, 1e-6))
-        return (sx + (dx - sx) * safe_t, sz + (dz - sz) * safe_t)
+        return (sx + (dx - sx) * safe_t, sy + (dy - sy) * safe_t)
 
     def step(self, device_id: str) -> tuple[float, float, float, float]:
+        """Advance the device and return (x, y, z, ts) in the room frame."""
         now = time.time()
         st = self._state.get(device_id)
         rng = self._rng_for(device_id)
         if st is None:
             st = _State(
                 x=self._cfg.width_m / 2,
-                y=self._cfg.height_m / 2,
-                z=self._cfg.depth_m / 2,
+                y=self._cfg.depth_m / 2,
+                z=self._cfg.height_m / 2,
                 last_ts=now,
             )
             self._state[device_id] = st
@@ -411,10 +400,10 @@ class WaypointWalker:
         if st.waypoint is None:
             st.waypoint = self._new_waypoint(rng)
 
-        wx, wz = st.waypoint
+        wx, wy = st.waypoint
         dx = wx - st.x
-        dz = wz - st.z
-        dist = math.hypot(dx, dz)
+        dy = wy - st.y
+        dist = math.hypot(dx, dy)
         if dist <= _WAYPOINT_TOLERANCE_M:
             st.waypoint = self._new_waypoint(rng)
             return st.x, st.y, st.z, now
@@ -423,12 +412,12 @@ class WaypointWalker:
         # remaining distance so we don't overshoot.
         advance = min(dist, self._cfg.speed_mps * dt)
         ux = dx / dist
-        uz = dz / dist
-        target = (st.x + ux * advance, st.z + uz * advance)
-        nx, nz = self._blocked_advance((st.x, st.z), target)
-        moved = math.hypot(nx - st.x, nz - st.z)
+        uy = dy / dist
+        target = (st.x + ux * advance, st.y + uy * advance)
+        nx, ny = self._blocked_advance((st.x, st.y), target)
+        moved = math.hypot(nx - st.x, ny - st.y)
         st.x = self._clamp(nx, _ROOM_INSET_M, max(_ROOM_INSET_M, self._cfg.width_m - _ROOM_INSET_M))
-        st.z = self._clamp(nz, _ROOM_INSET_M, max(_ROOM_INSET_M, self._cfg.depth_m - _ROOM_INSET_M))
+        st.y = self._clamp(ny, _ROOM_INSET_M, max(_ROOM_INSET_M, self._cfg.depth_m - _ROOM_INSET_M))
         # A wall blocked the advance (we moved less than 80% of the
         # intended step). Drop the waypoint so a new direction is picked.
         if moved < advance * 0.8:
@@ -478,12 +467,9 @@ class WaypointWalker:
 
     # --- placement ---------------------------------------------------------
     #
-    # Coordinates here are room-local canvas-y metres: origin top-left, x
-    # right, z down. That is the frame this walker already keeps its state in,
-    # the frame the placement editor stores, and the frame the demo's 3D scene
-    # renders, so a point picked on screen needs no conversion on the way in.
-    # `project_to_floor_plan` still lifts it to the engine's north-up frame on
-    # the way out.
+    # Coordinates here are in the room frame, the frame the walker keeps and
+    # the blueprint stores: origin at the room's lower-left corner, x along the
+    # width, y along the depth.
 
     def is_active(self, device_id: str) -> bool:
         """Whether this device currently reports a position.
@@ -498,7 +484,7 @@ class WaypointWalker:
         st = self._state.get(device_id)
         return st is not None and st.active
 
-    def place(self, device_id: str, x: float, z: float) -> tuple[float, float]:
+    def place(self, device_id: str, x: float, y: float) -> tuple[float, float]:
         """Put a device at a point and start it walking from there. Returns the
         point it actually landed on.
 
@@ -509,11 +495,11 @@ class WaypointWalker:
         """
         inset = _ROOM_INSET_M
         cx = self._clamp(x, inset, max(inset, self._cfg.width_m - inset))
-        cz = self._clamp(z, inset, max(inset, self._cfg.depth_m - inset))
+        cy = self._clamp(y, inset, max(inset, self._cfg.depth_m - inset))
         self._state[device_id] = _State(
             x=cx,
-            y=self._cfg.height_m / 2,
-            z=cz,
+            y=cy,
+            z=self._cfg.height_m / 2,
             # No waypoint yet: the next step picks one, so the device starts
             # moving from where it was dropped rather than resuming an old leg.
             waypoint=None,
@@ -521,7 +507,7 @@ class WaypointWalker:
             active=True,
             hold_until=time.time() + _SETTLE_S,
         )
-        return cx, cz
+        return cx, cy
 
     def remove(self, device_id: str) -> bool:
         """Stop a device reporting. Returns whether it was there to remove.
@@ -565,31 +551,17 @@ def _load_layout_data(cfg: Settings) -> Optional[dict]:
     return None
 
 
-def _frame_from_data(data: dict) -> tuple[float, float, float]:
-    """Pull (room.x_m, room.y_m, floor_plan.georef.height_m) so the walker can
-    lift room-local positions into the floor-plan frame the engine projects to
-    WGS84. Missing fields yield zeros (graceful)."""
-    room = (data.get("rooms") or [{}])[0] or {}
-    fp = (data.get("floor_plans") or [{}])[0] or {}
-    georef = fp.get("georef") or {}
-    return (
-        float(room.get("x_m") or 0),
-        float(room.get("y_m") or 0),
-        float(georef.get("height_m") or 0),
-    )
-
-
 def build_walker(cfg: Settings) -> WaypointWalker:
-    """Construct the walker and load room geometry + the floor-plan frame from
-    the engine blueprint (authority) or the mounted layout file. If the engine
-    is not yet reachable at boot, the walker starts frameless and self-heals on
-    the next measurements (see _ensure_frame)."""
+    """Construct the walker and load its room from the engine blueprint
+    (authority) or the mounted layout file. If the engine is not yet reachable
+    at boot, the walker starts without a room and retries on the next
+    measurements (see ensure_room)."""
     walker = WaypointWalker(cfg)
     if walker.reload_layout():
         log.info(
-            "synthetic-adapter: bounds=%.1fx%.1f, base=(%.1f,%.1f) fpH=%.1f",
-            cfg.width_m, cfg.depth_m, walker._base_x, walker._base_y, walker._fp_height_m,
+            "synthetic-adapter: room %s, bounds=%.1fx%.1f",
+            walker.room_id, cfg.width_m, cfg.depth_m,
         )
     else:
-        log.warning("synthetic-adapter: no blueprint frame at boot; will retry on demand")
+        log.warning("synthetic-adapter: no blueprint room at boot; will retry on demand")
     return walker

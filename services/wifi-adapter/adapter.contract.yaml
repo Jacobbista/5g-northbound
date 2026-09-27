@@ -6,7 +6,7 @@ description: WiFi RSSI trilateration against calibrated anchors.
 capabilities:
   source: wifi
   kinds: [tool, asset]
-  frame: local          # floor-plan-local, north-up
+  frame: room           # fixes in the frame of the room the anchors belong to
   streaming: false
   z: false              # 2D trilateration, no height estimate
   accuracy_class: metre

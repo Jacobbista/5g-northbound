@@ -1,19 +1,5 @@
 {
-  "version": "2.1",
-  "room_w": 13,
-  "room_h": 32,
-  "aps": [
-    { "id": "AP01", "x": 1.0, "y": 1.0 },
-    { "id": "AP02", "x": 12.0, "y": 1.0 },
-    { "id": "AP03", "x": 1.0, "y": 31.0 },
-    { "id": "AP04", "x": 12.0, "y": 31.0 }
-  ],
-  "gps_origin": {
-    "latitude": 45.064312,
-    "longitude": 7.659154,
-    "altitude_m": 0,
-    "azimuth_deg": 0
-  },
+  "version": 3,
   "floor_plans": [
     {
       "id": "fp-demo",
@@ -25,7 +11,7 @@
         "azimuth_deg": 0,
         "altitude_m": 0,
         "width_m": 40,
-        "height_m": 40
+        "depth_m": 40
       },
       "scale_calibration_refs": []
     }
@@ -38,18 +24,44 @@
       "x_m": 13.5,
       "y_m": 4.0,
       "width_m": 13,
-      "height_m": 32,
+      "depth_m": 32,
       "rotation_deg": 0,
       "anchors": [
-        { "id": "AP01", "technology": "wifi", "x": 1.0, "y": 1.0, "height_m": 2.7, "coverage_m": 30 },
-        { "id": "AP02", "technology": "wifi", "x": 12.0, "y": 1.0, "height_m": 2.7, "coverage_m": 30 },
-        { "id": "AP03", "technology": "wifi", "x": 1.0, "y": 31.0, "height_m": 2.7, "coverage_m": 30 },
-        { "id": "AP04", "technology": "wifi", "x": 12.0, "y": 31.0, "height_m": 2.7, "coverage_m": 30 }
+        {
+          "id": "AP01",
+          "technology": "wifi",
+          "x": 1.0,
+          "y": 31.0,
+          "z": 2.7,
+          "coverage_m": 30
+        },
+        {
+          "id": "AP02",
+          "technology": "wifi",
+          "x": 12.0,
+          "y": 31.0,
+          "z": 2.7,
+          "coverage_m": 30
+        },
+        {
+          "id": "AP03",
+          "technology": "wifi",
+          "x": 1.0,
+          "y": 1.0,
+          "z": 2.7,
+          "coverage_m": 30
+        },
+        {
+          "id": "AP04",
+          "technology": "wifi",
+          "x": 12.0,
+          "y": 1.0,
+          "z": 2.7,
+          "coverage_m": 30
+        }
       ],
       "walls": [],
       "perimeter_openings": []
     }
-  ],
-  "walls": [],
-  "floor_plan_image": null
+  ]
 }

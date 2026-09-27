@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..models import EnginePosition, FusionOutput
-from ..services.geo import local_to_gps
+from ..services.geo import local_to_gps, venue_altitude
 from ..services.position_service import (
     PositionService,
     get_position_service,
@@ -34,19 +34,14 @@ async def get_position(
             raise HTTPException(404, detail=f"no fix for {device_id}")
 
         primary = result.primary.fused
-        lat, lon = local_to_gps(primary.x, primary.z, origin)
-        # Vertical: fused local height + the origin's altitude when known.
-        # `primary.y` is the height in the local frame; absent height stays 0.
-        altitude = None
-        if primary.y is not None:
-            base_alt = origin.altitude_m if origin and origin.altitude_m is not None else 0.0
-            altitude = round(base_alt + primary.y, 3)
+        lat, lon = local_to_gps(primary.x, primary.y, origin)
+        altitude = venue_altitude(primary.z, origin)
 
         fusions = None
         if result.compare:
             fusions = {}
             for sr in result.compare:
-                f_lat, f_lon = local_to_gps(sr.fused.x, sr.fused.z, origin)
+                f_lat, f_lon = local_to_gps(sr.fused.x, sr.fused.y, origin)
                 fusions[sr.name] = FusionOutput(
                     latitude=f_lat,
                     longitude=f_lon,

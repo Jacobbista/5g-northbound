@@ -133,7 +133,7 @@ export function VendorSyncPanel({
       return {
         ...d,
         vendor_device_id: d.vendorDeviceId,
-        height_m: d.height,
+        height_m: d.z,
         device_type: d.deviceType,
         local,
       };

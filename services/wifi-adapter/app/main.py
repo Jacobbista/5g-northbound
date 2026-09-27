@@ -8,7 +8,7 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI
 
-from .assemble import load_wifi_config, persist_calibration
+from .assemble import load_wifi_config, migrate_calibration_samples, persist_calibration
 from .calibration import CalibrationStore
 from .config import settings
 from .obs import install_hop_logging
@@ -117,6 +117,8 @@ async def lifespan(app: FastAPI):
             )
 
         wifi_cfg = _reload()
+        if migrate_calibration_samples(bindings_path, wifi_cfg.room_d):
+            store.replace_samples(_load_persisted_samples(bindings_path))
         app.state.wifi_config = wifi_cfg
         app.state.adapter = WifiAdapter(wifi_cfg)
         app.state.adapter.on_ingest = store.on_ingest
@@ -125,7 +127,7 @@ async def lifespan(app: FastAPI):
         app.state.ready = True
         log.info(
             "wifi-adapter: %d routers, room %g x %g m, algo=%s, calibration samples=%d",
-            len(wifi_cfg.routers), wifi_cfg.room_w, wifi_cfg.room_h, wifi_cfg.algorithm,
+            len(wifi_cfg.routers), wifi_cfg.room_w, wifi_cfg.room_d, wifi_cfg.algorithm,
             len(samples),
         )
 

@@ -39,6 +39,7 @@ def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
     optional = _names(engine, r'body\.get\("([a-zA-Z_]+)"')
     required = _names(engine, r'body\["([a-zA-Z_]+)"\]') - optional
 
+    produced: set[str] = set()
     for adapter, emit_file, pattern in (
         ("vendor-adapter", "services/vendor-adapter/app/mapper.py", r'"([a-zA-Z_]+)":'),
         ("wifi-adapter", "services/wifi-adapter/app/models.py", r"^    ([a-zA-Z_]+):"),
@@ -47,17 +48,18 @@ def test_measurement_keys_the_engine_parses_are_the_keys_adapters_emit():
         emitted = set(re.findall(pattern, (ROOT / emit_file).read_text(), re.M))
         missing = required - emitted
         assert not missing, f"{adapter} does not emit {sorted(missing)}"
+        produced |= emitted
 
     # An optional key still has to be spelled the same on both sides wherever a
-    # producer does emit it.
-    vendor: set[str] = set()
+    # producer does emit it: `room` by the sources that compute in a room,
+    # `lastSeen` by the vendor-adapter.
     for f in ("services/vendor-adapter/app/mapper.py",
               "services/vendor-adapter/app/routers/measurement.py"):
-        vendor |= _names(ROOT / f, r'"([a-zA-Z_]+)":')
-        vendor |= _names(ROOT / f, r'out\["([a-zA-Z_]+)"\]')
-        vendor |= _names(ROOT / f, r'\["([a-zA-Z_]+)"\] =')
+        produced |= _names(ROOT / f, r'"([a-zA-Z_]+)":')
+        produced |= _names(ROOT / f, r'out\["([a-zA-Z_]+)"\]')
+        produced |= _names(ROOT / f, r'\["([a-zA-Z_]+)"\] =')
     for key in optional:
-        assert key in vendor, f"the engine reads optional {key!r} that no producer emits"
+        assert key in produced, f"the engine reads optional {key!r} that no producer emits"
 
 
 def test_devices_fields_the_engine_copies_are_the_fields_adapters_emit():
@@ -80,7 +82,7 @@ def test_devices_fields_the_engine_copies_are_the_fields_adapters_emit():
 # follow the document they read, not this project's convention, so a unit in
 # the field name is correct there. Named one by one: an exemption by pattern
 # would also excuse a wire model that happens to match.
-_DOCUMENT_MODELS = ("GpsOrigin", "Floor", "FloorPlan", "Room", "Anchor",
+_DOCUMENT_MODELS = ("GpsOrigin", "FloorPlan", "RoomPlacement", "Room", "Anchor",
                     "CalibrationSample", "Bindings", "WifiConfig")
 
 

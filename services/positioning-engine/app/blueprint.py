@@ -7,10 +7,11 @@ HTTP (`GET /blueprint`), so the demo (via the gateway proxy), the adapters and
 any future edge pod read it over the network instead of mounting a shared PVC.
 The placement-editor is a write-client (`PUT /blueprint`).
 
-The engine itself only needs `gps_origin` (the floor plan's georef) for the
-WGS84 conversion; `_floor_plan_from_blueprint` extracts that into the engine's
-`FloorPlan`. The full raw blueprint is what other services consume, so it is
-stored and served verbatim.
+The engine needs the georef of the floor plan and the placement of each room,
+which `floor_plan_from_blueprint` extracts into the engine's `FloorPlan`. The
+full blueprint is what other services consume, so it is stored and served as
+authored, in the current version: an older document is migrated once, at load
+or on PUT (see blueprint_migration.py).
 """
 
 import json
@@ -19,7 +20,8 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-from .models import Floor, FloorPlan, GpsOrigin
+from .blueprint_migration import blueprint_version, migrate_blueprint
+from .models import FloorPlan, GpsOrigin, RoomPlacement
 
 log = logging.getLogger(__name__)
 
@@ -53,20 +55,15 @@ def validate_blueprint(raw: dict) -> None:
 
 # Engine still works with no blueprint at all: it degrades to lat/lon 0 with a
 # warning (see geo.py), which is the documented "no GPS reference yet" state.
-DEFAULT_FLOOR_PLAN = FloorPlan(
-    version=1,
-    floors=[Floor(id=0, label="Default", width_m=20.0, depth_m=30.0, height_m=3.0)],
-)
+DEFAULT_FLOOR_PLAN = FloorPlan()
 
 
 def floor_plan_from_blueprint(raw: dict) -> FloorPlan:
-    """Build the engine's FloorPlan from a raw blueprint dict. The engine only
-    needs gps_origin; the blueprint authors it as floor_plans[0].georef (with a
-    legacy top-level gps_origin as fallback). A single Floor is synthesised from
-    the floor-plan extent (or first room) so the FloorPlan stays valid and the
-    bounds are the real venue, not a generic box."""
+    """Build the engine's FloorPlan from a version 3 blueprint: the georef of
+    the first floor plan, its extent, and the placement of every room on it."""
     fps = raw.get("floor_plans") or []
-    georef = (fps[0].get("georef") if fps else None) or raw.get("gps_origin") or {}
+    fp = fps[0] if fps else {}
+    georef = fp.get("georef") or {}
     gps = None
     if georef.get("latitude") is not None and georef.get("longitude") is not None:
         gps = GpsOrigin(
@@ -75,21 +72,23 @@ def floor_plan_from_blueprint(raw: dict) -> FloorPlan:
             azimuth_deg=float(georef.get("azimuth_deg") or 0.0),
             altitude_m=georef.get("altitude_m"),
         )
-    w = h = None
-    if fps:
-        g = fps[0].get("georef") or {}
-        w, h = g.get("width_m"), g.get("height_m")
-    rooms = raw.get("rooms") or []
-    if (not w or not h) and rooms:
-        w, h = rooms[0].get("width_m"), rooms[0].get("height_m")
-    floor = Floor(
-        id=0,
-        label=(fps[0].get("label") if fps else None) or "Floor",
-        width_m=float(w or 20.0),
-        depth_m=float(h or 30.0),
-        height_m=3.0,
+    rooms = {
+        str(r["id"]): RoomPlacement(
+            x_m=float(r.get("x_m") or 0.0),
+            y_m=float(r.get("y_m") or 0.0),
+            width_m=float(r.get("width_m") or 0.0),
+            depth_m=float(r.get("depth_m") or 0.0),
+            rotation_deg=float(r.get("rotation_deg") or 0.0),
+        )
+        for r in raw.get("rooms") or []
+        if r.get("id") is not None and r.get("floor_plan_id", fp.get("id")) == fp.get("id")
+    }
+    return FloorPlan(
+        gps_origin=gps,
+        width_m=float(georef.get("width_m") or 0.0),
+        depth_m=float(georef.get("depth_m") or 0.0),
+        rooms=rooms,
     )
-    return FloorPlan(version=2, gps_origin=gps, floors=[floor])
 
 
 def load_blueprint(blueprint_path: str, seed_path: str = "") -> Optional[dict[str, Any]]:
@@ -106,20 +105,34 @@ def load_blueprint(blueprint_path: str, seed_path: str = "") -> Optional[dict[st
     p = Path(blueprint_path)
     if p.is_file():
         try:
-            return json.loads(p.read_text())
+            return _migrated(json.loads(p.read_text()), blueprint_path)
         except (OSError, json.JSONDecodeError) as exc:
             log.error("blueprint at %s unreadable (%s); ignoring", blueprint_path, exc)
     if seed_path:
         sp = Path(seed_path)
         if sp.is_file():
             try:
-                raw = json.loads(sp.read_text())
+                raw = migrate_blueprint(json.loads(sp.read_text()))
                 save_blueprint(blueprint_path, raw)
                 log.info("blueprint seeded from %s into %s", seed_path, blueprint_path)
                 return raw
             except (OSError, json.JSONDecodeError) as exc:
                 log.error("blueprint seed %s unreadable (%s); skipping", seed_path, exc)
     return None
+
+
+def _migrated(raw: dict[str, Any], blueprint_path: str) -> dict[str, Any]:
+    """Migrate a stored blueprint to the current version and persist the result,
+    so the conversion runs once per venue."""
+    before = blueprint_version(raw)
+    out = migrate_blueprint(raw)
+    if out is not raw:
+        try:
+            save_blueprint(blueprint_path, out)
+            log.info("blueprint migrated from version %d to %d", before, out["version"])
+        except OSError as exc:
+            log.warning("blueprint migrated in memory, not persisted (%s)", exc)
+    return out
 
 
 def save_blueprint(blueprint_path: str, raw: dict[str, Any]) -> None:

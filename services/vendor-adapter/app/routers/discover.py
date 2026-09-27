@@ -14,13 +14,13 @@ Shape:
           "label":            "Tag 01",
           "latitude":         59.4047,
           "longitude":        17.9492,
-          "height":         3.0
+          "z":              3.0
         },
         ...
       ]
     }
 
-`label`, `latitude`, `longitude`, `height` are optional and may be
+`label`, `latitude`, `longitude`, `z` are optional and may be
 absent when the vendor does not expose them. The editor falls back to
 manual placement for entries without coordinates.
 

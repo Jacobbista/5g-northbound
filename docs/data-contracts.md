@@ -7,7 +7,7 @@ This document is the source of truth for the data contracts between the componen
 - [Engine northbound contract](#engine-northbound-contract): internal, between `camara-gateway` and `positioning-engine`.
 - [Adapter contract](#adapter-contract): internal, between `positioning-engine` and adapter pods (see [`adapters.md`](adapters.md) for the full implementer's guide).
 - [Asset Identity Map](#asset-identity-map): the assets the gateway resolves and serves.
-- [Floor plan](#floor-plan): loaded by the engine at startup.
+- [Blueprint](#blueprint): the venue geometry the engine holds and serves.
 - [Placement-editor API](#placement-editor-api): operator-facing service that owns the floor-plan / AP layout JSON.
 
 A compact endpoint-by-endpoint reference (one row per route) is available in [`api-reference.md`](api-reference.md). This document explains the *contracts*; the reference is the *index*.
@@ -195,7 +195,7 @@ The UI derives the `synthetic` badge from `source == "synthetic"` (the synthetic
 }
 ```
 
-`sources` and `kinds` are derived from the caller's own assets; `adapters` mirrors the engine's live registry (see [adapter-registry.md](adapter-registry.md)). The editor uses this to offer a `source` picker bound to adapters that actually exist.
+`altitude` is true when at least one live adapter declares `z: true`. `sources` and `kinds` are derived from the caller's own assets; `adapters` mirrors the engine's live registry (see [adapter-registry.md](adapter-registry.md)). The editor uses this to offer a `source` picker bound to adapters that actually exist.
 
 ### Anchor calibration
 
@@ -290,7 +290,7 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 }
 ```
 
-The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin altitude plus the local vertical. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)` and the unclamped value in `horizontalAccuracy`.
+The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin's `altitude_m` plus the fused height above the venue floor, present only when both exist. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)` and the unclamped value in `horizontalAccuracy`.
 
 **Routing.** `?source=<x>` selects the single registered adapter whose `ADAPTER_NAME == x`. If `source` is absent or matches no adapter, the engine falls back to the optional `DEVICE_MAP` (`positioning_id=adapter` pins), and finally fans out to every registered adapter and fuses the responders. The gateway always passes the source named by the capability it is resolving, so steady-state routing is single-adapter; fan-out is the no-source fallback. See [adapter-registry.md](adapter-registry.md).
 
@@ -335,20 +335,20 @@ Adapter pods expose the following endpoint, consumed by the engine via [`HttpAda
 GET /measurement/{device_id}  → 200 OK
 {
   "source":     "wifi",
-  "frame":      "local",
+  "frame":      "room",
+  "room":       "room-01",
   "x":          11.5,
-  "y":          0.0,
-  "z":          10.3,
-  "accuracy": 6.6,
+  "y":          10.3,
+  "accuracy":   6.6,
   "confidence": 0.85,
   "timestamp":  1700000000.0,
-  "lastSeen":  1700000042.0
+  "lastSeen":   1700000042.0
 }
 ```
 
-`lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
+`frame` declares the reference of the horizontal position: `"room"` (`x`, `y` in the room named by `room`), `"venue"` (`x`, `y` in the floor-plan frame, the default), or `"wgs84"` (`latitude`, `longitude`). The engine places every measurement in the venue frame before fusion. `z` is optional: the height above the venue floor in metres, in every frame, sent only by a source that declares `z: true`. `lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
 
-`{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". `frame` declares the coordinate system of the reply. `"local"` (default) means x/y/z are metres in the floor-plan-local frame (origin = lower-left corner, x = east, z = north, y = vertical), `"wgs84"` means the reply carries `latitude` and `longitude` instead and the engine projects them into the local frame using the georeference before fusion. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
+`{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 
 ## Asset Identity Map
 
@@ -384,43 +384,49 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
 - `org`: tenant; the gateway gates consumers by it.
 - `label`: human-readable name surfaced by the demo. Optional; defaults to `assetId`.
 
-## Floor plan
+## Blueprint
 
-Loaded at engine startup from `/app/config/floor-plan.json` (mounted in production from the `positioning-floor-plan` Kubernetes ConfigMap). In steady state the placement-editor PUTs the blueprint over HTTP; this file is the cold-start seed.
+The venue blueprint lives in the engine, the blueprint authority, which persists it on its own volume and serves it at `GET /blueprint` (`PUT /blueprint` to replace it). The placement editor writes it, the gateway proxies it to the demo, and the adapters read it. Its contract is [`schema/layout.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/layout.schema.json), version 3, with a complete example in [`schema/examples/layout.example.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/examples/layout.example.json).
+
+The blueprint places each level in its parent, and every level uses the venue-frame convention: x along the width, y along the depth, z up, origin at the lower-left corner of the parent. See [architecture.md](architecture.md#coordinate-frame).
 
 ```json
 {
-  "version": 1,
-  "gps_origin": {
-    "latitude":    45.064312,
-    "longitude":   7.659154,
-    "azimuth_deg": 0.0,
-    "altitude":  240.0
-  },
-  "floors": [
-    {
-      "id": 0,
-      "label": "Ground Floor",
-      "width_m": 20.0,
-      "depth_m": 30.0,
-      "height_m": 3.0,
-      "walls":        [{ "x": 0, "z": 0, "w": 20.0, "d": 0.2, "h": 3.0 }],
-      "uwb_anchors":  [{ "id": "anchor-00", "x": 0.5, "y": 2.4, "z": 0.5 }]
+  "version": 3,
+  "floor_plans": [{
+    "id": "fp-01",
+    "label": "Floor 6",
+    "georef": {
+      "latitude": 59.4042, "longitude": 17.9492, "azimuth_deg": -36.4,
+      "altitude_m": 31.0, "width_m": 40, "depth_m": 30
     }
-  ]
+  }],
+  "rooms": [{
+    "id": "room-01", "label": "Lab", "floor_plan_id": "fp-01",
+    "x_m": 4.0, "y_m": 16.0, "width_m": 10, "depth_m": 8, "rotation_deg": 0,
+    "anchors": [
+      { "id": "AP01", "technology": "wifi", "x": 1.0, "y": 7.0, "z": 2.7, "coverage_m": 30 }
+    ],
+    "walls": [
+      { "x1": 5.0, "y1": 8.0, "x2": 5.0, "y2": 2.0, "thickness": 0.1, "height_m": 3.0,
+        "openings": [{ "start_m": 2.0, "width_m": 1.0 }] }
+    ]
+  }]
 }
 ```
 
-`gps_origin` is the **single georeference** that links the local floor-plan frame (metres, lower-left origin, +x east-ish / +z north-ish) to WGS84. Survey it once for a venue; every anchor and asset position is then carried in local metres and projected to lat/lon at the engine boundary. This bounds positioning error by *one* calibration instead of letting it accumulate per AP.
+| Level | Placed by | Fields |
+|-------|-----------|--------|
+| floor plan in the world | `georef` | `latitude`, `longitude` of the lower-left corner, `azimuth_deg` (bearing of +y clockwise from true north), `altitude_m` (height of the origin above the WGS84 ellipsoid), `width_m`, `depth_m` |
+| room in the floor plan | the room | `x_m`, `y_m` (lower-left corner), `width_m`, `depth_m`, `rotation_deg` (clockwise about the room centre), optional `shape` (outline in room coordinates) |
+| anchor in the room | the anchor | `x`, `y`, `z` (mounting height), `technology` (`wifi` / `wittra` / `fiveg` / `gnss`), `coverage_m` |
+| wall in the room | the wall | `x1`, `y1`, `x2`, `y2`, `thickness`, `height_m`, `openings` measured along the wall from (`x1`, `y1`) |
 
-| Field         | Required | Notes                                                                       |
-|---------------|----------|-----------------------------------------------------------------------------|
-| `latitude`    | yes      | Latitude of the floor-plan origin (lower-left corner of the room)          |
-| `longitude`   | yes      | Longitude of the floor-plan origin                                          |
-| `azimuth_deg` | no (0)   | Bearing of the local +z axis (the SVG "up") clockwise from true north. 0 means the room is north-aligned; 30 means the room is rotated 30° east of north |
-| `altitude`  | no       | Altitude of the origin above sea level. Added to the local vertical to produce `altitude` on the fix |
+`altitude_m` is null until the origin height is surveyed, and fixes then carry no `altitude`. A GNSS receiver reports ellipsoidal height directly. A value read from a map or a DEM is above mean sea level and takes the geoid undulation at the origin. Without `latitude` and `longitude` the engine returns `latitude: 0, longitude: 0` and logs a warning. The georeference model (datums, tile drift, N-point calibration) is in [`georeferencing.md`](georeferencing.md).
 
-`gps_origin` itself is optional. When absent, the engine returns `latitude: 0, longitude: 0` and logs a warning. The development fixture [`dev/floor-plan.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/floor-plan.json) carries a placeholder origin so the local demo works; the production ConfigMap omits it until a real lab GPS reference is available. The full georeference model (datums, tile drift, N-point calibration) is in [`georeferencing.md`](georeferencing.md).
+The engine migrates a stored version 1 or 2 document to version 3 at load and on `PUT`, and writes version 3 from then on. The migration mirrors each level on its parent's depth and renames `height_m` to `depth_m` where it named a depth. No position is measured again.
+
+Real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) is not authored in the blueprint: the calibration tool measures it and it lives in the bindings, surfaced via [`/anchors/calibration`](#anchor-calibration). See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).
 
 ## Placement-editor API
 
@@ -436,78 +442,13 @@ Liveness, no auth.
 
 ### `GET /api/layout`
 
-Read the current layout.
+Read the blueprint, proxied from the engine's `GET /blueprint` (see [Blueprint](#blueprint)). The editor draws in screen axes and converts the version 3 document when it reads it.
 
-The placement-editor writes layouts in v2 shape, with legacy v1 top-level keys preserved for backward compatibility (the location-app still reads `layout.aps`, `layout.gps_origin`, etc.):
-
-```json
-{
-  "version": 2,
-  "floor_plans": [{
-    "id":    "fp-01",
-    "label": "Polito DAUIN. Floor 1",
-    "image": { "data_url": "...", "opacity": 0.7, "filename": "fp01.png" },
-    "georef": {
-      "latitude":    45.064312,
-      "longitude":   7.659154,
-      "azimuth_deg": 0.0,
-      "altitude":  240.0,
-      "width_m":     13.0,
-      "height_m":    32.0
-    }
-  }],
-  "rooms": [{
-    "id":            "room-01",
-    "label":         "Lab",
-    "floor_plan_id": "fp-01",
-    "x_m":           0.0,
-    "y_m":           0.0,
-    "width_m":       13.0,
-    "height_m":      32.0,
-    "rotation_deg":  0.0,
-    "anchors": [
-      { "id": "AP07",  "technology": "wifi",   "x": 11.5, "y": 28, "height_m": 2.7, "coverage_m": 30 },
-      { "id": "UWB01", "technology": "wittra", "x": 1.5,  "y": 4,  "height_m": 3.0, "coverage_m": 15 }
-    ],
-    "walls": []
-  }],
-
-  /* Legacy v1 mirror, derived from floor_plans[0] + rooms[0]. */
-  "room_w":     13.0,
-  "room_h":     32.0,
-  "gps_origin": { "latitude": 45.064312, "longitude": 7.659154, "azimuth_deg": 0.0, "altitude": 240.0 },
-  "aps":        [ … same as rooms[0].anchors … ],
-  "walls":      []
-}
-```
-
-Three layers of abstraction, each scoped to one editor section:
-
-| Layer        | Carries                                                      | Edited in     |
-|--------------|--------------------------------------------------------------|---------------|
-| `floor_plans[]` | Area on the world map: image + WGS84 origin + bearing + size | World section |
-| `rooms[]`    | Bounded indoor areas inside a floor plan                     | Plan section  |
-| `anchors[]`  | Per-technology positioning instruments inside a room         | Room section  |
-
-The `aps[]` array (legacy mirror of `rooms[0].anchors`) carries every anchor / reference device, regardless of technology. The field name is kept for back-compat with older v1 consumers.
-
-| Field          | Required | Notes                                                                                                         |
-|----------------|----------|---------------------------------------------------------------------------------------------------------------|
-| `id`           | yes      | Anchor identifier, unique within the layout                                                                   |
-| `technology`   | no (`wifi`) | One of `wifi` / `wittra` / `fiveg` / `gnss`. Unknown values fall back to the wifi visual palette. Drives editor grouping and demo filter chips |
-| `x`, `y`       | yes      | Position in metres, local frame (`y` is depth on the SVG / +z in 3D)                                          |
-| `height_m`     | no       | Mounting height in metres. Per-technology defaults: WiFi 2.7, UWB 3.0, 5G 10.0, GNSS 0.0                      |
-| `coverage_m`   | no       | Visual coverage hint (dashed ring in the editor). Per-technology defaults: WiFi 30, UWB 15, 5G 500, GNSS 0    |
-
-Real per-AP RF (`tx_power_ref_dbm`, `path_loss_n`) is **not** authored here, it is measured by the calibration tool and lives in the bindings, surfaced via [`/anchors/calibration`](#anchor-calibration). See [`blueprint-vs-bindings.md`](./blueprint-vs-bindings.md).
-
-`gps_origin` here is the same one-time-survey record as in the floor plan: when the editor saves it, downstream consumers (engine, demo) pick it up without a backend change.
-
-Status codes: `200` on success, `404` when the layout file is missing, `500` when the file exists but is malformed.
+Status codes: `200` on success, `404` when no blueprint has been authored yet.
 
 ### `PUT /api/layout`
 
-Overwrite the layout. Body is the new full JSON (no patching). Unknown top-level fields are preserved (schema is `extra="allow"` so the UI can evolve without backend changes).
+Replace the blueprint, proxied to the engine's `PUT /blueprint`. Body is the full version 3 document (no patching). Unknown fields are preserved, so the editor can add fields without a backend change.
 
 ```json
 { "status": "ok", "path": "/app/data/layout.json" }

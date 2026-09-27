@@ -31,13 +31,13 @@ _TIMEOUT_S = 3.0
 
 
 class Placement(BaseModel):
-    """A point on the floor plan, in room-local metres: origin top-left, x
-    right, z down. The frame the placement editor stores and the demo renders,
-    so a point picked on screen travels unchanged."""
+    """A point in the frame of the room the source walks: metres from the
+    room's lower-left corner, x along the width, y along the depth. The
+    response names that room."""
 
     model_config = ConfigDict(extra="ignore")
     x: float
-    z: float
+    y: float
 
 
 async def _placeable_adapter(source: str) -> str:
@@ -80,8 +80,8 @@ async def _proxy(method: str, asset_id: str, claims: dict, json: dict | None = N
         raise CamaraError(502, "BAD_GATEWAY", "The source rejected the placement.")
     body = r.json()
     # Answer in the caller's vocabulary: it asked about an asset.
-    return {"assetId": asset_id, "x": body.get("x"), "z": body.get("z"),
-            "placed": body.get("placed", False)}
+    return {"assetId": asset_id, "room": body.get("room"), "x": body.get("x"),
+            "y": body.get("y"), "placed": body.get("placed", False)}
 
 
 @router.put("/{asset_id}/placement")

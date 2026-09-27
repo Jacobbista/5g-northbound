@@ -7,12 +7,16 @@ from typing import Literal, Optional
 class Measurement:
     """A position estimate from a single adapter.
 
-    `frame` declares which coordinate fields are valid:
-      - "local": x, y, z are metres in the floor-plan-local frame.
-      - "wgs84": latitude, longitude are absolute; y (height) may still be set.
+    `frame` declares the reference of the horizontal position:
+      - "venue": x, y are metres in the venue frame (floor-plan lower-left
+        origin, x along the width, y along the depth).
+      - "room": x, y are metres in the frame of the room named by `room`.
+      - "wgs84": latitude, longitude are absolute.
+    `z` is the height above the venue floor in every frame, None when the
+    source did not measure it.
 
-    The engine converts every measurement to the local frame before fusion,
-    using the floor plan's gps_origin. Strategies always see local measurements.
+    The engine converts every measurement to the venue frame before fusion.
+    Strategies always see venue measurements.
     """
 
     source: str
@@ -22,10 +26,11 @@ class Measurement:
     # None - see position_service.py).
     accuracy: Optional[float] = None
     confidence: float = 0.0
-    frame: Literal["local", "wgs84"] = "local"
+    frame: Literal["venue", "room", "wgs84"] = "venue"
+    room: Optional[str] = None
     x: float = 0.0
     y: float = 0.0
-    z: float = 0.0
+    z: Optional[float] = None
     latitude: float = 0.0
     longitude: float = 0.0
     timestamp: Optional[float] = None

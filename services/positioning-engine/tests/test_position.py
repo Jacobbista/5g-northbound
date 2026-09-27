@@ -1,6 +1,6 @@
 import pytest
 
-from app.models import Floor, FloorPlan
+from app.models import FloorPlan
 
 
 @pytest.mark.asyncio
@@ -23,14 +23,14 @@ async def test_position_contract_shape(client):
 async def test_position_near_gps_origin(client):
     # device roams a 20x30 m floor anchored at the dev gps_origin
     body = (await client.get("/position/uwb-tag-001")).json()
-    assert 45.064 < body["latitude"] < 45.065
-    assert 7.659 < body["longitude"] < 7.660
+    assert 59.40 <= body["latitude"] < 59.401
+    assert 17.95 <= body["longitude"] < 17.951
 
 
 @pytest.mark.asyncio
 async def test_position_degrades_without_gps_origin(app, client):
     app.state.floor_plan = FloorPlan(
-        version=1, floors=[Floor(id=0, label="x", width_m=20.0, depth_m=30.0, height_m=3.0)]
+        width_m=20.0, depth_m=30.0
     )
     body = (await client.get("/position/uwb-tag-001")).json()
     assert body["latitude"] == 0.0

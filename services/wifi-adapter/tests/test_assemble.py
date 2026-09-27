@@ -20,18 +20,21 @@ def _write(tmp_path: Path, name: str, data: dict) -> Path:
 
 def _blueprint(rooms_anchors):
     return {
-        "version": 2,
+        "version": 3,
         "floor_plans": [
             {
                 "id": "fp-01",
-                "georef": {"latitude": 59.4, "longitude": 17.9, "width_m": 30, "height_m": 20},
+                "georef": {"latitude": 59.4, "longitude": 17.9, "width_m": 30, "depth_m": 20},
             }
         ],
         "rooms": [
             {
                 "id": "room-01",
+                "floor_plan_id": "fp-01",
+                "x_m": 0,
+                "y_m": 0,
                 "width_m": 30,
-                "height_m": 20,
+                "depth_m": 20,
                 "anchors": rooms_anchors,
             }
         ],
@@ -61,15 +64,12 @@ def test_assemble_joins_blueprint_positions_to_bindings(tmp_path):
 
     cfg = assemble_from_blueprint(blueprint, bindings)
 
-    assert cfg.room_w == 30
-    assert cfg.room_h == 20
+    assert (cfg.room_id, cfg.room_w, cfg.room_d) == ("room-01", 30, 20)
     assert cfg.tx_power == -45
     assert {r.id for r in cfg.routers} == {"AP07", "AP08"}
     ap07 = next(r for r in cfg.routers if r.id == "AP07")
     assert (ap07.x, ap07.y) == (5.0, 3.0)
     assert ap07.bssids == ["AA:BB:CC:01:01:01"]
-    assert cfg.gps_origin is not None
-    assert cfg.gps_origin.latitude == 59.4
 
 
 def test_assemble_skips_non_wifi_anchors(tmp_path):
@@ -203,23 +203,6 @@ def test_load_wifi_config_blueprint_mode(tmp_path):
     assert (cfg.routers[0].x, cfg.routers[0].y) == (1.0, 2.0)
 
 
-def test_load_wifi_config_legacy_mode_when_no_blueprint(tmp_path):
-    bindings = _write(
-        tmp_path,
-        "wifi-config.json",
-        {
-            "room_w": 10,
-            "room_h": 20,
-            "routers": [
-                {"id": "AP01", "x": 5.0, "y": 5.0, "bssids": ["AA:BB:CC:01:01:01"]},
-            ],
-        },
-    )
-    cfg = load_wifi_config(bindings, blueprint_path=None)
-    assert cfg.room_w == 10
-    assert cfg.routers[0].id == "AP01"
-
-
 def test_load_wifi_config_errors_without_positions_and_no_blueprint(tmp_path):
     bindings = _write(
         tmp_path,
@@ -230,25 +213,23 @@ def test_load_wifi_config_errors_without_positions_and_no_blueprint(tmp_path):
         load_wifi_config(bindings, blueprint_path=None)
 
 
-def test_assemble_handles_v1_legacy_blueprint(tmp_path):
-    blueprint = _write(
-        tmp_path,
-        "layout.json",
-        {
-            "room_w": 13,
-            "room_h": 32,
-            "aps": [
-                {"id": "AP01", "technology": "wifi", "x": 5.0, "y": 5.0},
-            ],
-        },
-    )
-    bindings = _write(
-        tmp_path,
-        "wifi-config.json",
-        {"bindings": [{"id": "AP01", "bssids": ["AA:BB:CC:01:01:01"]}]},
-    )
+def test_assemble_refuses_a_blueprint_older_than_version_3(tmp_path):
+    # Older versions use the screen frame (y down): reading one as version 3
+    # would misplace every anchor, so it is refused. The engine serves version 3.
+    blueprint = _write(tmp_path, "layout.json", {**_blueprint([]), "version": 2})
+    bindings = _write(tmp_path, "wifi-config.json", {"bindings": []})
+    with pytest.raises(ValueError):
+        assemble_from_blueprint(blueprint, bindings)
 
-    cfg = assemble_from_blueprint(blueprint, bindings)
-    assert cfg.room_w == 13
-    assert cfg.room_h == 32
-    assert cfg.routers[0].id == "AP01"
+
+def test_calibration_samples_are_mirrored_into_the_room_frame_once(tmp_path):
+    from app.assemble import migrate_calibration_samples
+
+    bindings = _write(tmp_path, "wifi-config.json", {"bindings": [], "calibration_samples": [
+        {"id": "s1", "x_m": 1.0, "y_m": 2.0, "rssi_by_anchor": {}, "n_scans": 1, "ts": 1.0},
+    ]})
+    assert migrate_calibration_samples(bindings, room_depth=20.0) is True
+    doc = json.loads(bindings.read_text())
+    assert (doc["calibration_samples"][0]["y_m"], doc["samples_frame"]) == (18.0, "room")
+    assert migrate_calibration_samples(bindings, room_depth=20.0) is False
+    assert json.loads(bindings.read_text())["calibration_samples"][0]["y_m"] == 18.0

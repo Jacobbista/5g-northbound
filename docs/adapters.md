@@ -34,18 +34,24 @@ Optionally it MAY expose `POST /ingest/...` (or any other transport) for sources
 
 ### `GET /measurement/{device_id}`
 
-Returns the latest position estimate for the device. Two coordinate frames are supported; the response declares which it uses.
+Returns the latest position estimate for the device. The response declares the frame of its horizontal position:
 
-**Response (200 OK, local frame, default):**
+- `room`: metres in the frame of a blueprint room, named by `room`. The source computes inside the room, as RSSI trilateration against the room's anchors does. The engine places the room in the venue.
+- `venue`: metres in the venue frame, the frame of the floor plan.
+- `wgs84`: latitude and longitude. The engine projects them into the venue frame with the floor-plan georef.
+
+Every level uses the same axes, the local frame of omlox: x along the width, y along the depth, z up, origin at the lower-left corner. See [coordinate frame](architecture.md#coordinate-frame).
+
+**Response (200 OK, room frame):**
 
 ```json
 {
   "source":      "wifi",
-  "frame":       "local",
+  "frame":       "room",
+  "room":        "room-01",
   "x":           11.5,
-  "y":           0.0,
-  "z":           10.3,
-  "accuracy":  6.6,
+  "y":           10.3,
+  "accuracy":    6.6,
   "confidence":  0.85,
   "timestamp":   1700000000.0
 }
@@ -57,9 +63,10 @@ Returns the latest position estimate for the device. Two coordinate frames are s
 {
   "source":      "wittra",
   "frame":       "wgs84",
-  "latitude":    45.064412,
-  "longitude":   7.659254,
-  "accuracy":  0.3,
+  "latitude":    59.404251,
+  "longitude":   17.949247,
+  "z":           1.2,
+  "accuracy":    0.3,
   "confidence":  0.95,
   "timestamp":   1700000000.0
 }
@@ -68,15 +75,17 @@ Returns the latest position estimate for the device. Two coordinate frames are s
 | Field                  | Type             | Notes |
 |------------------------|------------------|-------|
 | `source`               | string           | Short tag identifying the technology (`wifi`, `uwb`, `fiveg`, …). Surfaces in the engine response under `sources[]` |
-| `frame`                | `"local"`/`"wgs84"` | Defaults to `"local"` when omitted. The engine projects WGS84 replies into the local frame using the floor plan's `gps_origin` before fusion |
-| `x`, `y`, `z`          | float, metres    | Used when `frame = local`. Right-handed local frame: `x` = east, `y` = vertical (height), `z` = north. Origin is the floor-plan lower-left corner |
-| `latitude`, `longitude`| float, degrees   | Used when `frame = wgs84`. Absolute position. The adapter does not need to know the room's GPS origin; the engine does |
-| `accuracy`           | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
+| `frame`                | `"room"`/`"venue"`/`"wgs84"` | Defaults to `"venue"` when omitted. Any other value is a malformed measurement |
+| `room`                 | string           | With `frame = room`: the id of the blueprint room. A room the blueprint does not hold leaves the measurement unplaced, and the engine drops it |
+| `x`, `y`               | float, metres    | With `frame = room` or `venue`: the horizontal position, x along the width and y along the depth from the lower-left corner |
+| `latitude`, `longitude`| float, degrees   | With `frame = wgs84`: the absolute position. The adapter does not need the venue georef, the engine applies it |
+| `z`                    | float, metres, optional | Height above the venue floor, in every frame. Sent only by a source that declares `z: true`, and only when measured for this fix. The engine discards it from a source that does not declare `z: true` |
+| `accuracy`             | float, metres    | One-sigma error radius. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
 | `confidence`           | float, 0.0–1.0   | Adapter's self-reported reliability. Used as a multiplicative weight in fusion |
 | `timestamp`            | float, optional  | Unix epoch seconds when the underlying measurement was taken. Omit for "now". The engine uses this to decide staleness |
-| `lastSeen`            | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
+| `lastSeen`             | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
 
-Pick `local` for adapters that compute their own position from observations gathered inside the room (RSSI, UWB anchors). Pick `wgs84` for adapters whose backend is map-anchored and already reports global coordinates, typically commercial RTLS platforms whose operator places anchors on a real-world map. The engine treats the two paths uniformly downstream.
+Pick `room` for adapters that compute their own position from observations gathered inside a room (RSSI, UWB anchors). Pick `wgs84` for adapters whose backend is map-anchored and already reports global coordinates, typically commercial RTLS platforms whose operator places anchors on a real-world map. The engine treats every frame uniformly downstream.
 
 **Response (404 Not Found):**
 
@@ -238,11 +247,10 @@ that measures one cannot: there is nothing to place, its hardware is already
 somewhere. Only the former advertises `placement`, and only it exposes
 `PUT`/`DELETE /devices/{id}/placement`.
 
-Coordinates are room-local metres, origin top-left, x right, z down. That is
-the frame the walker keeps, the placement editor stores, and the demo's 3D
-scene renders, so a point picked on screen travels unchanged. The point is
-clamped into the room on arrival, since seeding a walk somewhere the walk could
-never reach would strand the device.
+Coordinates are `x`, `y` in the frame of the room the source walks, the frame
+the blueprint stores. The response names that room. The point is clamped into
+the room on arrival, since seeding a walk somewhere the walk could never reach
+would strand the device.
 
 With `SPAWN_REQUIRED` set, a device reports nothing until it is placed, and
 nothing again once removed. That is not an error state: `GET /measurement/{id}`
@@ -270,7 +278,7 @@ env:
     value: "weighted_avg"
 ```
 
-Each entry becomes one [`HttpAdapter`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-engine/app/adapters/http.py) instance. On every position request the engine selects the relevant adapters for the device (all adapters unless `DEVICE_MAP` overrides), concurrently calls `GET /measurement/{device_id}` on each, normalises WGS84 measurements into the local frame, runs the configured fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md) for the catalogue), and converts the result back to WGS84 using the floor-plan `gps_origin` before returning it on the northbound contract.
+Each entry becomes one [`HttpAdapter`](https://github.com/Jacobbista/5g-northbound/blob/main/services/positioning-engine/app/adapters/http.py) instance. On every position request the engine selects the relevant adapters for the device (all adapters unless `DEVICE_MAP` overrides), concurrently calls `GET /measurement/{device_id}` on each, expresses room and WGS84 measurements in the venue frame, runs the configured fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md) for the catalogue), and converts the result back to WGS84 using the floor-plan `gps_origin` before returning it on the northbound contract.
 
 A bare URL is also accepted for back-compatibility (`ADAPTER_URLS="http://wifi-adapter:8080"`); the engine assigns it a default name `adapter-N`.
 
@@ -278,14 +286,14 @@ To add an adapter to a running cluster: deploy the new Service, append its `name
 
 ## Coordinate frame
 
-All adapters report positions in the same room-local frame as the floor plan:
+Adapters report in a room, in the venue, or in WGS84 (see `frame` above). The room and venue frames share one convention, the local frame of omlox:
 
-- **Origin:** lower-left corner of the room, as defined in `dev/floor-plan.json` (or the production ConfigMap).
-- **x:** east, metres (along `width_m`).
-- **z:** north, metres (along `depth_m`).
-- **y:** vertical, metres (height). Adapters that cannot estimate height SHOULD return `y = 0.0`.
+- **Origin:** lower-left corner of the room, or of the floor plan.
+- **x:** metres along `width_m`.
+- **y:** metres along `depth_m`.
+- **z:** height above the floor, metres. A source that does not measure height omits it.
 
-The engine converts `(x, z)` to WGS84 latitude/longitude using the floor plan's `gps_origin` before exposing the position northbound. Adapters do not need GPS knowledge.
+The engine places a room in the floor plan (offset and rotation from the blueprint), then the floor plan in the world (georef), before exposing the position northbound. Adapters do not need GPS knowledge. The full model is in [architecture.md](architecture.md#coordinate-frame).
 
 ## Authentication
 

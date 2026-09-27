@@ -9,9 +9,9 @@ The deployed adapter receives two files:
      blueprint on the cluster's PVC / ConfigMap.
 
 This module joins them on anchor `id` and emits the single WifiConfig
-the trilateration code already consumes. If LAYOUT_PATH is not set, we
-fall back to reading positions from the bindings file too (legacy mode
-used by tests and the no-blueprint demo).
+the trilateration code consumes. Positions are in the frame of the room the
+anchors belong to (blueprint version 3): the adapter trilaterates and reports
+in that frame, and the engine places the room in the venue.
 """
 
 import json
@@ -24,24 +24,19 @@ from .models import Router, WifiBindings, WifiConfig
 log = logging.getLogger(__name__)
 
 
+BLUEPRINT_VERSION = 3
+
+
 def _normalize_layout(raw: dict) -> dict:
-    """Lift legacy v1 blueprint (room_w / room_h / aps) to the v2 shape
-    we consume below. v2 blueprints (`rooms[]`, `floor_plans[]`) pass
-    through unchanged."""
-    if raw.get("version") == 2 and isinstance(raw.get("rooms"), list):
-        return raw
-    return {
-        "version": 2,
-        "floor_plans": raw.get("floor_plans") or [],
-        "rooms": [
-            {
-                "id": "room-01",
-                "width_m": float(raw.get("room_w") or 0),
-                "height_m": float(raw.get("room_h") or 0),
-                "anchors": raw.get("aps") or [],
-            }
-        ],
-    }
+    """The blueprint in version 3, the only version the engine serves. An
+    older document (an offline fallback file) is refused: its coordinates use
+    another frame."""
+    if raw.get("version") != BLUEPRINT_VERSION or not isinstance(raw.get("rooms"), list):
+        raise ValueError(
+            f"blueprint version {raw.get('version')!r}: this adapter reads version "
+            f"{BLUEPRINT_VERSION}, which the engine serves after migrating older documents"
+        )
+    return raw
 
 
 def bindings_from_dict(data: dict) -> WifiBindings:
@@ -120,8 +115,10 @@ def assemble_from_blueprint_dict(
     if not rooms:
         raise ValueError("blueprint has no rooms")
     room = rooms[0]
+    if not room.get("id"):
+        raise ValueError("blueprint room has no id")
     width = float(room.get("width_m") or 0)
-    height = float(room.get("height_m") or 0)
+    depth = float(room.get("depth_m") or 0)
     wifi_anchors = [
         a for a in (room.get("anchors") or [])
         if (a.get("technology") or "wifi") == "wifi"
@@ -157,31 +154,12 @@ def assemble_from_blueprint_dict(
                 binding_id,
             )
 
-    # GPS origin from the blueprint's first floor plan, if any.
-    gps_origin: Optional[dict] = None
-    fp = (layout.get("floor_plans") or [{}])[0]
-    georef = fp.get("georef") or {}
-    if georef.get("latitude") is not None and georef.get("longitude") is not None:
-        gps_origin = {
-            "latitude": float(georef["latitude"]),
-            "longitude": float(georef["longitude"]),
-        }
-
-    # Room origin + floor-plan height: lift the room-local fix into the
-    # engine's `local` frame (floor-plan-local, north-up) at emit time.
-    base_x = float(room.get("x_m") or 0)
-    base_y = float(room.get("y_m") or 0)
-    fp_height_m = float(georef.get("height_m") or 0)
-
     return WifiConfig(
+        room_id=str(room["id"]),
         room_w=width,
-        room_h=height,
-        base_x=base_x,
-        base_y=base_y,
-        fp_height_m=fp_height_m,
+        room_d=depth,
         tx_power=bindings.tx_power,
         path_loss_n=bindings.path_loss_n,
-        gps_origin=gps_origin,
         routers=routers,
         algorithm=bindings.algorithm,
         weight_power=bindings.weight_power,
@@ -189,6 +167,29 @@ def assemble_from_blueprint_dict(
         process_noise=bindings.process_noise,
         motion_model=bindings.motion_model,
     )
+
+
+def migrate_calibration_samples(bindings_path: Path, room_depth: float) -> bool:
+    """Bring stored calibration samples into the room frame, once.
+
+    Files written before blueprint version 3 hold samples with y measured down
+    from the top edge of the room. Mirroring on the room depth expresses them
+    from the bottom edge, the same transform the engine applies to the anchors,
+    so every sample-to-anchor distance and every fitted parameter is preserved.
+    Returns True when the file changed."""
+    try:
+        raw = json.loads(bindings_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(raw, dict) or raw.get("samples_frame") == "room":
+        return False
+    for sample in raw.get("calibration_samples") or []:
+        if isinstance(sample.get("y_m"), (int, float)):
+            sample["y_m"] = room_depth - float(sample["y_m"])
+    raw["samples_frame"] = "room"
+    _atomic_write(bindings_path, json.dumps(raw, indent=2, ensure_ascii=False))
+    log.info("wifi-adapter: calibration samples migrated to the room frame -> %s", bindings_path)
+    return True
 
 
 def persist_calibration(
@@ -238,10 +239,15 @@ def persist_calibration(
         entry["tx_power"] = ov.get("tx_power")
         entry["path_loss_n"] = ov.get("path_loss_n")
 
+    # Samples written before the room frame keep their marker absent until
+    # migrate_calibration_samples mirrors them all.
+    unmigrated = raw.get("samples_frame") != "room" and bool(raw.get("calibration_samples"))
     raw["calibration_samples"] = [
         s.model_dump() if isinstance(s, CalibrationSample) else dict(s)
         for s in samples
     ]
+    if not unmigrated:
+        raw["samples_frame"] = "room"
 
     _atomic_write(bindings_path, json.dumps(raw, indent=2, ensure_ascii=False))
     log.info(
@@ -286,39 +292,24 @@ def load_wifi_config(
     blueprint_path: Optional[Path] = None,
     blueprint: Optional[dict] = None,
 ) -> WifiConfig:
-    """Single entry point used by main.py. Blueprint mode when a blueprint is
-    available (a dict fetched from the engine, or a readable file path), legacy
-    mode otherwise. Bindings always come from the local file (PVC)."""
+    """Single entry point used by main.py. Anchor positions come from the
+    blueprint (a dict fetched from the engine, or a readable file path), and
+    the BSSID bindings from the local file (PVC)."""
     if blueprint is not None:
         cfg = assemble_from_blueprint_dict(blueprint, bindings_path)
         log.info(
-            "wifi-adapter: blueprint mode (from engine, bindings=%s) - %d routers",
+            "wifi-adapter: blueprint from engine, bindings=%s - %d routers",
             bindings_path, len(cfg.routers),
         )
         return cfg
     if blueprint_path is not None and blueprint_path.is_file():
         cfg = assemble_from_blueprint(blueprint_path, bindings_path)
         log.info(
-            "wifi-adapter: blueprint mode (layout=%s, bindings=%s) - %d routers",
-            blueprint_path,
-            bindings_path,
-            len(cfg.routers),
-        )
-        return cfg
-    # Legacy mode - bindings file carries positions inline. Accepts both
-    # the historical `routers: [{id, x, y, bssids}]` and the new
-    # `bindings: [...]` plus tunables shape.
-    raw = json.loads(bindings_path.read_text())
-    if "routers" in raw and isinstance(raw["routers"], list):
-        cfg = WifiConfig.model_validate(raw)
-        log.info(
-            "wifi-adapter: legacy mode (%s) - %d routers",
-            bindings_path,
-            len(cfg.routers),
+            "wifi-adapter: blueprint from %s, bindings=%s - %d routers",
+            blueprint_path, bindings_path, len(cfg.routers),
         )
         return cfg
     raise ValueError(
-        f"wifi-adapter: {bindings_path} has no positions and no blueprint is "
-        "configured. Set LAYOUT_PATH to point at the placement-editor JSON, or "
-        "add `routers: [{id, x, y, bssids}]` to the bindings file."
+        "wifi-adapter: no blueprint. Anchor positions come from the engine's "
+        "GET /blueprint, or from LAYOUT_PATH offline."
     )

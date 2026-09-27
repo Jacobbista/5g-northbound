@@ -87,4 +87,4 @@ def test_reload_keeps_the_trackers_when_the_filter_is_unchanged(cfg):
 
 def test_default_motion_model_does_not_extrapolate():
     """The default is the one that cannot turn measurement noise into motion."""
-    assert WifiConfig(room_w=1, room_h=1, routers=[]).motion_model == "random-walk"
+    assert WifiConfig(room_w=1, room_id="room-01", room_d=1, routers=[]).motion_model == "random-walk"

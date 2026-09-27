@@ -129,7 +129,7 @@ python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skelet
 | Vendor credentials          | `services/vendor-adapter/.env`              | `Secret` (names come from the active vendor schema) |
 | Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
 | Asset Identity Map          | `dev/assets.json`                         | **PVC** (`ASSET_STORE_FILE`) seeded from `ASSET_SEED_FILE` |
-| Venue blueprint (georef)    | `dev/floor-plan.json` (first-boot seed)   | **PVC** (`BLUEPRINT_PATH`), seeded once from `BLUEPRINT_SEED_PATH` |
+| Venue blueprint (georef)    | `services/location-app/public/layout.json` (first-boot seed, bootstrapped from `layout.example.json`) | **PVC** (`BLUEPRINT_PATH`), seeded once from `BLUEPRINT_SEED_PATH` |
 
 The blueprint/bindings split and its cluster mounts are detailed in [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md); the georef workflow, if you re-calibrate for a new venue, in [`georeferencing.md`](georeferencing.md).
 

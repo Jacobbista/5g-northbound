@@ -66,3 +66,17 @@ def test_rotation_preserves_distance():
 def test_altitude_field_round_trips_through_model():
     origin = GpsOrigin(latitude=45.0, longitude=7.0, altitude_m=237.5)
     assert origin.altitude_m == 237.5
+
+
+def test_venue_altitude_is_origin_altitude_plus_height():
+    from app.services.geo import venue_altitude
+
+    assert venue_altitude(1.5, GpsOrigin(latitude=45.0, longitude=7.0, altitude_m=31.0)) == 32.5
+
+
+def test_venue_altitude_is_absent_without_height_or_origin_altitude():
+    from app.services.geo import venue_altitude
+
+    assert venue_altitude(None, GpsOrigin(latitude=45.0, longitude=7.0, altitude_m=31.0)) is None
+    assert venue_altitude(1.5, GpsOrigin(latitude=45.0, longitude=7.0)) is None
+    assert venue_altitude(1.5, None) is None

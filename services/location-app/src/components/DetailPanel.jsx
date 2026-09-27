@@ -1,38 +1,7 @@
 import { useDeviceDetails } from "../hooks/useDeviceDetails";
 import { useAnchorCalibration } from "../hooks/useAnchorCalibration";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
-
-const M_PER_DEG = 111320;
-
-// Invert the blueprint's floor-plan georef to room-local metres (canvas-y),
-// the SAME frame the scene + sidebar use. NOT the legacy env GPS_ORIGIN, which
-// produced the million-metre x/z the panel used to show. `frame` is null until
-// the blueprint loads; callers fall back to lat/lon.
-function gpsToRoomLocal(lat, lon, frame) {
-  if (!frame?.georef) return null;
-  const { lat0, lon0, az, roomX, roomY, fpH } = frame;
-  const east = (lon - lon0) * M_PER_DEG * Math.cos((lat0 * Math.PI) / 180);
-  const north = (lat - lat0) * M_PER_DEG;
-  const xFp = east * Math.cos(az) - north * Math.sin(az);
-  const yFp = east * Math.sin(az) + north * Math.cos(az);
-  return { x: xFp - roomX, z: (fpH - yFp) - roomY };
-}
-
-// Forward transform: room-local canvas-y (x right, y down) -> lat/lon, the exact
-// inverse of gpsToRoomLocal. Anchors are stored in the room frame with no native
-// lat/lon; georef them so the panel can show both. (x, y) here is (ap.x, ap.y).
-function roomLocalToGps(x, y, frame) {
-  if (!frame?.georef) return null;
-  const { lat0, lon0, az, roomX, roomY, fpH } = frame;
-  const xFp = x + roomX;
-  const yFp = fpH - (y + roomY);
-  const east = xFp * Math.cos(az) + yFp * Math.sin(az);
-  const north = -xFp * Math.sin(az) + yFp * Math.cos(az);
-  return {
-    lat: lat0 + north / M_PER_DEG,
-    lon: lon0 + east / (M_PER_DEG * Math.cos((lat0 * Math.PI) / 180)),
-  };
-}
+import { gpsToRoom, sceneToGps, sceneToRoom } from "../lib/venueFrame";
 
 const KIND_ICON = {
   forklift: "🚜",
@@ -255,11 +224,11 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosabl
               </div>
               {(() => {
                 const c = lastFix.area.center;
-                const p = gpsToRoomLocal(c.latitude, c.longitude, frame);
+                const p = gpsToRoom(c.latitude, c.longitude, frame);
                 return p ? (
                   <div style={statRow}>
-                    <span style={sLabel}>room x / z</span>
-                    <span style={sVal}>{p.x.toFixed(1)}, {p.z.toFixed(1)} m</span>
+                    <span style={sLabel}>room x / y</span>
+                    <span style={sVal}>{p.x.toFixed(1)}, {p.y.toFixed(1)} m</span>
                   </div>
                 ) : null;
               })()}
@@ -276,11 +245,11 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosabl
             <span style={sVal}>{t.latitude.toFixed(6)}, {t.longitude.toFixed(6)}</span>
           </div>
           {(() => {
-            const p = gpsToRoomLocal(t.latitude, t.longitude, frame);
+            const p = gpsToRoom(t.latitude, t.longitude, frame);
             return p ? (
               <div style={statRow}>
-                <span style={sLabel}>room x / z</span>
-                <span style={sVal}>{p.x.toFixed(1)}, {p.z.toFixed(1)} m</span>
+                <span style={sLabel}>room x / y</span>
+                <span style={sVal}>{p.x.toFixed(1)}, {p.y.toFixed(1)} m</span>
               </div>
             ) : null;
           })()}
@@ -414,10 +383,13 @@ function ApPanel({ ap, onClose, token, frame }) {
       <div style={sectionTitle}>anchor</div>
       <div style={statRow}>
         <span style={sLabel}>room x / y</span>
-        <span style={sVal}>{ap.x.toFixed(1)}, {ap.y.toFixed(1)} m</span>
+        <span style={sVal}>
+          {ap.x.toFixed(1)}, {(frame ? sceneToRoom(ap.x, ap.y, frame).y : ap.y).toFixed(1)} m
+        </span>
       </div>
       {(() => {
-        const g = roomLocalToGps(ap.x, ap.y, frame);
+        // The scene holds anchors in canvas axes: y there is the scene z.
+        const g = sceneToGps(ap.x, ap.y, frame);
         return g ? (
           <div style={statRow}>
             <span style={sLabel}>lat / lon</span>

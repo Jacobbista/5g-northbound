@@ -75,7 +75,7 @@ the editor stamps three fields into the floor plan's `georef`:
   "longitude": 17.949278,
   "azimuth_deg": -36.445,
   "width_m": 118.8,
-  "height_m": 110.9,
+  "depth_m": 110.9,
   "calibrated_against": "mapbox",
   "calibration_points": 4,
   "calibration_rms_m": 0.41

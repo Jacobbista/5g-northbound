@@ -126,7 +126,7 @@ def compute_position(scan: Scan, cfg: WifiConfig) -> Optional[tuple[float, float
         tx, n = _params_for(rid)
         dists.append(max(0.1, _rssi_to_distance(rssi, tx, n)))
     confidence = (len(router_rssi) / len(router_pos)) * 100 if router_pos else 0.0
-    room_diag = math.hypot(cfg.room_w, cfg.room_h)
+    room_diag = math.hypot(cfg.room_w, cfg.room_d)
 
     sol = None
     if cfg.algorithm == "trilateration" and len(points) >= 3:
@@ -144,7 +144,7 @@ def compute_position(scan: Scan, cfg: WifiConfig) -> Optional[tuple[float, float
 
     x, y, accuracy_m = sol
     clamped_x = max(0.0, min(cfg.room_w, x))
-    clamped_y = max(0.0, min(cfg.room_h, y))
+    clamped_y = max(0.0, min(cfg.room_d, y))
     if DEBUG:
         log.info(
             "wifi-debug: matched=%d/%d, scan_size=%d, "
@@ -233,28 +233,18 @@ class WifiAdapter:
                 x, y = tracker.update(x, y, dt, accuracy_m**2)
         self._last_ts[device_id] = ts
 
-        # Trilateration runs in room-local (canvas-y); lift to the engine's
-        # documented `local` frame (floor-plan-local, north-up) before caching.
-        fx, fz = self._to_floor_plan(x, y)
+        # Trilateration runs in the room frame, and the fix is reported in it.
+        # The engine places the room in the venue.
         self._cache[device_id] = Measurement(
             source=self.source,
-            x=fx,
-            y=0.0,
-            z=fz,
+            room=self.cfg.room_id,
+            x=x,
+            y=y,
             accuracy=accuracy_m,
             confidence=max(0.01, confidence / 100.0),
             timestamp=ts,
         )
         return True
-
-    def _to_floor_plan(self, x: float, y: float) -> tuple[float, float]:
-        """Room-local (canvas-y) -> floor-plan-local (north-up). Falls back to
-        room-local + base when no floor-plan height is known (no georef); the
-        engine degrades to (0, 0) WGS84 in that case anyway."""
-        fx = self.cfg.base_x + x
-        if self.cfg.fp_height_m > 0:
-            return fx, self.cfg.fp_height_m - (self.cfg.base_y + y)
-        return fx, self.cfg.base_y + y
 
     def get_measurement(self, device_id: str) -> Optional[Measurement]:
         # Always return the last fix with its real timestamp; the consumer decides
@@ -275,7 +265,7 @@ class WifiAdapter:
                 "role": "asset",
                 "sourceClass": "wifi",
                 "lastSeen": m.timestamp,
-                "position": {"x": m.x, "y": m.y, "z": m.z},
+                "position": {"frame": m.frame, "room": m.room, "x": m.x, "y": m.y},
                 **(
                     {"supersededIngestField": self._superseded_ingest[device_id]}
                     if device_id in self._superseded_ingest

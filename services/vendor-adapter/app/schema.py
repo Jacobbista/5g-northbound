@@ -8,7 +8,7 @@ is not auto-loaded.
 
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EnvRef(BaseModel):
@@ -108,27 +108,42 @@ FieldSpec = Union[ConstSpec, PathSpec]
 # --- Top-level schema -------------------------------------------------------
 
 
+FRAME_FIELDS = {"wgs84": ("latitude", "longitude"), "venue": ("x", "y")}
+
+
 class Mapping(BaseModel):
     """Mapping from the vendor response onto the engine `Measurement` fields.
 
-    `frame` is "wgs84" or "local". In wgs84 `latitude`/`longitude` are
-    geographic degrees; in a local frame they carry the room-local x / z in
-    metres (the field names are kept so one spec serves either frame). `y`
-    and `confidence` are optional and default to 0 when omitted. `accuracy`
-    is also optional: a vendor with no genuine per-fix radius omits it rather
-    than have the schema fabricate one (the engine substitutes a nominal
-    value for the adapter's accuracy_class instead).
+    `frame` is "wgs84" or "venue", and selects the horizontal pair:
+    `latitude`/`longitude` in wgs84, `x`/`y` in the venue frame (floor-plan
+    lower-left origin, x along the width, y along the depth). A constant frame
+    requires its pair and admits only that pair. A frame read from the payload
+    admits both pairs, and the resolved frame picks one per record. `z` is the
+    height above the venue floor in either frame, mapped only for a source that
+    measures it. `accuracy` is optional: a
+    vendor with no genuine per-fix radius omits it, and the engine substitutes
+    the nominal value of the adapter's accuracy_class.
     """
 
     model_config = ConfigDict(extra="forbid")
     frame: FieldSpec = Field(
-        description="Coordinate frame of the position: 'wgs84' (geographic) or 'local' (a room-local x/z grid in metres)."
+        description="Coordinate frame of the position: 'wgs84' (geographic) or 'venue' (metres from the floor-plan lower-left corner)."
     )
-    latitude: FieldSpec = Field(
-        description="wgs84: geographic latitude in degrees. local: the room-local x coordinate in metres."
+    latitude: Optional[FieldSpec] = Field(
+        default=None, description="wgs84 frame: geographic latitude in degrees."
     )
-    longitude: FieldSpec = Field(
-        description="wgs84: geographic longitude in degrees. local: the room-local z coordinate in metres."
+    longitude: Optional[FieldSpec] = Field(
+        default=None, description="wgs84 frame: geographic longitude in degrees."
+    )
+    x: Optional[FieldSpec] = Field(
+        default=None,
+        json_schema_extra={"x-unit": "m"},
+        description="venue frame: metres along the floor-plan width from its lower-left corner.",
+    )
+    y: Optional[FieldSpec] = Field(
+        default=None,
+        json_schema_extra={"x-unit": "m"},
+        description="venue frame: metres along the floor-plan depth from its lower-left corner.",
     )
     accuracy: Optional[FieldSpec] = Field(
         default=None,
@@ -145,9 +160,14 @@ class Mapping(BaseModel):
         default=None,
         description="Optional fix confidence in [0,1]. Omit when the vendor reports only an accuracy radius; defaults to 0.",
     )
-    y: Optional[FieldSpec] = Field(
+    z: Optional[FieldSpec] = Field(
         default=None,
-        description="Optional vertical coordinate (height / level) in metres. Omit for a 2D vendor; defaults to 0.",
+        json_schema_extra={"x-unit": "m"},
+        description=(
+            "Height above the venue floor, in either frame. Map it only when the source "
+            "measures height and declares `z: true`, translating another reference with a "
+            "`linear` transform. A record where it resolves to null carries no height."
+        ),
     )
     timestamp: FieldSpec = Field(
         description="Fix time. A PathSpec with format:'iso8601' coerces an ISO string to epoch seconds; a numeric epoch passes through.",
@@ -162,6 +182,28 @@ class Mapping(BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _horizontal_pair(self) -> "Mapping":
+        pairs = {
+            frame: [getattr(self, f) is not None for f in fields]
+            for frame, fields in FRAME_FIELDS.items()
+        }
+        for frame, present in pairs.items():
+            if any(present) and not all(present):
+                raise ValueError(f"{frame} frame: map both of {', '.join(FRAME_FIELDS[frame])}")
+        if isinstance(self.frame, ConstSpec):
+            frame = self.frame.const
+            if frame not in FRAME_FIELDS:
+                raise ValueError(f"frame must be one of {sorted(FRAME_FIELDS)}, got {frame!r}")
+            other = "venue" if frame == "wgs84" else "wgs84"
+            if not all(pairs[frame]):
+                raise ValueError(f"frame {frame!r} requires {', '.join(FRAME_FIELDS[frame])}")
+            if any(pairs[other]):
+                raise ValueError(f"frame {frame!r} admits only {', '.join(FRAME_FIELDS[frame])}")
+        elif not any(all(v) for v in pairs.values()):
+            raise ValueError("map latitude/longitude, x/y, or both")
+        return self
+
 
 class DiscoverMapping(BaseModel):
     """Field mapping for one entry in the vendor's device list.
@@ -175,7 +217,8 @@ class DiscoverMapping(BaseModel):
     label: Optional[FieldSpec] = None
     latitude: Optional[FieldSpec] = None
     longitude: Optional[FieldSpec] = None
-    height: Optional[FieldSpec] = Field(default=None, json_schema_extra={"x-unit": "m"})
+    # Mounting height above the venue floor, the vertical of every contract.
+    z: Optional[FieldSpec] = Field(default=None, json_schema_extra={"x-unit": "m"})
     # Native vendor device type (e.g. Wittra `deviceType`: "beacon" / "tag" /
     # "meshrouter" / "gateway"). Surfaced as `deviceType` on discovery and used
     # by the `classify` block's predicates to derive role + source_class.

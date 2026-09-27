@@ -115,8 +115,8 @@ The `Location` response gains optional fields (omitted when absent):
 | `source` | positioning modality (`wittra`/`wifi`/`fiveg`/`gnss`/`synthetic`) - a UWB fix is trusted differently from a WiFi fix at the same radius |
 | `kind` | asset class (`uwb-tag`/`tool`/`pallet`/`forklift`/…) |
 | `horizontalAccuracy` | horizontal uncertainty (m) as reported by the source, without the 1 m floor CAMARA sets on `area.radius`. The confidence level is the source's own |
-| `altitude` | fused vertical position (m); multi-floor / stacked storage that CAMARA's 2D Circle drops |
-| `verticalAccuracy` | vertical 1-sigma (m), when available |
+| `altitude` | height above the WGS84 ellipsoid (m), the datum of latitude and longitude, as in W3C Geolocation and 3GPP TS 23.032: the ellipsoidal height of the venue origin plus the measured height above the venue floor. Present when both exist. Covers multi-floor and stacked storage, which CAMARA's 2D Circle cannot express |
+| `verticalAccuracy` | 1-sigma of the measured height (m) as reported by the source, without the uncertainty of the origin survey |
 
 ### 3. Streaming delivery (gap 2)
 

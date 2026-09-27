@@ -5,12 +5,13 @@ where its hardware actually is, and there is nothing to place. This one
 synthesises the position, so where it starts is a choice, and the demo hands
 that choice to the operator.
 
-Coordinates are room-local canvas-y metres (origin top-left, x right, z down),
-the frame the walker keeps, the placement editor stores, and the demo's 3D
-scene renders. A point picked on screen needs no conversion on the way in.
+Coordinates are in the room frame: metres from the room's lower-left corner, x
+along the width, y along the depth. It is the frame the walker keeps and the
+blueprint stores.
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
@@ -24,13 +25,15 @@ router = APIRouter(tags=["placement"])
 class Placement(BaseModel):
     model_config = ConfigDict(extra="ignore")
     x: float
-    z: float
+    y: float
 
 
 class PlacementResult(BaseModel):
     id: str
+    # The room whose frame x and y are in.
+    room: Optional[str] = None
     x: float
-    z: float
+    y: float
     placed: bool
 
 
@@ -51,9 +54,9 @@ async def place(device_id: str, body: Placement, request: Request):
     """
     if not _served(device_id):
         raise HTTPException(404, detail=f"{device_id} not served by this adapter")
-    x, z = request.app.state.walker.place(device_id, body.x, body.z)
-    log.info("placed %s at room-local (%.2f, %.2f)", device_id, x, z)
-    return PlacementResult(id=device_id, x=x, z=z, placed=True)
+    x, y = request.app.state.walker.place(device_id, body.x, body.y)
+    log.info("placed %s at room (%.2f, %.2f)", device_id, x, y)
+    return PlacementResult(id=device_id, room=request.app.state.walker.room_id, x=x, y=y, placed=True)
 
 
 @router.delete("/devices/{device_id}/placement", response_model=PlacementResult)
@@ -69,4 +72,4 @@ async def remove(device_id: str, request: Request):
     existed = request.app.state.walker.remove(device_id)
     if existed:
         log.info("removed %s", device_id)
-    return PlacementResult(id=device_id, x=0.0, z=0.0, placed=False)
+    return PlacementResult(id=device_id, x=0.0, y=0.0, placed=False)

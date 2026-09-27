@@ -9,7 +9,10 @@ from app.walker import RandomWalker
 def app():
     from app.main import app as _app
     # ASGITransport does not trigger lifespan; populate state manually.
-    _app.state.walker = RandomWalker(settings)
+    walker = RandomWalker(settings)
+    # The room the blueprint would name; no engine runs in the tests.
+    walker.room_id = "room-01"
+    _app.state.walker = walker
     return _app
 
 

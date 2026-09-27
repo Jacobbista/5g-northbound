@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from ..blueprint import floor_plan_from_blueprint, save_blueprint, validate_blueprint
+from ..blueprint_migration import migrate_blueprint
 from ..config import settings
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ async def get_blueprint(request: Request) -> dict[str, Any]:
 
 @router.put("/blueprint")
 async def put_blueprint(request: Request, raw: dict[str, Any]) -> dict[str, Any]:
+    # A client still writing an older version is migrated here, so the store
+    # holds one version only.
+    raw = migrate_blueprint(raw)
     try:
         validate_blueprint(raw)
     except ValueError as exc:

@@ -26,19 +26,22 @@ async def get_measurement(device_id: str, request: Request):
         # for this cycle without entering cooldown, and the asset simply has no
         # position until it is placed.
         raise HTTPException(404, detail=f"{device_id} is not placed")
+    room = walker.ensure_room()
+    if room is None:
+        # The walk is in a room the blueprint has not named yet: the engine
+        # could not place the fix, so there is none to report.
+        raise HTTPException(404, detail="no blueprint room to report in")
     x, y, z, ts = walker.step(device_id)
     # Synthesised, not measured: read after the step that advanced the quality
     # they map from, so the pair matches the fix just produced.
     accuracy, confidence = walker.fidelity(device_id)
-    # The walker steps in room-local (canvas-y); lift to the engine's
-    # documented `local` frame (floor-plan-local, north-up) before emitting.
-    fx, fz = walker.project_to_floor_plan(x, z)
     return Measurement(
         source=settings.source,
-        frame="local",
-        x=round(fx, 4),
+        frame="room",
+        room=room,
+        x=round(x, 4),
         y=round(y, 4),
-        z=round(fz, 4),
+        z=round(z, 4),
         accuracy=accuracy,
         confidence=confidence,
         timestamp=ts,

@@ -11,7 +11,7 @@ from app.obs import correlator_var
 async def test_http_adapter_propagates_correlator():
     route = respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
-            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "source": "x", "x": 1.0, "y": 2.0,
             "accuracy": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
         })
     )
@@ -24,10 +24,10 @@ async def test_http_adapter_propagates_correlator():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_http_adapter_decodes_local_measurement():
+async def test_http_adapter_decodes_venue_measurement():
     respx.get("http://wifi-adapter:8080/measurement/dev1").mock(
         return_value=Response(200, json={
-            "source": "wifi", "x": 5.0, "y": 0.0, "z": 12.3,
+            "source": "wifi", "x": 5.0, "y": 12.3,
             "accuracy": 1.5, "confidence": 0.7, "timestamp": 1700000000.0,
         })
     )
@@ -36,8 +36,9 @@ async def test_http_adapter_decodes_local_measurement():
     await a.aclose()
     assert m is not None
     assert m.source == "wifi"
-    assert m.frame == "local"
-    assert m.x == 5.0 and m.z == 12.3
+    assert m.frame == "venue"
+    assert m.x == 5.0 and m.y == 12.3
+    assert m.z is None
     assert m.accuracy == 1.5
     assert m.timestamp == 1700000000.0
 
@@ -65,7 +66,7 @@ async def test_http_adapter_decodes_wgs84_measurement():
 @respx.mock
 async def test_http_adapter_uses_adapter_name_when_source_missing():
     respx.get("http://x/measurement/d").mock(
-        return_value=Response(200, json={"x": 1, "y": 0, "z": 2, "accuracy": 1, "confidence": 0.5})
+        return_value=Response(200, json={"x": 1, "y": 2, "accuracy": 1, "confidence": 0.5})
     )
     a = HttpAdapter("custom-name", "http://x")
     m = await a.get_measurement("d")
@@ -97,7 +98,7 @@ async def test_http_adapter_network_error_returns_none():
 async def test_http_adapter_sends_configured_headers():
     route = respx.get("http://wittra/measurement/dev1").mock(
         return_value=Response(200, json={
-            "source": "wittra", "x": 1.0, "y": 0, "z": 2.0,
+            "source": "wittra", "x": 1.0, "y": 2.0,
             "accuracy": 0.3, "confidence": 0.95,
         })
     )
@@ -175,7 +176,7 @@ async def test_http_adapter_success_resets_failure_counter():
             _httpx.ConnectError("down"),
             _httpx.ConnectError("down"),
             Response(200, json={
-                "source": "x", "x": 1, "y": 0, "z": 2,
+                "source": "x", "x": 1, "y": 2,
                 "accuracy": 1, "confidence": 0.5,
             }),
         ]
@@ -240,7 +241,7 @@ async def test_http_adapter_malformed_body_counts_as_failure():
 @respx.mock
 async def test_http_adapter_trailing_slash_normalised():
     respx.get("http://x/measurement/dev").mock(
-        return_value=Response(200, json={"source": "wifi", "x": 1, "y": 0, "z": 2,
+        return_value=Response(200, json={"source": "wifi", "x": 1, "y": 2,
                                           "accuracy": 1, "confidence": 0.5})
     )
     a = HttpAdapter("wifi", "http://x/")
@@ -256,7 +257,7 @@ async def test_measurement_carries_last_seen():
     # the engine can broadcast it as the liveness clock.
     respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
-            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "source": "x", "x": 1.0, "y": 2.0,
             "accuracy": 1.0, "confidence": 0.5,
             "timestamp": 1700000000.0, "lastSeen": 1700000600.0,
         })
@@ -273,10 +274,54 @@ async def test_measurement_last_seen_none_when_absent():
     # undetermined rather than being faked from the fix time.
     respx.get("http://x/measurement/dev1").mock(
         return_value=Response(200, json={
-            "source": "x", "x": 1.0, "y": 0.0, "z": 2.0,
+            "source": "x", "x": 1.0, "y": 2.0,
             "accuracy": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
         })
     )
     a = HttpAdapter("x", "http://x")
     m = await a.get_measurement("dev1")
     assert m.lastSeen is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_reads_height_and_leaves_it_absent_when_missing():
+    respx.get("http://a/measurement/with").mock(return_value=Response(200, json={
+        "source": "a", "x": 1.0, "y": 2.0, "z": 1.4, "accuracy": 1.0, "confidence": 0.5,
+    }))
+    respx.get("http://a/measurement/without").mock(return_value=Response(200, json={
+        "source": "a", "x": 1.0, "y": 2.0, "accuracy": 1.0, "confidence": 0.5,
+    }))
+    a = HttpAdapter("a", "http://a")
+    with_height = await a.get_measurement("with")
+    without = await a.get_measurement("without")
+    await a.aclose()
+    assert with_height.z == 1.4
+    assert without.z is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_reads_a_room_measurement():
+    respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
+        "source": "a", "frame": "room", "room": "room-01", "x": 1.0, "y": 2.0,
+        "accuracy": 1.0, "confidence": 0.5,
+    }))
+    a = HttpAdapter("a", "http://a")
+    m = await a.get_measurement("d")
+    await a.aclose()
+    assert (m.frame, m.room, m.x, m.y) == ("room", "room-01", 1.0, 2.0)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_rejects_an_unknown_frame():
+    # The retired "local" frame carried y as the vertical: reading it as a
+    # venue position would misplace the fix, so it is refused.
+    respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
+        "source": "a", "frame": "local", "x": 1.0, "y": 0.0, "z": 2.0,
+        "accuracy": 1.0, "confidence": 0.5,
+    }))
+    a = HttpAdapter("a", "http://a")
+    assert await a.get_measurement("d") is None
+    await a.aclose()

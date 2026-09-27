@@ -1,0 +1,124 @@
+{
+  "version": 3,
+  "floor_plans": [
+    {
+      "id": "fp-01",
+      "label": "Floor 6",
+      "image": null,
+      "georef": {
+        "latitude": 59.4042,
+        "longitude": 17.9492,
+        "azimuth_deg": -36.4,
+        "altitude_m": 31.0,
+        "width_m": 40,
+        "depth_m": 30
+      },
+      "scale_calibration_refs": [
+        {
+          "id": "ref-1",
+          "p1": [
+            2.0,
+            25.0
+          ],
+          "p2": [
+            12.0,
+            25.0
+          ],
+          "knownM": 10.0
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-01",
+      "label": "Lab",
+      "floor_plan_id": "fp-01",
+      "x_m": 4.0,
+      "y_m": 16.0,
+      "width_m": 10,
+      "depth_m": 8,
+      "rotation_deg": 0,
+      "wall_height_m": 3.0,
+      "anchors": [
+        {
+          "id": "AP01",
+          "technology": "wifi",
+          "x": 1.0,
+          "y": 7.0,
+          "z": 2.7,
+          "coverage_m": 30
+        },
+        {
+          "id": "UWB01",
+          "technology": "wittra",
+          "x": 9.0,
+          "y": 0.5,
+          "z": 3.0
+        }
+      ],
+      "walls": [
+        {
+          "x1": 5.0,
+          "y1": 8.0,
+          "x2": 5.0,
+          "y2": 2.0,
+          "thickness": 0.1,
+          "height_m": 3.0,
+          "openings": [
+            {
+              "start_m": 2.0,
+              "width_m": 1.0
+            }
+          ]
+        }
+      ],
+      "perimeter_openings": [
+        {
+          "edge_index": 1,
+          "start_m": 1.5,
+          "width_m": 1.2
+        }
+      ]
+    },
+    {
+      "id": "room-02",
+      "label": "Store",
+      "floor_plan_id": "fp-01",
+      "x_m": 20.0,
+      "y_m": 16.0,
+      "width_m": 6,
+      "depth_m": 4,
+      "rotation_deg": 30,
+      "shape": [
+        [
+          0.0,
+          4.0
+        ],
+        [
+          6.0,
+          4.0
+        ],
+        [
+          6.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ],
+      "anchors": [
+        {
+          "id": "AP02",
+          "technology": "wifi",
+          "x": 3.0,
+          "y": 3.0,
+          "z": 2.5
+        }
+      ],
+      "walls": [],
+      "perimeter_openings": []
+    }
+  ]
+}

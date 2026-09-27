@@ -100,7 +100,7 @@ asset never touches it.
 | **Adapter registry** | Adapters self-register with the engine; routing matches a capability's `source` to an adapter's registered name | [adapter-registry.md](adapter-registry.md) |
 | **Blueprint vs bindings** | Portable venue geometry (committable) vs per-venue secrets like BSSIDs (never committed) | [blueprint-vs-bindings.md](blueprint-vs-bindings.md) |
 | **Identity chain** | `assetId` → capability → `positioningId` → adapter → vendor fix | [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix) |
-| **Coordinate frames** | Room-local (editor) vs floor-plan north-up (engine) vs WGS84 (gateway) | [architecture.md](architecture.md) |
+| **Coordinate frames** | One convention for room and floor plan (x width, y depth, z up), placed in WGS84 by the georef | [architecture.md](architecture.md) |
 
 ## Where to go next
 
