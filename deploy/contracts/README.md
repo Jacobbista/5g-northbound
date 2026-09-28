@@ -1,55 +1,49 @@
-# Env contracts
+# Environment contracts
 
-Each production service ships its own `env.contract.yaml` next to its code:
-
-| Service             | Contract                                                                  |
-|---------------------|---------------------------------------------------------------------------|
-| camara-gateway      | [`../../services/camara-gateway/env.contract.yaml`](../../services/camara-gateway/env.contract.yaml)         |
-| positioning-engine  | [`../../services/positioning-engine/env.contract.yaml`](../../services/positioning-engine/env.contract.yaml) |
-| wifi-adapter    | [`../../services/wifi-adapter/env.contract.yaml`](../../services/wifi-adapter/env.contract.yaml)     |
-| placement-editor    | [`../../services/placement-editor/env.contract.yaml`](../../services/placement-editor/env.contract.yaml)     |
-| vendor-adapter        | [`../../services/vendor-adapter/env.contract.yaml`](../../services/vendor-adapter/env.contract.yaml)             |
-| location-app    | [`../../services/location-app/env.contract.yaml`](../../services/location-app/env.contract.yaml)     |
-
-The deploy portal discovers these by scanning `services/*/env.contract.yaml`
-(no central registry to keep in sync) and renders one form per service.
-
-## Schema
+Each published service declares the environment variables it reads in
+`services/<service>/env.contract.yaml`. The image bakes the file and serves it
+on `GET /contract`. `deploy/tools/contracts.py` reads every
+`services/*/env.contract.yaml`, so a new service needs no registration here.
 
 ```yaml
 service: <image name>
-description: <one-paragraph summary, surfaced in the form header>
+description: <what the service does>
+kind: ui | api | internal
+external_origin: <VARIABLE_NAME> | null
 
 required:
-  - name: <ENV_VAR_NAME>           # POSIX style, uppercase
-    description: <prompt shown to the operator>
-    sensitive: <true|false>        # true → k8s Secret, false → ConfigMap
-    type: <string|url|integer|number|boolean|path>
-                                   # optional, default string. Value shape, for
-                                   # form rendering and validation. Orthogonal
-                                   # to `sensitive`.
-    example: <optional placeholder>
-    runtime_layer: <optional>      # e.g. "window.__ENV__" when the var is
-                                   # read by the browser via env-config.js
-                                   # instead of by the backend at startup
+  - name: <VARIABLE_NAME>
+    description: <meaning>
+    sensitive: true | false
+    type: string | url | integer | number | boolean | path | json
+    example: <placeholder>
 
 optional:
-  - name: <ENV_VAR_NAME>
-    default: "<built-in default>"  # always quoted as a string
-    sensitive: <true|false>
-    description: <prompt>
-    runtime_layer: <optional>
+  - name: <VARIABLE_NAME>
+    default: "<default, as a string>"
+    description: <meaning>
+    sensitive: true | false
 ```
 
-## Conventions
+| Field | Meaning |
+|-------|---------|
+| `kind` | `ui` or `api` for a service reached from outside the cluster, `internal` otherwise |
+| `external_origin` | the variable under which KELT records the service's public origin. The image does not read it |
+| `sensitive` | `true` routes the value to a Secret, `false` to a ConfigMap. `GET /contract` never returns the default or example of a sensitive entry |
+| `type` | the shape of the value, for form rendering and validation |
+| `runtime_layer` | `window.__ENV__` for a browser variable that `entrypoint.sh` writes into `env-config.js` |
+| `set_by` | who provides the value: `compose` (the default, derived by the deployment), `operator` or `secret` |
+| `writable` | the service writes to this path at runtime, so it needs a persistent volume |
+| `consumed_by` | the services that read the value, when not only the declaring one |
 
-- `sensitive: true` → token / password / API key / client secret. Always
-  rendered as a password input in the form and emitted as a `Secret` value
-  in the generated manifest.
-- `sensitive: false` and stable → `ConfigMap`.
-- `runtime_layer: window.__ENV__` flags a frontend var that lives in the
-  generated `env-config.js`, not in a backend env block. The portal still
-  injects it via env var (consumed by the container's `entrypoint.sh`).
-- Variable names follow the convention of the consuming service (no global
-  prefix). The schema does not normalise - what the contract says is what
-  the container reads.
+A variable keeps its name and its sensitivity in every service that declares it.
+
+| Command | Effect |
+|---------|--------|
+| `make contracts` | lint the contracts and regenerate `sensitivity-manifest.json` |
+| `make env-check` | check the compose environment against the contracts |
+| `python3 deploy/tools/contracts.py render-k8s <service>` | print the ConfigMap and Secret for one service |
+
+`sensitivity-manifest.json` lists every variable with its routing and the
+services that use it. KELT reads it. CI fails when the committed file differs
+from the contracts.

@@ -1,290 +1,141 @@
 # Deployment
 
-This repository produces container images and exposes a deployment contract (environment variables, ConfigMap shape, port numbers, health probes). The companion repository `kelt` consumes that contract through Ansible roles that render Kubernetes manifests. This document covers the producer side.
+This repository publishes container images and, for each service, the
+environment contract that configures it. The KELT repository renders the
+Kubernetes manifests and pins the image versions that run on the testbed. This
+page covers what an image expects from its deployment.
 
 ## Images
 
-Seven images are published to GHCR. On a `v*` tag, CI rebuilds only the services
-whose code changed since the previous tag (see [CI](#ci)), so a release publishes
-exactly what it touched and image versions can differ between services:
+| Image | Port | Published |
+|-------|------|-----------|
+| `camara-gateway` | 8080 | yes |
+| `positioning-engine` | 8080 | yes |
+| `wifi-adapter` | 8080 | yes |
+| `vendor-adapter` | 8080 | yes |
+| `synthetic-adapter` | 8080 | yes |
+| `placement-editor` | 8080 | yes |
+| `location-app` | 80 | yes |
+| `mock-vendor` | 8080 | no, built from source by `make demo` |
 
-| Image                                                              | Source path                                    | Default port |
-|--------------------------------------------------------------------|------------------------------------------------|--------------|
-| `ghcr.io/jacobbista/5g-northbound/camara-gateway:<tag>`            | [`services/camara-gateway/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/camara-gateway/)        | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/positioning-engine:<tag>`        | [`services/positioning-engine/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/positioning-engine/)| 8080         |
-| `ghcr.io/jacobbista/5g-northbound/wifi-adapter:<tag>`          | [`services/wifi-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/wifi-adapter/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/placement-editor:<tag>`          | [`services/placement-editor/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/placement-editor/)    | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/location-app:<tag>`          | [`services/location-app/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/location-app/)    | 80           |
-| `ghcr.io/jacobbista/5g-northbound/vendor-adapter:<tag>`              | [`services/vendor-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/vendor-adapter/)            | 8080         |
-| `ghcr.io/jacobbista/5g-northbound/synthetic-adapter:<tag>`          | [`services/synthetic-adapter/`](https://github.com/Jacobbista/5g-northbound/tree/main/services/synthetic-adapter/)    | 8080         |
+A published image is `ghcr.io/jacobbista/5g-northbound/<image>:<version>`. The
+Python images run as the non-root user `app`, uid 1001. `location-app` is an
+nginx image serving the built bundle.
 
-The architecture diagram groups these by role, which is the right axis for
-understanding the system and the wrong one for deploying it. Grouped instead by
-where an image comes from and who may run it:
+An adapter that carries vendor SDKs or material under NDA is built in a private
+repository and implements the same adapter contract. The cluster runs it like
+a published adapter, with an `imagePullSecret`.
 
-```mermaid
-flowchart TD
-  subgraph pub["Published to GHCR from this repository"]
-    direction LR
-    GW[camara-gateway] ~~~ ENG[positioning-engine]
-    WIFI[wifi-adapter] ~~~ VEND[vendor-adapter]
-    SYN[synthetic-adapter] ~~~ APP[location-app]
-    EDIT[placement-editor]
-  end
+## Releases
 
-  subgraph demo["Built from source by make demo, never published"]
-    MOCK[mock-vendor]
-  end
-
-  subgraph priv["Published from a separate private repository"]
-    PRIV["vendor adapter carrying an NDA SDK"]
-  end
-
-  pub --> KELT[["kelt: Ansible renders the manifests<br/>and pins each image version"]]
-  priv --> KELT
-```
-
-Vendor SDKs and NDA material never enter this repository. Such an adapter ships
-as a private image that implements the same public HTTP contract, so the
-cluster composes it exactly like a published one.
-
-`synthetic-adapter` is published because a synthetic walking adapter is useful in the testbed for a demo device with no real hardware. `mock-vendor` is **not** published: it is a local schema-driven vendor cloud double used only by `make demo` (compose builds it from source); in the testbed `vendor-adapter` points at the real vendor cloud.
-
-Each rebuilt image publishes two references: the semver tag (`0.11.0`) and `latest`.
-
-### Which version is which
-
-Because a tag rebuilds only the changed services, the images drift apart in version.
-To see what a given release published, read its **[GitHub Release](https://github.com/Jacobbista/5g-northbound/releases)**: CI creates one per tag whose notes list the images built at that tag. For the current tag of any single image, the **[container registry](https://github.com/Jacobbista?tab=packages&repo_name=5g-northbound)** is authoritative. The versions actually **running** on the cluster are the pins in the KELT deployment repo (`all.yml`), not this repository.
-
-The Python services share a common Dockerfile pattern: multi-stage `python:3.11-slim`, non-root user, no shell entry point, `uvicorn` as PID 1. The demo image is `node:20-alpine` → `nginx:alpine` and serves a Vite-built bundle with a runtime configuration file (`env-config.js`) mounted from a ConfigMap and served `Cache-Control: no-cache`.
-
-GitHub Packages defaults each new package to private. They must be flipped to **Public** once per package, via *Repo → Packages → \<pkg\> → Package settings → Change visibility*. `GITHUB_TOKEN` cannot change visibility; this is a one-time manual step.
-
-## CI
-
-[`.github/workflows/test.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/test.yml) runs the Python and JavaScript test suites on every push and pull request. [`.github/workflows/build.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/build.yml) builds and pushes the images whose service changed on `v*` tags, then creates a GitHub Release listing them. Both use a matrix over services; a failure in one service does not block the others.
-
-To cut a release:
+A tag `v*` triggers
+[`build.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/build.yml).
+It builds the images whose `services/<image>` directory changed since the
+previous tag, pushes each as `<version>` and `latest`, and creates a GitHub
+Release that lists them. Image versions therefore differ between services.
+The GitHub Release names what a tag published. The KELT pins name what runs.
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.19.0
+git push origin v0.19.0
 ```
 
-On the first release each ghcr package is created private. Flip every package to **Public** once (Repo, Packages, the package, Package settings, Change visibility); `GITHUB_TOKEN` cannot do this.
+GHCR creates a new package as private. It is made public once, by hand, in the
+package settings.
 
-## Configuration mechanism (single, by convention)
+Every push runs
+[`test.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/test.yml)
+(the Python and JavaScript suites) and
+[`checks.yml`](https://github.com/Jacobbista/5g-northbound/blob/main/.github/workflows/checks.yml)
+(environment contracts and sensitivity manifest, positioning fabric, compose
+file, profiled specification freshness, leak scan).
 
-Every service in this repository takes its configuration through exactly one
-input: **pod environment variables**. There is no second mechanism, and a
-deploy tool can treat all services identically:
+## Configuration
 
-- Non-sensitive variables (a contract entry with `sensitive: false`) go in a
-  **ConfigMap**; sensitive ones in a **Secret**. Both are wired to the pod with
-  `envFrom`. The `sensitive` flag on each `/contract` entry is the only thing
-  that decides which.
-- **Frontends are not an exception.** `location-app` and `placement-editor`
-  run in the browser and cannot read pod env vars directly, so their image's
-  `entrypoint.sh` renders the same env vars into `env-config.js`
-  (`window.__ENV__`) at container start. The *source* is still pod env vars;
-  the file is an internal materialisation step, invisible to the deployer.
-- **Apply is uniform:** write the operator's answers into the service's
-  ConfigMap + Secret, then `kubectl rollout restart`. The frontend entrypoint
-  re-renders `env-config.js` on the restart. Same path for every service.
+A service is configured only through environment variables. Each service
+declares them in `env.contract.yaml` beside its code, in the format described in
+[`deploy/contracts`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/contracts/README.md),
+and a running pod serves the same declaration on `GET /contract`. The contract
+is the reference for names, defaults and meaning.
 
-**Anti-pattern, do not do this:** mounting `env-config.js` directly from a
-ConfigMap as a file. That predates the entrypoint and creates a second,
-divergent config path for the frontends. Always supply env vars via `envFrom`
-and let the entrypoint render the file. (In local `docker compose` the file is
-bind-mounted for hot-editing convenience; that is a dev affordance, not the
-cluster pattern.)
+A variable with `sensitive: true` goes into a Secret, every other one into a
+ConfigMap, and both reach the pod through `envFrom`.
+`deploy/contracts/sensitivity-manifest.json`, generated by `make contracts`,
+lists every variable with its routing for KELT.
 
-The worked example [`deploy/k8s/examples/placement-editor.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/k8s/examples/placement-editor.yaml)
-follows this exactly: `envFrom` a ConfigMap + a Secret, no file-mounted
-`env-config.js`. Copy it; do not reintroduce the file mount.
-
-## Deploying to the testbed
-
-End-to-end path from a green build to running pods. The manifests live in the companion repository; this section is the producer-side checklist.
-
-**1. Read what each service needs.** Every service declares its environment surface in `env.contract.yaml` next to its code. Inspect them without leaving the repo:
+`location-app` and `placement-editor` run in the browser. At start their
+`entrypoint.sh` writes the variables marked `runtime_layer: window.__ENV__`
+into `env-config.js`, so these too are set as pod environment. A changed Secret
+or ConfigMap takes effect after `kubectl rollout restart`.
 
 ```bash
-make env-check                                       # required vars per service + where each is set
-python3 deploy/tools/contracts.py validate -v        # full per-var breakdown
-python3 deploy/tools/contracts.py render-k8s <svc>   # ConfigMap + Secret skeleton with <FILL> sentinels
+make env-check                                        # compose environment against the contracts
+python3 deploy/tools/contracts.py render-k8s <image>  # ConfigMap and Secret skeleton for one service
 ```
 
-`sensitive: true` in a contract means the value belongs in a `Secret`; `false` means a `ConfigMap`. `runtime_layer: window.__ENV__` flags a browser variable that the container's `entrypoint.sh` renders into `env-config.js` at start, so it is still supplied as a normal pod env var.
+## Wiring
 
-**2. Copy the manifest pattern.** [`deploy/k8s/examples/placement-editor.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/k8s/examples/placement-editor.yaml) is a complete worked example: ConfigMap + Secret + Deployment (`envFrom` both, `fsGroup` for the writable PVC) + PVC + Service. Replicate it per service, filling values from that service's contract. The per-variable tables below add the cross-service context (which URL points where) that does not fit a contract field.
+| Service | Variable | Points to |
+|---------|----------|-----------|
+| camara-gateway | `POSITIONING_ENGINE_URL` | positioning-engine |
+| camara-gateway | `WIFI_ADAPTER_URL` | wifi-adapter, for `GET /anchors/calibration`. Empty disables that route |
+| camara-gateway | `KEYCLOAK_URL`, `KEYCLOAK_REALM` | the identity provider that signs the tokens |
+| each adapter | `POSITIONING_ENGINE_URL` | positioning-engine, to register and to read the blueprint |
+| each adapter | `ADAPTER_BASE_URL` | the adapter's own Service, which the engine polls |
+| placement-editor | `POSITIONING_ENGINE_URL`, `WIFI_ADAPTER_URL`, `VENDOR_ADAPTER_URL` | the services its proxy routes reach |
+| location-app | `VITE_CAMARA_API_BASE`, `VITE_KEYCLOAK_URL` | the gateway and the identity provider, as the browser reaches them |
 
-**3. Carry the data that never enters the repo.** These are gitignored locally and become cluster resources:
+The engine needs no adapter list: each adapter registers itself and sends a
+heartbeat ([adapter registry](adapter-registry.md)). `ADAPTER_URLS` on the
+engine only seeds an empty registry.
 
-| Artifact                    | Local source                              | Cluster resource                                  |
-|-----------------------------|-------------------------------------------|---------------------------------------------------|
-| Blueprint (geometry)        | editor `↓ export`                         | PVC shared by placement-editor + engine + demo    |
-| Bindings (BSSIDs, calib.)   | `dev/wifi-config.local.json`              | writable PVC on wifi-adapter                  |
-| Vendor credentials          | `services/vendor-adapter/.env`              | `Secret` (names come from the active vendor schema) |
-| Mapbox token                | editor `env-config.js`                    | `Secret`, injected as `VITE_MAPBOX_TOKEN`          |
-| Asset Identity Map          | `dev/assets.json`                         | **PVC** (`ASSET_STORE_FILE`) seeded from `ASSET_SEED_FILE` |
-| Venue blueprint (georef)    | `services/location-app/public/layout.json` (first-boot seed, bootstrapped from `layout.example.json`) | **PVC** (`BLUEPRINT_PATH`), seeded once from `BLUEPRINT_SEED_PATH` |
+Every service runs behind a `ClusterIP` Service. Only camara-gateway,
+location-app and placement-editor are reached from outside, and each of their
+contracts names the variable that holds its public origin
+(`external_origin`). The edge wifi-scanner posts to wifi-adapter from outside
+the cluster.
 
-The blueprint/bindings split and its cluster mounts are detailed in [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md); the georef workflow, if you re-calibrate for a new venue, in [`georeferencing.md`](georeferencing.md).
+## Storage
 
-**4. Rotate secrets without a rebuild.** Edit the `Secret`, then `kubectl rollout restart`. Frontend containers regenerate `env-config.js` from env vars at start, so a restart is enough; no image rebuild.
+| Service | Variable | Content | Volume |
+|---------|----------|---------|--------|
+| positioning-engine | `BLUEPRINT_PATH`, `ADAPTER_REGISTRY_PATH` | the blueprint, the seeded adapter registrations | persistent volume at `/app/data` |
+| camara-gateway | `ASSET_STORE_FILE` | the asset map | persistent volume at `/app/data` |
+| wifi-adapter | `WIFI_CONFIG_PATH` | the bindings and the calibration survey | persistent volume |
+| vendor-adapter | `SCHEMA_FILE` | the vendor schema | ConfigMap, read-only |
 
-## Environment variables
+Each persistent volume is written by one pod, so `ReadWriteOnce` suffices. The
+pod needs `fsGroup: 1001` to write it. A volume starts empty.
+`BLUEPRINT_SEED_PATH` and `ASSET_SEED_FILE` name a read-only file that is
+copied in once when the store is absent. The bindings are seeded with
+`PUT /bindings`, through the editor's `⇪ import bindings`.
 
-Every service ships an authoritative declaration of its environment surface
-next to its code as `env.contract.yaml` (required vs optional, sensitive flag,
-default, description, runtime layer). The tables below mirror those contracts
-and add the cross-service context that does not fit a YAML field - but if a
-value disagrees, the contract is the source of truth.
+The real blueprint, bindings and asset map, and the vendor credentials, never
+enter this repository. The committed files under `dev/` and
+`services/location-app/public/layout.example.json` are placeholders
+([blueprint and bindings](blueprint-vs-bindings.md),
+[asset registry](asset-registry.md)).
 
-Discover them locally:
+## Probes
 
-```bash
-make env-check                                       # what each service needs and where to set it
-python3 deploy/tools/contracts.py validate -v        # full per-var breakdown
-python3 deploy/tools/contracts.py render-k8s <svc>   # preview a ConfigMap + Secret pair
-```
+| Service | Liveness | Readiness |
+|---------|----------|-----------|
+| wifi-adapter | `/health` | `/ready`: `503` until the blueprint is loaded |
+| vendor-adapter | `/health` | `/ready`: `503` without a schema, or with one that contradicts `ADAPTER_CAPABILITIES` |
+| synthetic-adapter | `/health` | `/ready` |
+| camara-gateway, positioning-engine, placement-editor | `/health` | `/health` |
+| location-app | `/` | `/` |
 
-### camara-gateway
+A pod that is not ready still answers `/health` and `/contract`, so its
+configuration can be read and corrected.
 
-| Variable                  | Default                                                | Notes |
-|---------------------------|--------------------------------------------------------|-------|
-| `KEYCLOAK_URL`            | `http://keycloak.iam.svc.cluster.local:8080`           | Full base URL including any path prefix |
-| `KEYCLOAK_REALM`          | `5g-testbed`                                           | |
-| `REQUIRED_ROLE`           | `camara-location-read`                                 | Realm role required to call CAMARA endpoints |
-| `POSITIONING_ENGINE_URL`  | empty (mock fallback)                                  | Engine base URL; gateway calls `GET /position/{positioning_id}?source=` |
-| `WIFI_ADAPTER_URL`    | empty                                                  | wifi-adapter base URL, proxied by `/anchors/calibration` so the demo reads real per-AP RF. Empty disables that extension |
-| `ASSET_STORE_FILE`        | `/app/data/assets.json`                                | **Writable** Asset Identity Map store. Back it with a **PVC** (not a read-only ConfigMap) so `PUT /assets` survives restart/upgrade. Content is tenant inventory (Tier-1): never committed |
-| `ASSET_SEED_FILE`         | `/app/config/assets.seed.json`                         | Read-only seed copied into the store once on first boot when it is empty. Conforms to `schema/asset.schema.json` |
-| `SKIP_AUTH`               | `false`                                                | Development override only, bypasses JWT validation for every endpoint except `/health` |
+## Adding an adapter
 
-The gateway also exposes **vendor-extension** endpoints used by the demo UI (not part of CAMARA): `GET /assets`, `GET /assets/{assetId}/details`, `GET /capabilities`, `GET /anchors/calibration`. Auth and error envelope are identical to the CAMARA routes, and all are `org`-scoped. See [`data-contracts.md`](data-contracts.md#vendor-extensions-on-the-gateway).
+1. Deploy the adapter with a `ClusterIP` Service in the engine's namespace.
+2. Set `POSITIONING_ENGINE_URL`, `ADAPTER_NAME`, `ADAPTER_BASE_URL` and
+   `ADAPTER_CAPABILITIES` ([what an adapter declares](adapters.md#what-an-adapter-declares)).
+3. The adapter registers at start and sends a heartbeat. The engine drops it
+   after `ADAPTER_TTL_S` (45 s) without one.
+4. Assets reach it through capabilities whose `source` is its `ADAPTER_NAME`.
 
-### positioning-engine
-
-| Variable                | Default                              | Notes |
-|-------------------------|--------------------------------------|-------|
-| `ADAPTER_URLS`          | empty                                | Comma-separated `name=url` entries (e.g. `wifi=http://wifi-adapter:8080,synthetic=http://synthetic-adapter:8080`). A bare URL is accepted as a back-compat shortcut and gets an auto-generated name. Empty → no measurements produced |
-| `DEVICE_MAP`            | empty                                | Optional cold-start override: comma-separated `positioning_id=adapter_name` pins. Routing prefers the source the gateway passes for the capability being resolved (the adapter whose `ADAPTER_NAME` matches); `DEVICE_MAP` is only consulted when `source` is unset or matches nothing; unlisted ids then fan out to every adapter and are fused. Normally unset |
-| `FUSION_STRATEGY`       | `weighted_avg`                       | Name of the primary fusion strategy (see [`fusion-strategies.md`](fusion-strategies.md)) |
-| `FUSION_COMPARE`        | empty                                | Optional comma-separated strategies whose outputs are surfaced under `fusions` for side-by-side rendering. Demo / research feature; leave empty in production |
-| `BLUEPRINT_PATH`        | `/app/data/blueprint.json`           | The engine's own writable copy of the venue blueprint; it is the blueprint authority and serves it at `GET/PUT /blueprint`. Needs a PVC, not a ConfigMap |
-| `BLUEPRINT_SEED_PATH`   | empty                                | One-time read-only seed migrated into the store on first boot when `BLUEPRINT_PATH` is empty. Unset in steady state: the editor PUTs the blueprint over HTTP |
-| `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
-| `DEVICE_IDS`            | `uwb-tag-001`                        | Cold-start seed for the WebSocket broadcast; normally unset, since the engine learns its target ids from adapters advertising the `devices` capability |
-| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{positioningId}`. See [`adapters.md`](adapters.md#engine-options-per-adapter) |
-| `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
-| `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
-
-### wifi-adapter
-
-| Variable           | Default                          | Notes |
-|--------------------|----------------------------------|-------|
-| `WIFI_CONFIG_PATH` | `/app/config/wifi-config.json`   | Path to the per-venue **bindings** file: tunables (`tx_power`, `path_loss_n`, `algorithm`, smoothing), the `id → BSSIDs` map, the persistent `calibration_samples`, and per-AP overrides. In docker compose, mounted from `dev/wifi-config.json` (or `dev/wifi-config.local.json` when present). In Kubernetes, mounted from a writable PVC because the calibration tool writes samples and overrides back at runtime. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md#calibration). |
-| `LAYOUT_PATH`      | unset                            | Optional path to the placement-editor **blueprint** JSON. When set, anchor positions are taken from `rooms[0].anchors` (where `technology == "wifi"`) and joined to the bindings file by anchor `id`. Unset → legacy mode where the bindings file must carry positions inline. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md). |
-
-The split into blueprint + bindings is a deliberate architectural choice: blueprints are portable across clusters and never contain secrets, bindings are per-venue and never committed. Skim [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) before configuring a real venue.
-
-### synthetic-adapter
-
-Synthetic adapter driving a waypoint walker, with wall and opening collision when a blueprint is available. No external configuration file; bounds and motion parameters come from environment variables. Implements the same adapter contract as `wifi-adapter`, so the engine treats them uniformly.
-
-| Variable      | Default | Notes |
-|---------------|---------|-------|
-| `SOURCE`      | `synthetic`  | Tag set on every measurement (surfaces in `sources[]` northbound) |
-| `WIDTH_M`     | `20.0`  | Room width along x (metres); positions are clamped to `[0, WIDTH_M]` |
-| `DEPTH_M`     | `30.0`  | Room depth along z |
-| `HEIGHT_M`    | `3.0`   | Room height along y |
-| `SPEED_MPS`   | `1.0`   | Walking speed for the waypoint walker (m/s). 1.0 reads as indoor ambling |
-| `STEP_M`      | `0.3`   | Legacy random-walk step per poll (metres). Kept so old configs parse; the waypoint walker does not use it |
-| `LAYOUT_PATH` | unset   | Optional placement-editor layout JSON. When set and readable the walker loads inner walls + openings and stays inside the room geometry; unset it rectangles inside the `WIDTH_M` x `DEPTH_M` box |
-| `DEVICE_IDS`  | empty   | Device ids this source serves (CSV). Empty serves every id, which pollutes fusion when the engine fans out; set it so the adapter 404s for devices it does not own |
-| `ANCHOR_IDS`  | empty   | Fixed infrastructure ids (CSV), surfaced on `/devices` with `role=infrastructure`. Not walked, so `/measurement` 404s for them |
-| `SOURCE_CLASS`| `uwb`   | Positioning technology this synthetic source stands in for; surfaced as `sourceClass` on `/devices` |
-| `ACCURACY_M`  | `1.5`   | Fixed accuracy reported on every measurement |
-| `CONFIDENCE`  | `0.6`   | Fixed confidence reported on every measurement |
-| `RNG_SEED`    | `0`     | Set non-zero for reproducible trajectories in tests / recordings |
-
-### vendor-adapter
-
-Generic, schema-driven translator from a vendor REST positioning API onto the engine's adapter contract. One pod per vendor. In production the schema is durable cluster config: a **ConfigMap mounted at `SCHEMA_FILE`, changed + `kubectl rollout restart`** (see [`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). `PUT /schema` is a dev / preview hot-patch only - on a ConfigMap mount it applies live but does not persist, and the ConfigMap re-wins on restart.
-
-| Variable        | Default                       | Notes |
-|-----------------|-------------------------------|-------|
-| `SCHEMA_FILE`   | `/app/data/schema.json`       | Path the schema is read from. Production: mount a ConfigMap here (read-only) and roll out to change it. Compose bind-mounts the example for the demo |
-
-Vendor-specific env vars (base URL override, credentials, path-template parameters) are referenced *by name* from inside the schema, so the adapter pod needs `WITTRA_API_KEY`, `WITTRA_ORG_ID`, etc. (or your vendor's equivalents) mounted from a Kubernetes `Secret`. The schema itself contains no credentials and is safe to keep in a `ConfigMap`.
-
-### mock-vendor
-
-Schema-driven vendor cloud double. Demo / CI only, never deployed alongside the real adapter. It reads the same schema `vendor-adapter` consumes and serves responses that satisfy it, on the URL paths and behind the auth that schema declares.
-
-| Variable       | Default                    | Notes                                          |
-|----------------|----------------------------|------------------------------------------------|
-| `SCHEMA_FILE`  | `/app/config/schema.json`  | The vendor schema to serve; mount the same one `vendor-adapter` uses |
-
-The account values and credentials it expects come from the env vars the schema's `path_vars` / `auth` blocks reference (for the Wittra example: `WITTRA_ORG_ID`, `WITTRA_PROJECT_ID`, `WITTRA_API_KEY`).
-
-### placement-editor
-
-| Variable      | Default                       | Notes |
-|---------------|-------------------------------|-------|
-| `LAYOUT_FILE` | `/app/data/layout.json`       | Path the editor reads from and writes to. Mount the same artefact (volume / ConfigMap-backed PVC) on the engine and demo so changes flow through |
-
-The editor's drag-drop UI is not implemented yet (`v0.0.1` is a scaffold). The HTTP surface is stable: `GET /api/layout`, `PUT /api/layout`, `GET /health`. Auth is not wired in for the scaffold, production deployments MUST front it with a Keycloak-protected ingress and the realm role `placement-admin` until the service grows its own JWT middleware (planned).
-
-### location-app
-
-Runtime configuration is injected through `/usr/share/nginx/html/env-config.js`, served `Cache-Control: no-cache`. The image's `entrypoint.sh` regenerates this file from container env vars at every pod start, so a Secret / ConfigMap update only needs a `kubectl rollout restart`. The image build itself does not bake any of these values in.
-
-Full variable list (names, required vs optional, sensitivity, defaults) lives in [`../services/location-app/env.contract.yaml`](https://github.com/Jacobbista/5g-northbound/blob/main/services/location-app/env.contract.yaml). Edit the contract, not this section, when adding a variable; the deploy portal reads the contract to render the operator form.
-
-## Health probes
-
-Every service exposes `GET /health` returning `200 {"status": "ok"}` with no authentication. Use it for both `readinessProbe` and `livenessProbe`. Initial delays should account for the startup work: floor plan loading, JWKS fetch, AP map parsing.
-
-## Registering an asset
-
-Assets live in the gateway's **Asset Identity Map**, a writable JSON store the gateway is the authority for (`GET/PUT /assets`). Unlike the old device registry, it is mutated at runtime, not edited-and-restarted.
-
-### Entry shape
-
-```json
-{
-  "asset_id":       "pkg-4471",
-  "positioning_id": "wittra-tag-01",
-  "source":         "wittra",
-  "kind":           "pallet",
-  "org":            "acme",
-  "label":          "Timber bundle 01"
-}
-```
-
-Full field reference and the schema (`schema/asset.schema.json`) are in [`data-contracts.md`](data-contracts.md#asset-identity-map). The two contracts that must hold: `positioning_id` == the vendor-native device id, and `source` == the adapter's `ADAPTER_NAME`.
-
-### How it is consumed
-
-| Environment | Source                                                                                  |
-|-------------|------------------------------------------------------------------------------------------|
-| compose     | [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json) seed → persisted to the writable store on first boot |
-| Kubernetes  | `ASSET_SEED_FILE` (ConfigMap) seeds a **PVC** at `ASSET_STORE_FILE` once; thereafter the store is the source of truth |
-
-Register or update an asset at runtime with `PUT /assets` and the operator token, no restart. The demo discovers the tenant's assets via `GET /assets`. Because the store is a PVC, runtime changes survive restart and upgrade.
-
-## Adding a new adapter to a running cluster
-
-1. Deploy the adapter (Deployment + ClusterIP Service) in the same namespace as the engine. Adapters that contain vendor code or NDA material ship as private images with an `imagePullSecret`.
-2. Append the adapter's Service URL to the engine's `ADAPTER_URLS` (edit the engine ConfigMap or environment).
-3. Restart the engine pod to pick up the new list. The engine reads `ADAPTER_URLS` at startup; a `checksum/config` annotation on the engine Deployment automates the rolling restart on ConfigMap change.
-
-The adapter contract is documented in full in [`adapters.md`](adapters.md).
-
-## Local development
-
-The host-level quick start (`docker compose up --build`, port table, CAMARA call example) lives in the top-level [README](https://github.com/Jacobbista/5g-northbound/blob/main/README.md). This document covers the producer-side contract: images, environment variables, ConfigMap shape, health probes. Anything that differs between *what the image expects* and *how a local compose run wires it up* is intentional, the compose file is one consumer of this contract; Kubernetes is the other.
+The engine and the gateway are not restarted.

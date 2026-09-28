@@ -1,66 +1,34 @@
 # Kubernetes manifests
 
-Skeleton + worked example for the testbed deployment. The deploy portal (TBD)
-discovers each service's [env.contract.yaml](../contracts/README.md), reads
-operator answers, and emits the manifests in this directory.
+The testbed manifests are rendered by the KELT repository. This directory
+holds the namespace and one example:
 
-## Layout
+| File | Content |
+|------|---------|
+| `namespace.yaml` | the `5g-northbound` namespace |
+| `examples/placement-editor.yaml` | ConfigMap, Secret, Deployment and Service for one service |
 
-```
-deploy/k8s/
-├── README.md
-├── namespace.yaml                # 5g-northbound namespace
-├── examples/
-│   └── placement-editor.yaml     # End-to-end example: ConfigMap + Secret + Deployment + Service
-└── <service>.yaml                # Per-service manifests, emitted by the deploy portal
-```
+Every service follows the same pattern:
 
-## Single config mechanism
+1. **ConfigMap** with the contract entries marked `sensitive: false`.
+2. **Secret** (`Opaque`) with the entries marked `sensitive: true`.
+3. **Deployment** that loads both with `envFrom`, so a new variable needs no
+   change to the Deployment. Probes as in
+   [deployment](../../docs/deployment.md#probes).
+4. **Service** of type `ClusterIP`.
 
-Every service is configured through exactly one input: **pod environment
-variables**. Non-sensitive contract entries go in a ConfigMap, sensitive ones
-in a Secret, both wired with `envFrom`. This holds for the frontends too:
-`location-app` and `placement-editor` cannot read pod env from the browser,
-so their `entrypoint.sh` renders the same env vars into `env-config.js`
-(`window.__ENV__`) at container start. The file is an internal step; the input
-is still env vars.
+`python3 deploy/tools/contracts.py render-k8s <service>` prints the ConfigMap
+and the Secret from the service's contract. A service that stores data mounts
+the persistent volume listed in
+[deployment](../../docs/deployment.md#storage).
 
-**Do not mount `env-config.js` from a ConfigMap as a file.** That is a second,
-divergent config path that predates the entrypoint and breaks the uniform
-"patch ConfigMap/Secret, then rollout" apply. Supply env vars via `envFrom` and
-let the entrypoint render the file. `examples/placement-editor.yaml` follows
-this; copy it, do not reintroduce a file mount.
+`location-app` and `placement-editor` receive their browser settings as
+environment variables too: `entrypoint.sh` writes them into `env-config.js`
+at start. The file is not mounted from a ConfigMap.
 
-## Pattern per service
-
-Each service's manifest contains four resources (concatenated with `---`):
-
-1. **ConfigMap** - every env contract entry with `sensitive: false`.
-2. **Secret** - every env contract entry with `sensitive: true`. Always
-   `type: Opaque`.
-3. **Deployment** - one pod, image pulled from
-   `ghcr.io/<owner>/5g-northbound/<image>:<tag>`. `envFrom:` references both
-   the ConfigMap and the Secret above so the operator never edits the
-   Deployment to add a new env var. Point `livenessProbe` at `/health` and
-   `readinessProbe` at `/ready` (where the service exposes it) so a
-   misconfigured pod stays alive and keeps serving `/contract` while being
-   held out of rotation.
-4. **Service** - `ClusterIP`. Cross-service URLs live in the ConfigMap of
-   the consumer, never hard-coded in code.
-
-## Rotating a secret
+To rotate a secret:
 
 ```sh
 kubectl -n 5g-northbound edit secret <service>-secrets
 kubectl -n 5g-northbound rollout restart deployment <service>
 ```
-
-Frontend services (location-app, placement-editor) regenerate their
-`env-config.js` from env vars at container start via `entrypoint.sh`, so a
-restart is enough - no image rebuild.
-
-## Worked example
-
-See [`examples/placement-editor.yaml`](examples/placement-editor.yaml) for the
-full shape including the optional Mapbox token (mounted from a Secret and
-injected as the `VITE_MAPBOX_TOKEN` env var that the entrypoint reads).
