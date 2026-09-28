@@ -59,6 +59,10 @@ async def get_position(
             strategy=result.primary.name,
             fusions=fusions,
             altitude=altitude,
+            establishedAt=(
+                ts_to_iso(primary.establishedAt) if primary.establishedAt is not None else None
+            ),
+            current=primary.current,
         )
     except HTTPException:
         raise

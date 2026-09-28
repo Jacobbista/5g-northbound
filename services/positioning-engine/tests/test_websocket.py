@@ -5,7 +5,7 @@ class _Fused:
     def __init__(self, diagnostics, lastSeen=None):
         self.x = 1.0; self.z = 2.0; self.y = None
         self.accuracy = 0.9; self.sources = ["wittra"]
-        self.timestamp = None; self.diagnostics = diagnostics
+        self.timestamp = 1757000000.0; self.diagnostics = diagnostics
         self.lastSeen = lastSeen
 
 

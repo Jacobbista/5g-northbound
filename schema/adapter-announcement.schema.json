@@ -113,6 +113,39 @@
           "description": "Accepts a placement, for a synthetic source.",
           "title": "Placement",
           "type": "boolean"
+        },
+        "reporting": {
+          "anyOf": [
+            {
+              "enum": [
+                "on_request",
+                "periodic",
+                "on_motion"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the source produces fixes. `on_request`: a fix at each poll. `periodic`: a fix at least every `reportingInterval`. `on_motion`: a fix whenever the device moves, and a communication at least every `reportingInterval` while it is still. Undeclared, the source counts as `periodic` without an interval, and its fixes are never current.",
+          "title": "Reporting"
+        },
+        "reportingInterval": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest time between two reports the source guarantees, transport included. Required with `periodic` and `on_motion`.",
+          "title": "Reportinginterval",
+          "x-unit": "s"
         }
       },
       "title": "Adapter capabilities",

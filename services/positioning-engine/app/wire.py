@@ -10,6 +10,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Frame = Literal["venue", "room", "wgs84"]
+Reporting = Literal["on_request", "periodic", "on_motion"]
 
 # Coordinates each frame requires.
 FRAME_COORDINATES: dict[str, tuple[str, str]] = {
@@ -84,13 +85,16 @@ class MeasurementBody(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="The source's own reliability score, a multiplier on the fusion weight.",
     )
-    timestamp: Optional[float] = Field(
-        default=None, json_schema_extra={"x-unit": "s"},
+    timestamp: float = Field(
+        json_schema_extra={"x-unit": "s"},
         description="When the fix was taken, Unix epoch seconds.",
     )
     lastSeen: Optional[float] = Field(
         default=None, json_schema_extra={"x-unit": "s"},
-        description="When the device last communicated with its source, Unix epoch seconds.",
+        description=(
+            "When the device last communicated with its source, Unix epoch seconds. For a source "
+            "that declares `reporting: on_motion`, it confirms that the last fix still holds."
+        ),
     )
     diagnostics: dict = Field(
         default_factory=dict, description="Stream-tier diagnostics, carried to the position stream.",
@@ -129,6 +133,28 @@ class AdapterCapabilities(BaseModel):
     discover: bool = Field(default=False, description="Serves GET /discover, the vendor device list.")
     diagnostics: bool = Field(default=False, description="Serves GET /diagnostics/{positioningId}.")
     placement: bool = Field(default=False, description="Accepts a placement, for a synthetic source.")
+    reporting: Optional[Reporting] = Field(
+        default=None,
+        description=(
+            "How the source produces fixes. `on_request`: a fix at each poll. `periodic`: a fix at "
+            "least every `reportingInterval`. `on_motion`: a fix whenever the device moves, and a "
+            "communication at least every `reportingInterval` while it is still. Undeclared, the "
+            "source counts as `periodic` without an interval, and its fixes are never current."
+        ),
+    )
+    reportingInterval: Optional[float] = Field(
+        default=None, gt=0, json_schema_extra={"x-unit": "s"},
+        description=(
+            "Longest time between two reports the source guarantees, transport included. "
+            "Required with `periodic` and `on_motion`."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _interval_for_reporting(self) -> "AdapterCapabilities":
+        if self.reporting in ("periodic", "on_motion") and self.reportingInterval is None:
+            raise ValueError(f"reporting {self.reporting!r} requires reportingInterval")
+        return self
 
 
 class Announcement(BaseModel):

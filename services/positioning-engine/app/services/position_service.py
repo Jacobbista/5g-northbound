@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -13,6 +14,34 @@ from ..models import FloorPlan
 from .geo import gps_to_local, room_to_venue
 
 log = logging.getLogger(__name__)
+
+
+def established_at(m: Measurement, caps: dict) -> Optional[float]:
+    """The latest moment at which the measured position is known to hold. A
+    source reporting on motion confirms its last fix with every
+    communication, so the later of the fix time and lastSeen. Any other
+    source, or one that declares nothing, only by the fix itself."""
+    if m.timestamp is None:
+        return None
+    if caps.get("reporting") == "on_motion" and m.lastSeen is not None:
+        return max(m.timestamp, m.lastSeen)
+    return m.timestamp
+
+
+def is_current(established: Optional[float], caps: dict, now: float) -> bool:
+    """Whether the position is as recent as its source can provide. A source
+    that computes on request is current by construction. A periodic or
+    motion-triggered source is current within its declared interval. A source
+    that declares no model never is."""
+    if established is None:
+        return False
+    reporting = caps.get("reporting")
+    if reporting == "on_request":
+        return True
+    interval = caps.get("reportingInterval")
+    if reporting in ("periodic", "on_motion") and interval:
+        return now - established <= float(interval)
+    return False
 
 
 @dataclass
@@ -45,7 +74,9 @@ class PositionService:
         primary_strategy: FusionStrategy,
         compare_strategies: list[FusionStrategy],
         capabilities_for: Callable[[str], dict] = lambda name: {},
+        clock: Callable[[], float] = time.time,
     ):
+        self._clock = clock
         self._adapters = adapters
         self._floor_plan = floor_plan
         self._device_map = device_map
@@ -179,6 +210,18 @@ class PositionService:
         seen = [m.lastSeen for m in measurements if m.lastSeen is not None]
         if seen:
             primary.lastSeen = max(seen)
+        # The fused position holds as of its least recent contribution, and is
+        # current only when every contribution is.
+        now = self._clock()
+        times, currents = [], []
+        for m in measurements:
+            caps = self._capabilities_for(m.source)
+            t = established_at(m, caps)
+            times.append(t)
+            currents.append(is_current(t, caps, now))
+        if all(t is not None for t in times):
+            primary.establishedAt = min(times)
+        primary.current = all(currents)
         compare: list[StrategyResult] = []
         for strat in self._compare:
             out = strat.fuse(device_id, measurements, self._floor_plan)
@@ -199,7 +242,5 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def ts_to_iso(ts: Optional[float]) -> str:
-    if ts is None:
-        return now_iso()
+def ts_to_iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).isoformat()

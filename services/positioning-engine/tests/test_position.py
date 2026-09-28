@@ -17,6 +17,10 @@ async def test_position_contract_shape(client):
     assert len(body["sources"]) > 0
     # no local x/y/z leaks across the northbound boundary
     assert "x" not in body and "z" not in body
+    # The test adapters declare no reporting model: the position holds as of
+    # its fix time and is never current.
+    assert body["establishedAt"] == body["timestamp"]
+    assert body["current"] is False
 
 
 @pytest.mark.asyncio

@@ -278,17 +278,26 @@ The boundary between `camara-gateway` and any positioning engine is this REST co
 
 ```json
 {
-  "positioningId": "wifi-asset-01",
-  "latitude":   45.064581,
-  "longitude":  7.659408,
-  "altitude": 240.4,
-  "accuracy": 0.3,
-  "timestamp":  "2024-01-01T12:00:00Z",
-  "sources":    ["wifi"],
-  "strategy":   "weighted_avg",
-  "fusions":    null
+  "positioningId": "wittra-tag-02",
+  "latitude":      59.404251,
+  "longitude":     17.949247,
+  "altitude":      32.6,
+  "accuracy":      0.3,
+  "timestamp":     "2026-09-27T08:12:40Z",
+  "establishedAt": "2026-09-27T10:00:05Z",
+  "current":       true,
+  "sources":       ["wittra"],
+  "strategy":      "weighted_avg",
+  "fusions":       null
 }
 ```
+
+`timestamp` is the fix time of the fused position, the earliest among its
+contributions. `establishedAt` is the latest time the position is known to
+hold, from each source's declared `reporting` model: for a motion-triggered
+source it is the last communication from the still device, here two hours
+after the fix. `current` is true when every contribution is as recent as its
+source can provide. See [adapters.md](adapters.md#reporting-and-reportinginterval).
 
 The path id is the capability's `positioningId` (the internal/vendor-native id), **not** the CAMARA `assetId`; the gateway substitutes it from the asset map. The optional `?source=` query selects routing (see below). The engine owns its native coordinate frame and normalises to WGS84 at this boundary; `altitude` is the origin's `altitude_m` plus the fused height above the venue floor, present only when both exist. The gateway passes `latitude`/`longitude` straight into the CAMARA `area.center`, with `radius = max(accuracy, 1)` and the unclamped value in `horizontalAccuracy`.
 
@@ -319,7 +328,7 @@ When `POSITIONING_ENGINE_URL` is **unset** the gateway falls back to a built-in 
 
 #### Engine adapter status
 
-`GET /adapters` on the engine returns the same shape proxied by the gateway above, the engine is the source of truth, the gateway forwards it as a vendor extension. Useful when debugging the engine directly:
+`GET /adapters` on the engine returns the full registry entry of each adapter: `name`, `baseUrl`, `kind`, `registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`, `cooldownSecondsRemaining`, `state`, `capabilities`. It is internal, and the gateway serves a reduced view. Useful when debugging the engine directly:
 
 ```bash
 curl http://localhost:8081/adapters
@@ -348,7 +357,7 @@ GET /measurement/{device_id}  → 200 OK
 
 `frame` declares the reference of the horizontal position: `"room"` (`x`, `y` in the room named by `room`), `"venue"` (`x`, `y` in the floor-plan frame, the default), or `"wgs84"` (`latitude`, `longitude`). The coordinates of the declared frame are required, and a measurement without them is dropped as malformed. `accuracy` and `confidence` are optional. The engine places every measurement in the venue frame before fusion. `z` is optional: the height above the venue floor in metres, in every frame, sent only by a source that declares `z: true`. `lastSeen` is optional: when the source reports when the device last communicated, the adapter carries it here and the gateway publishes it as `lastCommunicationTime`.
 
-`{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is Unix epoch seconds; omit for "now". See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
+`{device_id}` here is the capability's `positioningId`, substituted verbatim. `404 Not Found` indicates no measurement for it. `timestamp` is required, the fix time in Unix epoch seconds. See [`adapters.md`](adapters.md) for the full specification and implementer's guide.
 
 ## Asset Identity Map
 

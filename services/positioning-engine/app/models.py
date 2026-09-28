@@ -80,3 +80,14 @@ class EnginePosition(BaseModel):
     altitude: Optional[float] = Field(
         default=None, json_schema_extra={"x-unit": "m"}
     )
+    establishedAt: Optional[str] = Field(
+        default=None,
+        description=(
+            "Latest time the position is known to hold, RFC 3339: the earliest established time "
+            "among the fused contributions. Absent when a contribution has no fix time."
+        ),
+    )
+    current: bool = Field(
+        default=False,
+        description="Every contribution is as recent as its source's declared reporting model provides.",
+    )

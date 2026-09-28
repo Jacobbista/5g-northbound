@@ -84,8 +84,8 @@ The machine-readable contract is [`schema/adapter-measurement.schema.json`](http
 | `z`                    | float, metres, optional | Height above the venue floor, in every frame. Sent only by a source that declares `z: true`, and only when measured for this fix. The engine discards it from a source that does not declare `z: true` |
 | `accuracy`             | float, metres, optional | One-sigma error radius. When absent, the engine uses the nominal accuracy of the adapter's declared `accuracy_class`. Fusion weights a measurement by `confidence / accuracy`, and combines the accuracies in quadrature |
 | `confidence`           | float, 0.0–1.0, optional | The source's own reliability score, a multiplier on the fusion weight. When absent, the weight is `1 / accuracy` |
-| `timestamp`            | float, optional  | Unix epoch seconds when the underlying measurement was taken. Omit for "now". The engine uses this to decide staleness |
-| `lastSeen`             | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. The gateway publishes it as `lastCommunicationTime` |
+| `timestamp`            | float            | Required. Unix epoch seconds when the fix was taken. A measurement without it is malformed |
+| `lastSeen`             | float, optional  | Unix epoch seconds when the DEVICE last communicated with the source. Distinct from `timestamp`, which freezes for a still asset that keeps reporting. For a source that declares `reporting: on_motion` it confirms the last fix. The gateway publishes it as `lastCommunicationTime` |
 
 Pick `room` for adapters that compute their own position from observations gathered inside a room (RSSI, UWB anchors). Pick `wgs84` for adapters whose backend is map-anchored and already reports global coordinates, typically commercial RTLS platforms whose operator places anchors on a real-world map. The engine treats every frame uniformly downstream.
 
@@ -174,7 +174,10 @@ Traits that belong to the **image** go in the YAML: which endpoints the binary
 exposes (`devices`, `discover`, `diagnostics`), whether it pushes or is polled
 (`streaming`). Traits that belong to the **bound source** go in
 `ADAPTER_CAPABILITIES` at deploy time: `source`, `kinds`, `frame`, `z`,
-`accuracy_class`, `nominalAccuracy`. The vendor-adapter image is generic and
+`accuracy_class`, `nominalAccuracy`, `reporting`, `reportingInterval`. The
+engine validates the declaration against
+[`schema/adapter-announcement.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-announcement.schema.json)
+and refuses a malformed one with 422. The vendor-adapter image is generic and
 holds no vendor's traits, for the same reason its `GET /contract` names no
 vendor's variables until a schema is loaded.
 
@@ -186,6 +189,38 @@ The `kind` an adapter registers under is the image's **family** (`wifi`,
 `vendor`, `synthetic`), read from the `adapter:` field of its own
 `adapter.contract.yaml`. It is not configuration: the image knows which family
 it belongs to, and a deployment that could restate it could only get it wrong.
+
+### `reporting` and `reportingInterval`
+
+`reporting` states how the source produces fixes, and decides how old a
+position really is.
+
+| `reporting` | The source | A position holds as of |
+|-------------|------------|------------------------|
+| `on_request` | computes a fix at each poll | the fix time |
+| `periodic` | produces a fix at least every `reportingInterval` | the fix time |
+| `on_motion` | produces a fix whenever the device moves, and communicates at least every `reportingInterval` while it is still | the later of the fix time and `lastSeen` |
+
+`reportingInterval` is the longest time between two reports the source
+guarantees, in seconds, transport included. It is required with `periodic` and
+`on_motion`. A position is **current** when it is as recent as its source can
+provide: always for `on_request`, within one `reportingInterval` for the other
+two. A source that declares no model counts as `periodic` without an interval:
+its position holds as of the fix time and is never current.
+
+Under `on_motion`, a communication confirms the last fix because the
+declaration states that any movement produces a new one. The declaration is a
+property of the source, and whoever binds the adapter answers for it.
+
+The engine reports, for each fused position, `establishedAt` (the earliest of
+its contributions) and `current` (true when every contribution is current). The
+gateway judges `maxAge` on them.
+
+| Adapter | `reporting` | `reportingInterval` |
+|---------|-------------|---------------------|
+| `synthetic-adapter` | `on_request` | |
+| `wifi-adapter` | `periodic` | 2 s, for the edge scanner's default of one scan a second |
+| `vendor-adapter` | declared per deployment | declared per deployment |
 
 ### `accuracy_class` and `nominalAccuracy`
 
@@ -409,7 +444,7 @@ class Measurement(BaseModel):
     z: Optional[float] = None
     accuracy: Optional[float] = None
     confidence: Optional[float] = None
-    timestamp: Optional[float] = None
+    timestamp: float
 
 app = FastAPI()
 _cache: dict[str, Measurement] = {}

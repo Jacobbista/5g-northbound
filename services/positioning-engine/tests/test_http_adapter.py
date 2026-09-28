@@ -50,7 +50,7 @@ async def test_http_adapter_decodes_wgs84_measurement():
         return_value=Response(200, json={
             "source": "wittra", "frame": "wgs84",
             "latitude": 45.064412, "longitude": 7.659254,
-            "accuracy": 0.3, "confidence": 0.95,
+            "accuracy": 0.3, "confidence": 0.95, "timestamp": 1700000000.0,
         })
     )
     a = HttpAdapter("wittra", "http://wittra")
@@ -66,7 +66,8 @@ async def test_http_adapter_decodes_wgs84_measurement():
 @respx.mock
 async def test_http_adapter_uses_adapter_name_when_source_missing():
     respx.get("http://x/measurement/d").mock(
-        return_value=Response(200, json={"x": 1, "y": 2, "accuracy": 1, "confidence": 0.5})
+        return_value=Response(200, json={"x": 1, "y": 2, "accuracy": 1, "confidence": 0.5,
+                                          "timestamp": 1700000000.0})
     )
     a = HttpAdapter("custom-name", "http://x")
     m = await a.get_measurement("d")
@@ -99,7 +100,7 @@ async def test_http_adapter_sends_configured_headers():
     route = respx.get("http://wittra/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "wittra", "x": 1.0, "y": 2.0,
-            "accuracy": 0.3, "confidence": 0.95,
+            "accuracy": 0.3, "confidence": 0.95, "timestamp": 1700000000.0,
         })
     )
     a = HttpAdapter("wittra", "http://wittra", headers={"X-API-Key": "secret-token"})
@@ -177,7 +178,7 @@ async def test_http_adapter_success_resets_failure_counter():
             _httpx.ConnectError("down"),
             Response(200, json={
                 "source": "x", "x": 1, "y": 2,
-                "accuracy": 1, "confidence": 0.5,
+                "accuracy": 1, "confidence": 0.5, "timestamp": 1700000000.0,
             }),
         ]
     )
@@ -242,7 +243,8 @@ async def test_http_adapter_malformed_body_counts_as_failure():
 async def test_http_adapter_trailing_slash_normalised():
     respx.get("http://x/measurement/dev").mock(
         return_value=Response(200, json={"source": "wifi", "x": 1, "y": 2,
-                                          "accuracy": 1, "confidence": 0.5})
+                                          "accuracy": 1, "confidence": 0.5,
+                                          "timestamp": 1700000000.0})
     )
     a = HttpAdapter("wifi", "http://x/")
     m = await a.get_measurement("dev")
@@ -288,9 +290,11 @@ async def test_measurement_last_seen_none_when_absent():
 async def test_http_adapter_reads_height_and_leaves_it_absent_when_missing():
     respx.get("http://a/measurement/with").mock(return_value=Response(200, json={
         "source": "a", "x": 1.0, "y": 2.0, "z": 1.4, "accuracy": 1.0, "confidence": 0.5,
+        "timestamp": 1700000000.0,
     }))
     respx.get("http://a/measurement/without").mock(return_value=Response(200, json={
         "source": "a", "x": 1.0, "y": 2.0, "accuracy": 1.0, "confidence": 0.5,
+        "timestamp": 1700000000.0,
     }))
     a = HttpAdapter("a", "http://a")
     with_height = await a.get_measurement("with")
@@ -305,7 +309,7 @@ async def test_http_adapter_reads_height_and_leaves_it_absent_when_missing():
 async def test_http_adapter_reads_a_room_measurement():
     respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
         "source": "a", "frame": "room", "room": "room-01", "x": 1.0, "y": 2.0,
-        "accuracy": 1.0, "confidence": 0.5,
+        "accuracy": 1.0, "confidence": 0.5, "timestamp": 1700000000.0,
     }))
     a = HttpAdapter("a", "http://a")
     m = await a.get_measurement("d")
@@ -337,7 +341,7 @@ async def test_http_adapter_rejects_an_unknown_frame():
 async def test_http_adapter_rejects_a_measurement_without_its_coordinates(body):
     # A missing coordinate is a malformed measurement, not a fix at the origin.
     respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
-        "source": "a", "accuracy": 1.0, **body,
+        "source": "a", "accuracy": 1.0, "timestamp": 1700000000.0, **body,
     }))
     a = HttpAdapter("a", "http://a")
     assert await a.get_measurement("d") is None
@@ -349,8 +353,21 @@ async def test_http_adapter_rejects_a_measurement_without_its_coordinates(body):
 async def test_http_adapter_leaves_confidence_absent_when_missing():
     respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
         "source": "a", "frame": "venue", "x": 1.0, "y": 2.0, "accuracy": 1.0,
+        "timestamp": 1700000000.0,
     }))
     a = HttpAdapter("a", "http://a")
     m = await a.get_measurement("d")
     await a.aclose()
     assert m is not None and m.confidence is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_http_adapter_rejects_a_measurement_without_fix_time():
+    # Without a fix time the position has no age, and would read as fresh.
+    respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
+        "source": "a", "x": 1.0, "y": 2.0, "accuracy": 1.0,
+    }))
+    a = HttpAdapter("a", "http://a")
+    assert await a.get_measurement("d") is None
+    await a.aclose()

@@ -53,8 +53,9 @@ class WeightedAvgFusion:
 
         accuracy = 1.0 / math.sqrt(sum(1.0 / (a ** 2) for a in accuracies))
         sources = [m.source for m in measurements]
+        # A fused position is no newer than its oldest contribution.
         times = [m.timestamp for m in measurements if m.timestamp is not None]
-        timestamp = max(times) if times else None
+        timestamp = min(times) if times else None
 
         return FusedPosition(
             x=x, y=y, z=z,

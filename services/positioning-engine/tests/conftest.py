@@ -1,4 +1,5 @@
 import random
+import time
 from typing import Optional
 
 import pytest
@@ -43,7 +44,7 @@ class RandomWalkAdapter(Adapter):
         self._state[device_id] = (x, y, z)
         return Measurement(
             source=self._source, accuracy=self._accuracy_m, confidence=self._confidence,
-            frame="venue", x=x, y=y, z=z,
+            frame="venue", x=x, y=y, z=z, timestamp=time.time(),
         )
 
 

@@ -12,3 +12,7 @@ capabilities:
   accuracy_class: metre
   calibration: true     # exposes the /calibration tool; editor shows CALIBRATE
   devices: true         # exposes /devices (observed device enumeration for onboarding)
+  # A fix per scan from the edge scanner, one scan a second by default. The
+  # interval is the longest gap the source guarantees, transport included.
+  reporting: periodic
+  reportingInterval: 2

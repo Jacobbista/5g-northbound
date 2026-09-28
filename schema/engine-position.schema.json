@@ -97,6 +97,25 @@
       "default": null,
       "title": "Altitude",
       "x-unit": "m"
+    },
+    "establishedAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Latest time the position is known to hold, RFC 3339: the earliest established time among the fused contributions. Absent when a contribution has no fix time.",
+      "title": "Establishedat"
+    },
+    "current": {
+      "default": false,
+      "description": "Every contribution is as recent as its source's declared reporting model provides.",
+      "title": "Current",
+      "type": "boolean"
     }
   },
   "required": [

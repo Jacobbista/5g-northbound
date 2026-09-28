@@ -183,17 +183,9 @@
       "title": "Confidence"
     },
     "timestamp": {
-      "anyOf": [
-        {
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
       "description": "When the fix was taken, Unix epoch seconds.",
       "title": "Timestamp",
+      "type": "number",
       "x-unit": "s"
     },
     "lastSeen": {
@@ -206,7 +198,7 @@
         }
       ],
       "default": null,
-      "description": "When the device last communicated with its source, Unix epoch seconds.",
+      "description": "When the device last communicated with its source, Unix epoch seconds. For a source that declares `reporting: on_motion`, it confirms that the last fix still holds.",
       "title": "Lastseen",
       "x-unit": "s"
     },
@@ -216,6 +208,9 @@
       "type": "object"
     }
   },
+  "required": [
+    "timestamp"
+  ],
   "title": "Adapter measurement",
   "type": "object"
 }

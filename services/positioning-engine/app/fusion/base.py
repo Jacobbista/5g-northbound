@@ -17,6 +17,12 @@ class FusedPosition:
     accuracy: float
     sources: list[str]
     timestamp: Optional[float] = None
+    # Latest moment the fused position is known to hold, epoch seconds: the
+    # earliest established time among the contributions. Attached after
+    # fusion from the sources' declared reporting models.
+    establishedAt: Optional[float] = None
+    # Every contribution is as recent as its source can provide.
+    current: bool = False
     # Most recent last-communication across the fused sources, epoch seconds.
     # Attached after fusion (strategies do not compute it); drives liveness
     # downstream. None when no contributing source reported one.

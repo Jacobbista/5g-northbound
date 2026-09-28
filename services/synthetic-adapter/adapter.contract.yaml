@@ -21,3 +21,4 @@ capabilities:
   # reading. `coarse` is not a way to say "this source is fake": that is what
   # `source: synthetic` says, on its own axis.
   accuracy_class: metre
+  reporting: on_request # the walker computes a fix at each poll

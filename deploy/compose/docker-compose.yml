@@ -44,7 +44,7 @@ services:
       ADAPTER_BASE_URL: "http://wifi-adapter:8080"
       # Advertised capabilities (mirrors adapter.contract.yaml; validated by
       # `make positioning-check`). Drives the gateway's GET /capabilities.
-      ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"room","streaming":false,"z":false,"accuracy_class":"metre","calibration":true,"devices":true}'
+      ADAPTER_CAPABILITIES: '{"source":"wifi","kinds":["tool","asset"],"frame":"room","streaming":false,"z":false,"accuracy_class":"metre","calibration":true,"devices":true,"reporting":"periodic","reportingInterval":2}'
       # Set WIFI_DEBUG=1 in the shell before `make demo` to enable per-scan
       # trilateration diagnostics in this container's logs. Useful for
       # tuning tx_power / path_loss_n against a real venue.
@@ -119,7 +119,9 @@ services:
       POSITIONING_ENGINE_URL: "http://positioning-engine:8080"
       ADAPTER_NAME: "wittra"
       ADAPTER_BASE_URL: "http://vendor-adapter:8080"
-      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true,"diagnostics":true}'
+      # Bound to mock-vendor here, which computes a fix on every request. A
+      # deployment bound to the real Wittra cloud declares its own reporting.
+      ADAPTER_CAPABILITIES: '{"source":"wittra","kinds":["pallet","uwb-tag","asset"],"frame":"wgs84","streaming":false,"z":true,"accuracy_class":"sub-metre","discover":true,"devices":true,"diagnostics":true,"reporting":"on_request"}'
     depends_on:
       mock-vendor:
         condition: service_healthy
@@ -169,7 +171,7 @@ services:
       # exercises both onboarding classes. SOURCE_CLASS tags the technology.
       ANCHOR_IDS: "synthetic-anchor-01,synthetic-anchor-02"
       SOURCE_CLASS: "uwb"
-      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"room","streaming":false,"z":true,"accuracy_class":"metre","devices":true,"placement":true}'
+      ADAPTER_CAPABILITIES: '{"source":"synthetic","kinds":["forklift","asset"],"frame":"room","streaming":false,"z":true,"accuracy_class":"metre","devices":true,"placement":true,"reporting":"on_request"}'
     depends_on:
       positioning-engine:
         condition: service_healthy
