@@ -1,27 +1,24 @@
 # Overview
 
-What this system is, why it is built this way, and how the pieces fit. Read
-this before the other documents.
+The stack reports where assets are inside a private venue, such as tools,
+pallets and forklifts, through the
+[CAMARA Device Location API](https://camaraproject.org/). The positions come
+from on-site sources such as WiFi, UWB or a vendor's positioning cloud, and are
+fused at the edge.
 
-## What this system does
+CAMARA was designed for public mobile networks, where the tracked device is a
+phone with a number and the operator computes its position. In a factory the
+same organisation owns the network, the assets and the applications, and an
+asset has no phone number. The stack keeps the CAMARA interface and changes
+what sits behind it: the entity is an asset, the positions come from sources
+the venue runs, and authorisation follows the organisation. These changes form
+the [private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md).
 
-It exposes **where things are** inside a private venue - tools, tags, pallets,
-forklifts - to applications, over the standard
-[CAMARA Device Location API](https://camaraproject.org/). The things it tracks
-are **assets**, not phones: they are located by on-site sensing (WiFi, UWB, and
-others), fused at the edge, and served through one familiar API.
-
-It runs unchanged from a laptop (`docker compose`) to a Kubernetes cluster. New
-positioning technologies plug in as new **adapters**; the engine and gateway
-never change.
-
-## The mental model: sense, fuse, expose
-
-Three roles, left to right:
+## Components
 
 ```mermaid
 flowchart LR
-    subgraph adapters["adapters · ingest"]
+    subgraph sources["adapters"]
       W["wifi-adapter"]
       V["vendor-adapter"]
       S["synthetic-adapter"]
@@ -29,85 +26,56 @@ flowchart LR
     W --> E
     V --> E
     S --> E
-    E["positioning-engine<br/>fuse sources · own coordinates"] --> G
-    G["camara-gateway<br/>CAMARA API · identity · tenant auth"] --> C["location-app<br/>consumer"]
-    ED["placement-editor<br/>author the venue"] -. blueprint .-> E
+    E["positioning-engine"] --> G["camara-gateway"]
+    G --> C["location-app"]
+    ED["placement-editor"] -. blueprint .-> E
 ```
 
-Names follow `<flavor>-<role>` (see
-[naming and roles](https://github.com/Jacobbista/5g-northbound/blob/main/AGENTS.md#component-naming-and-roles)):
-the suffix is the role in this flow (`-adapter` ingests, `-engine` fuses,
-`-gateway` exposes, `-app` consumes, `-editor` authors).
+| Component | Role |
+|-----------|------|
+| adapters | Each one speaks to one kind of source and answers `GET /measurement/{positioningId}` with a fix. |
+| positioning-engine | Collects the fixes for a positioning id, fuses them, places them in the venue and converts them to WGS84. Stores the venue blueprint. |
+| camara-gateway | Serves the CAMARA API. Resolves an asset to its positioning ids, fuses them, and restricts each consumer to its organisation. Stores the asset map. |
+| placement-editor | Operator tool to draw the venue: floor plan, rooms, anchors, walls. |
+| location-app | A CAMARA consumer: a browser application that shows the assets on the venue. |
 
-- **Adapters sense.** Each positioning technology is its own service speaking
-  one tiny HTTP contract (`GET /measurement/{id}`). WiFi RSSI, a vendor UWB
-  cloud, a synthetic source - all look the same to the engine.
-- **The engine fuses.** It merges the measurements, owns the coordinate frame,
-  and converts to WGS84. It is the authority for the venue **blueprint**.
-- **The gateway exposes.** It speaks CAMARA to consumers, resolves identity,
-  and gates each consumer to its tenant.
+Component names follow `<flavor>-<role>`: the suffix is the role in this flow,
+the prefix qualifies it
+([naming](https://github.com/Jacobbista/5g-northbound/blob/main/AGENTS.md#component-naming-and-roles)).
 
-That separation is the whole point: a new sensing technology is a new adapter,
-nothing upstream changes.
+A new kind of source is a new adapter. For a vendor cloud with a REST API it is
+a configuration document loaded into the generic `vendor-adapter`. The engine
+and the gateway do not change.
 
-## Assets, not subscribers
+## Terms
 
-CAMARA was designed for public mobile networks, where a device is a phone
-identified by a number. Here the tracked entity is an **asset** with a business
-id (`assetId`, e.g. `pkg-4471`) - never a phone number. This is the
-**private-asset profile**. See
-[the profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md)
-for the full rationale.
+The rest of the documentation uses five terms in this sense.
 
-### The five words this system runs on
+| Term | Meaning |
+|------|---------|
+| **asset** | The tracked physical thing, named by an `assetId` the organisation chooses. A CAMARA client asks about assets. |
+| **capability** | One way of locating an asset: a `source` and the `positioningId` that source knows the asset by. An asset has one or more. |
+| **source** | The positioning technology behind a capability, such as `wifi`, `wittra` or `synthetic`. It is also the name under which the serving adapter registers. |
+| **positioningId** | The identifier of the asset inside one source. |
+| **adapter** | The service that translates one source into the adapter contract. |
 
-An asset is not bound to one sensor. A pallet may carry a UWB tag and be seen
-by WiFi at the same time, and the point of the profile is that a consumer
-should not have to know. Five terms carry that idea, and the rest of the
-documentation uses them in exactly this sense:
+A request resolves as follows. The gateway looks up the asset's capabilities.
+For each one it asks the engine for the position of that `positioningId`,
+naming the `source`. The engine asks the adapter registered under that source.
+The gateway then fuses the answers into one CAMARA `Location`. The engine never
+sees the asset, so adding an asset changes nothing in the engine.
 
-**asset** - the tracked physical thing, named by an `assetId` the enterprise
-chose. It is what a CAMARA client asks about, and the only identifier that
-crosses the northbound boundary.
+A CAMARA request names only the `assetId`. The management surfaces of the
+profile (`GET /assets`, asset details, the position stream) also carry the
+`positioningId` of the primary capability, so an operator can relate an asset
+to its source.
 
-**capability** - one way of locating that asset. A capability names a
-**source** and the **positioningId** that source knows the thing by. An asset
-declares at least one and may declare several.
+## Further reading
 
-**source** - the positioning technology behind a capability (`wifi`, `wittra`,
-`synthetic`). It is also the name the serving adapter registers under, which is
-what makes routing a name match rather than a lookup table.
-
-**positioningId** - the identifier internal to that source. It never leaves
-the internal plane: the gateway resolves it and does not return it.
-
-**adapter** - the service that speaks one source's language and answers
-`GET /measurement/{positioning_id}`.
-
-So the resolution chain is `assetId` → capabilities → for each, `(source,
-positioningId)` → the adapter registered under that source → a fix. The
-gateway walks every capability an asset declares and fuses what comes back, so
-a two-capability asset yields one CAMARA `Location` with a smaller radius than
-either source alone. The engine never sees the asset: it is asked for a
-`positioningId` and told which source to route to, which is why adding an
-asset never touches it.
-
-## Key concepts
-
-| Concept | In one line | Detail |
-|---------|-------------|--------|
-| **Adapter** | A positioning source behind one HTTP contract | [adapters.md](adapters.md) |
-| **Adapter registry** | Adapters self-register with the engine; routing matches a capability's `source` to an adapter's registered name | [adapter-registry.md](adapter-registry.md) |
-| **Blueprint vs bindings** | Portable venue geometry (committable) vs per-venue secrets like BSSIDs (never committed) | [blueprint-vs-bindings.md](blueprint-vs-bindings.md) |
-| **Identity chain** | `assetId` → capability → `positioningId` → adapter → vendor fix | [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix) |
-| **Coordinate frames** | One convention for room and floor plan (x width, y depth, z up), placed in WGS84 by the georef | [architecture.md](architecture.md) |
-
-## Where to go next
-
-| You want to… | Start at |
-|--------------|----------|
-| Run it on your laptop | the repo `README.md` quick start (`make demo`) |
-| Understand the design in depth | [architecture.md](architecture.md) |
-| Add a positioning source | [adapters.md](adapters.md) → [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md) |
-| Build a CAMARA client | [data-contracts.md](data-contracts.md) → [api-reference.md](api-reference.md) |
-| Deploy to Kubernetes | [deployment.md](deployment.md) |
+| Goal | Page |
+|------|------|
+| Run it on a laptop | the repository [README](https://github.com/Jacobbista/5g-northbound/blob/main/README.md) |
+| Understand the services and the request flow | [Architecture](architecture.md) |
+| Add a positioning source | [Adapters](adapters.md), then [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) |
+| Build a CAMARA client | [Private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md), then [Data contracts](data-contracts.md) |
+| Deploy on Kubernetes | [Deployment](deployment.md) |

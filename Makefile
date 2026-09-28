@@ -164,7 +164,7 @@ token:
 
 smoke:
 	@TOKEN=$$($(MAKE) -s token); \
-	for asset in forklift-7 pkg-4471; do \
+	for asset in pkg-4471 robot-2; do \
 	  echo "=== $$asset ==="; \
 	  curl -s -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
 	    -H "Authorization: Bearer $$TOKEN" -H "Content-Type: application/json" \
