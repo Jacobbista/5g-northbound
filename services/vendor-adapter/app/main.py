@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from . import register
 from .config import settings
+from .declaration import check
 from .obs import install_hop_logging
 from .routers import contract as contract_router
 from .routers import devices as devices_router
@@ -32,11 +33,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         loaded = None
         log.error("schema at %s failed to load: %s", settings.schema_file, exc)
-    if loaded:
+    errors = check(loaded, register.declared_capabilities()) if loaded else []
+    if errors:
+        # A schema that contradicts the declaration is not applied: the pod
+        # stays unready, and /ready and /contract say why.
+        app.state.store.declaration_errors = errors
+        log.error("schema at %s contradicts the declared capabilities: %s", settings.schema_file, errors)
+    elif loaded:
         app.state.store.schema = loaded
         app.state.store.schema_source = "mounted"
         log.info("loaded schema for vendor=%s from %s", loaded.vendor, settings.schema_file)
-    else:
+    if not loaded:
         log.warning(
             "no schema loaded; PUT one to /schema or mount it at %s",
             settings.schema_file,

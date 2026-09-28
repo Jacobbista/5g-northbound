@@ -192,6 +192,43 @@ The two contracts an operator must get right (see step 5):
 
   Mapping keys are routed by the [core vocabulary](profile-extensions.md#core-vocabulary): a key that names a core field (`battery`, `lastSeen`, `accuracy`, `moving`) surfaces at the top of the payload, coerced to the core unit through a `transform`; any other key surfaces under a `vendorSpecific` sub-object, carried as authored. `PUT /schema` returns `vendorSpecificKeys` listing every key it routed there, so a typo of a core name is visible. Map `battery` to a percent 0-100 value (add a `linear` transform with `scale` when the vendor reports 0-1). Populate `moving` either by mapping the omlox-standard `speed` (the adapter derives `moving = speed > 0.15` m/s) or by mapping a vendor's own moving/stationary state to `moving` with a `bool` transform (`{ "type": "bool", "truthy": ["MOVING"] }`).
 
+### Declaring how the source reports
+
+The schema says where the data is. The declaration in `ADAPTER_CAPABILITIES`
+says what the data means: `reporting` and `reportingInterval` (how the source
+produces fixes, see [adapters.md](adapters.md#reporting-and-reportinginterval))
+and `z` (whether it measures height). Declare them from the vendor's
+documentation and from a raw sample, never from the field names alone.
+
+The adapter checks the schema against the declaration when it loads one, at
+start and on `PUT /schema`, and refuses a schema that cannot carry it:
+
+| Declaration | Requires in the schema |
+|-------------|------------------------|
+| `reporting: on_motion` | a `lastSeen` mapping: the last communication confirms the last fix |
+| `reporting: periodic` or `on_motion` | a `reportingInterval` in the declaration |
+| `z: true` | a `z` mapping |
+| `z: false` | no `z` mapping |
+
+A refused schema is not applied. At start the pod stays unready and `/ready`
+names the contradiction. `PUT /schema` answers `422` with the list under
+`detail.declaration`, and the live schema stays as it was.
+
+A declaration can also be wrong about the data itself, so the adapter compares
+it with every payload and reports on `GET /contract`, under
+`declaration.observed`:
+
+- `unresolved`: for each mapped field, how many payloads left it null. A
+  `lastSeen` that never resolves, as on the live Wittra cloud today, shows up
+  here, and the source cannot support `on_motion`.
+- `intervalExceeded`: how many times two reports of the same device were
+  further apart than `reportingInterval`.
+- `movedWithoutFix`: for `on_motion`, how many times a position changed without
+  a new fix time. The declaration says every movement produces a fix, so any
+  count here contradicts it.
+
+The counters restart when a schema is applied.
+
 ### Optional `discover` block (vendor sync in the placement editor)
 
 When a vendor exposes a "list all devices" endpoint, declaring a `discover` block lets the placement editor pull the device list and propose anchor positions instead of forcing manual placement. The block is independent from the per-device telemetry path: same auth + base URL, different endpoint + mapping.

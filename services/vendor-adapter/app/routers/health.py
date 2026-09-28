@@ -20,7 +20,12 @@ async def ready(request: Request, response: Response):
     # loaded. Point the k8s readinessProbe here (standard across adapters):
     # 200 when ready, 503 + {error} when degraded, so a schema-less pod is
     # kept out of rotation while still answering /health and /contract.
-    if request.app.state.store.schema is None:
+    store = request.app.state.store
+    if store.schema is None:
         response.status_code = 503
+        if store.declaration_errors:
+            return {"status": "not-ready",
+                    "error": "schema contradicts the declared capabilities: "
+                             + "; ".join(store.declaration_errors)}
         return {"status": "not-ready", "error": "no vendor schema loaded"}
     return {"status": "ready"}

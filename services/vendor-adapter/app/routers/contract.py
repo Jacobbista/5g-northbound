@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..client import IMPLEMENTED_TRANSPORTS
 from ..envcontract import discover_mapping_coverage, mapping_coverage, vendor_env
+from ..register import declared_capabilities
 from ..schema import Schema
 
 router = APIRouter(tags=["contract"])
@@ -86,6 +87,16 @@ def contract(request: Request) -> dict:
             "recommended": _sanitize(raw.get("recommended")),
             "optional": _sanitize(raw.get("optional")),
         },
+    }
+    # The declared behaviour of the source, what contradicts it in the schema,
+    # and what the payloads show against it.
+    caps = declared_capabilities()
+    body["declaration"] = {
+        "reporting": caps.get("reporting"),
+        "reportingInterval": caps.get("reportingInterval"),
+        "z": caps.get("z"),
+        "errors": list(getattr(store, "declaration_errors", [])),
+        "observed": store.observed.as_dict() if store is not None else None,
     }
     discover = discover_mapping_coverage(schema) if schema is not None else None
     if discover is not None:

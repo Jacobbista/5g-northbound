@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from .. import client as vendor_client
 from ..mapper import map_stream_diagnostics, to_measurement
+from ..register import declared_capabilities
 
 log = logging.getLogger(__name__)
 
@@ -47,5 +48,6 @@ async def get_measurement(device_id: str, request: Request):
         diag = map_stream_diagnostics(schema.diagnostics, payload)
         if diag:
             measurement["diagnostics"] = diag
+    state.observed.record(device_id, schema.mapping, measurement, declared_capabilities())
     state.cache_put(device_id, measurement, schema.cacheTtl)
     return measurement

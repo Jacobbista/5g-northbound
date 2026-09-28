@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from .declaration import Observed
 from .schema import Schema
 
 log = logging.getLogger(__name__)
@@ -103,6 +104,11 @@ class State:
     # applied by PUT /schema and is lost at restart when the schema volume is a
     # read-only ConfigMap. Assigned at the two call sites, never inferred.
     schema_source: str = "none"
+    # Contradictions between a schema that was offered and the declared
+    # capabilities. A schema with any is not applied.
+    declaration_errors: list[str] = field(default_factory=list)
+    # Payload statistics against the declaration, reset when a schema is applied.
+    observed: Observed = field(default_factory=Observed)
     cache: dict[str, _CacheEntry] = field(default_factory=dict)
 
     def cache_get(self, device_id: str) -> Optional[Any]:

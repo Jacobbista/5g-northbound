@@ -79,6 +79,11 @@ def _caps() -> dict:
     return caps
 
 
+def declared_capabilities() -> dict:
+    """What this adapter declares about its source, as announced to the engine."""
+    return _caps()
+
+
 def _cfg() -> dict:
     return {
         "engine_url": os.environ.get("POSITIONING_ENGINE_URL", "").rstrip("/"),

@@ -11,6 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
 from ..config import get_settings
+from ..declaration import Observed, check
+from ..register import declared_capabilities
 from ..schema import Schema
 from ..store import save_schema
 from ..vocabulary import is_core
@@ -46,12 +48,20 @@ async def put_schema(payload: dict, request: Request):
         schema = Schema.model_validate(payload)
     except ValidationError as exc:
         raise HTTPException(400, detail=exc.errors()) from exc
+    # A schema that cannot carry what the adapter declares is refused, and the
+    # live schema stays as it was.
+    errors = check(schema, declared_capabilities())
+    if errors:
+        raise HTTPException(422, detail={"declaration": errors})
     # Apply live FIRST: the hot-reload always works, even when the schema volume
     # is read-only (ConfigMap/subPath). Persistence is best-effort so a
     # read-only mount does not turn a valid PUT into a 500.
-    request.app.state.store.schema = schema
-    request.app.state.store.schema_source = "runtime"
-    request.app.state.store.cache_clear()
+    store = request.app.state.store
+    store.schema = schema
+    store.schema_source = "runtime"
+    store.declaration_errors = []
+    store.observed = Observed()
+    store.cache_clear()
     persisted = save_schema(get_settings().schema_file, schema)
     log.info("schema replaced; vendor=%s persisted=%s", schema.vendor, persisted)
     resp = {
