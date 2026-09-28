@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from . import register
 from .config import settings
 from .obs import install_hop_logging
-from .routers import devices, health, measurement, placement
+from .routers import contract, devices, health, measurement, placement
 from .walker import build_walker
 
 logging.basicConfig(level=logging.INFO)
@@ -34,3 +34,4 @@ app.include_router(health.router)
 app.include_router(measurement.router)
 app.include_router(devices.router)
 app.include_router(placement.router)
+app.include_router(contract.router)

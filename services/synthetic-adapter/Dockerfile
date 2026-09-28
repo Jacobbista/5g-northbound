@@ -9,6 +9,7 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY app/ app/
 COPY adapter.contract.yaml /app/adapter.contract.yaml
+COPY env.contract.yaml /app/env.contract.yaml
 USER app
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

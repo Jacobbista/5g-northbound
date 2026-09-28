@@ -26,6 +26,11 @@
       "external_origin": null
     },
     {
+      "service": "synthetic-adapter",
+      "kind": "internal",
+      "external_origin": null
+    },
+    {
       "service": "vendor-adapter",
       "kind": "internal",
       "external_origin": null
@@ -38,6 +43,36 @@
   ],
   "vars": [
     {
+      "name": "ACCURACY_MAX_M",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "ACCURACY_MIN_M",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
       "name": "ADAPTER_BASE_URL",
       "sensitive": false,
       "tier": "configmap",
@@ -46,10 +81,12 @@
       "writable": false,
       "type": "url",
       "consumed_by": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ],
       "services": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ]
@@ -63,10 +100,12 @@
       "writable": true,
       "type": "json",
       "consumed_by": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ],
       "services": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ]
@@ -95,10 +134,12 @@
       "writable": false,
       "type": "string",
       "consumed_by": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ],
       "services": [
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ]
@@ -146,6 +187,21 @@
       ],
       "services": [
         "positioning-engine"
+      ]
+    },
+    {
+      "name": "ANCHOR_IDS",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "string",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
       ]
     },
     {
@@ -224,6 +280,81 @@
       ]
     },
     {
+      "name": "CONFIDENCE_MAX",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "CONFIDENCE_MIN",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "DEGRADE_PROBABILITY",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "DEGRADE_SECONDS",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "DEPTH_M",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
       "name": "DEVICE_DISCOVERY_INTERVAL_S",
       "sensitive": false,
       "tier": "configmap",
@@ -247,10 +378,12 @@
       "writable": false,
       "type": "string",
       "consumed_by": [
-        "positioning-engine"
+        "positioning-engine",
+        "synthetic-adapter"
       ],
       "services": [
-        "positioning-engine"
+        "positioning-engine",
+        "synthetic-adapter"
       ]
     },
     {
@@ -299,6 +432,21 @@
       ]
     },
     {
+      "name": "HEIGHT_M",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
       "name": "KEYCLOAK_REALM",
       "sensitive": false,
       "tier": "configmap",
@@ -337,9 +485,11 @@
       "writable": false,
       "type": "path",
       "consumed_by": [
+        "synthetic-adapter",
         "wifi-adapter"
       ],
       "services": [
+        "synthetic-adapter",
         "wifi-adapter"
       ]
     },
@@ -369,12 +519,14 @@
       "consumed_by": [
         "camara-gateway",
         "placement-editor",
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ],
       "services": [
         "camara-gateway",
         "placement-editor",
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ]
@@ -392,6 +544,21 @@
       ],
       "services": [
         "camara-gateway"
+      ]
+    },
+    {
+      "name": "RNG_SEED",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "integer",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
       ]
     },
     {
@@ -422,6 +589,66 @@
       ],
       "services": [
         "camara-gateway"
+      ]
+    },
+    {
+      "name": "SOURCE",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "string",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "SOURCE_CLASS",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "string",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "SPAWN_REQUIRED",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "boolean",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
+      ]
+    },
+    {
+      "name": "SPEED_MPS",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
       ]
     },
     {
@@ -587,6 +814,21 @@
       ],
       "services": [
         "positioning-engine"
+      ]
+    },
+    {
+      "name": "WIDTH_M",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "consumed_by": [
+        "synthetic-adapter"
+      ],
+      "services": [
+        "synthetic-adapter"
       ]
     },
     {
