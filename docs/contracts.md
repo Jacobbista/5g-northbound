@@ -156,7 +156,7 @@ Take each `<path>` and prefix it with a base above.
 | Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
 | Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
 | Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | The core diagnostics names, their units and the standard each is anchored to, and the rule that routes every other field to `vendorSpecific` ([profile-extensions.md](profile-extensions.md#core-vocabulary)) |
-| Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares-about-itself)) |
+| Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares)) |
 | Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management and extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/assets/{id}/placement`, `/anchors/calibration`, `/capabilities`, `/adapters`, `/blueprint` |
 
 The four engine schemas are generated from the engine's models with

@@ -178,7 +178,7 @@ The gateway also exposes **vendor-extension** endpoints used by the demo UI (not
 | `BLUEPRINT_SEED_PATH`   | empty                                | One-time read-only seed migrated into the store on first boot when `BLUEPRINT_PATH` is empty. Unset in steady state: the editor PUTs the blueprint over HTTP |
 | `WEBSOCKET_INTERVAL_MS` | `500`                                | Cadence of the WebSocket position broadcast |
 | `DEVICE_IDS`            | `uwb-tag-001`                        | Cold-start seed for the WebSocket broadcast; normally unset, since the engine learns its target ids from adapters advertising the `devices` capability |
-| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{positioningId}`. See [`adapters.md`](adapters.md#outbound-api-key-engine-external-adapter) |
+| `ADAPTER_<NAME>_API_KEY` | _unset_                             | Outbound credential for the adapter named `<NAME>` in `ADAPTER_URLS` (uppercased, non-alphanumerics → `_`). Mount from a `Secret`. Sent on every `GET /measurement/{positioningId}`. See [`adapters.md`](adapters.md#engine-options-per-adapter) |
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key`                  | Header name carrying the token above. Use `Authorization` for bearer-style auth (value must include the `Bearer ` prefix) |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0`                               | Per-adapter HTTPX timeout in seconds. Raise for high-latency cloud backends |
 

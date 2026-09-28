@@ -1,124 +1,71 @@
-# Adapter registry: self-registration, the engine as authority
+# Adapter registry
 
-The set of positioning adapters the engine fuses is **dynamic**. Adapters
-announce themselves to the engine at boot and heartbeat; the engine evicts the
-ones that stop. This mirrors the blueprint model (engine = network authority)
-and is what lets adapters run on edge nodes - an edge adapter registers over
-the data network, exactly like the WiFi scanner already posts scans.
+The engine keeps the list of adapters it can call. Adapters add themselves to
+it, so an adapter can run anywhere that reaches the engine, including an edge
+node over the data network.
 
-## The model
+## Registration
 
-```mermaid
-flowchart LR
-    M["synthetic-adapter"] -->|"POST /adapters {name, baseUrl, kind}<br/>boot, then heartbeat ~15s · DELETE on shutdown"| E
-    W["wifi-adapter"] --> E
-    R["vendor-adapter"] --> E
-    E["positioning-engine<br/><i>registry authority:<br/>persists · evicts · polls</i>"]
-```
+An adapter sends `POST /adapters` to the engine at start with
+`{name, baseUrl, kind, capabilities}` and repeats it every
+`ADAPTER_HEARTBEAT_S` (15 s by default). The request is idempotent. On a clean
+shutdown the adapter sends `DELETE /adapters/{name}`. The engine removes an
+adapter that has not announced itself for `ADAPTER_TTL_S` (45 s by default).
 
-- **Self-registration**: each adapter POSTs `{name, baseUrl, kind}` to
-  `POSITIONING_ENGINE_URL/adapters` at startup and re-POSTs on a heartbeat
-  (`ADAPTER_HEARTBEAT_S`, default 15s). The POST is idempotent (upsert).
-- **Eviction**: the engine drops a self-registered adapter after
-  `ADAPTER_TTL_S` (default 45s, i.e. three missed beats) without a heartbeat.
-- **Deregister**: best-effort `DELETE /adapters/{name}` on graceful shutdown;
-  if it is missed, the TTL cleans up.
-- **`ADAPTER_URLS` is a cold-start seed only**: applied once to an empty
-  registry (like the blueprint seed), then the live/persisted registry is
-  authoritative. A re-applied `ADAPTER_URLS` never clobbers live registrations.
+`name` is the adapter's `ADAPTER_NAME`. `kind` is the image family (`wifi`,
+`vendor`, `synthetic`), read from the image's own `adapter.contract.yaml`.
+`capabilities` is the declaration described in
+[adapters](adapters.md#what-an-adapter-declares), validated against
+[`schema/adapter-announcement.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/adapter-announcement.schema.json).
 
-## Two provenance classes, different lifecycles
+`ADAPTER_URLS` on the engine (`name=url` pairs) seeds the registry once, when
+it is empty, for adapters that do not register themselves. The engine stores
+seeded entries in `ADAPTER_REGISTRY_PATH` (on the same volume as the
+blueprint) and never removes them for silence. Self-registered entries are not
+stored, because they return within one heartbeat after an engine restart.
 
-| `registeredVia` | Source                          | Persisted? | TTL-evicted? | Liveness from        |
-|------------------|---------------------------------|-----------|--------------|----------------------|
-| `self`           | adapter POSTs itself            | no        | yes          | heartbeat            |
-| `seed`           | `ADAPTER_URLS` cold-start       | yes       | **no**       | polling (cooldown)   |
-| `manual`         | operator-declared (future)      | yes       | **no**       | polling (cooldown)   |
+| `registeredVia` | Origin | Stored | Removed for silence |
+|-----------------|--------|--------|---------------------|
+| `self` | `POST /adapters` | no | yes |
+| `seed` | `ADAPTER_URLS` | yes | no |
 
-`self` entries are ephemeral: they are not persisted because they repopulate
-within one heartbeat after an engine restart. `seed`/`manual` entries are
-intentional declarations - persisted on the engine's volume and never removed
-for lack of a heartbeat (they would not heartbeat). Their health comes from
-whether the engine's polls succeed.
+## Health
 
-Every `POST /adapters` registers as `self`, including one an operator issues by
-hand: it is heartbeat-bound and TTL-evicted like any other. A declaration meant
-to outlive a silent source comes from `ADAPTER_URLS` today.
+Two signals are independent. The heartbeat tells whether the adapter process
+reaches the engine. The polls tell whether the adapter answers the engine: a
+vendor adapter can announce itself while its vendor cloud is down, so its
+measurements fail. `state` combines them:
 
-## Membership vs reachability are orthogonal
+| `state` | Meaning |
+|---------|---------|
+| `live` | announcing (or seeded) and answering |
+| `unreachable` | registered, but the engine's calls fail and it is backing off |
+| `stale` | self-registered and silent for longer than one heartbeat, not yet removed |
 
-Two independent health signals, both on `GET /adapters`:
-
-- **heartbeat / TTL** (adapter → engine): is the adapter process alive and able
-  to reach the engine?
-- **poll cooldown** (engine → adapter): do the engine's `GET /measurement`
-  polls succeed?
-
-They differ. A vendor adapter can heartbeat fine while its upstream cloud is
-down, so its `/measurement` returns 5xx and it enters cooldown: alive but its
-data source is gone. The derived `state` keeps these distinct:
-
-| `state`       | Meaning                                                                 |
-|---------------|-------------------------------------------------------------------------|
-| `live`        | heartbeat fresh (or seed/manual) AND polls succeeding                   |
-| `unreachable` | present, but the engine's polls fail (in cooldown) - data source down   |
-| `stale`       | a `self` entry that has not re-announced within one heartbeat interval (still within TTL) |
-| (evicted)     | past TTL - removed from the registry, no longer listed                  |
-
-The engine's `GET /adapters` returns, per adapter: `name`, `baseUrl`, `kind`,
+The engine's `GET /adapters` returns each entry with `name`, `baseUrl`, `kind`,
 `registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`,
-`cooldownSecondsRemaining`, `state`. It is an internal surface, read by the
-operator tooling. The gateway's `GET /adapters` carries only `name`, `state` and
-`capabilities` to applications. The cluster address and the engine's
-bookkeeping stay internal.
+`cooldownSecondsRemaining`, `state` and `capabilities`. It is an internal
+surface for operator tools. The gateway's `GET /adapters` gives applications
+`name`, `state` and `capabilities` only.
 
-## API
+The engine has no authentication. It is reachable only inside the cluster.
 
-| Method | Path               | Who    | Notes                                            |
-|--------|--------------------|--------|--------------------------------------------------|
-| GET    | `/adapters`        | engine | membership + reachability snapshot. The gateway serves a reduced view |
-| POST   | `/adapters`        | engine | `{name, baseUrl, kind}` register / heartbeat (upsert) |
-| DELETE | `/adapters/{name}` | engine | deregister                                       |
+## Routing
 
-No auth: the engine is `ClusterIP` and never externally exposed, consistent
-with its internal-trust model (it already serves positions and PUTs the
-blueprint unauthenticated in-cluster).
+The gateway asks for a position with the source of the capability it resolves:
+`GET /position/{positioningId}?source={source}`. The engine calls the adapter
+whose `ADAPTER_NAME` equals that source. So the one rule an operator must keep
+is that a capability's `source` equals the `ADAPTER_NAME` of the adapter
+serving it.
 
-## Wiring
+Without a `source`, or with one no adapter matches, the engine reads the
+optional `DEVICE_MAP` (`positioningId=adapterName` pairs, normally unset), and
+otherwise asks every adapter and fuses the answers. An adapter answers `404`
+for a device it does not serve.
 
-Each adapter sets `POSITIONING_ENGINE_URL`, `ADAPTER_NAME` (the routing key, see
-below) and `ADAPTER_BASE_URL` (its own in-cluster Service URL the engine polls).
-With those set the adapter self-registers; unset, it runs standalone and the
-engine only knows it via an `ADAPTER_URLS` seed.
-
-The `kind` in the registration body is the adapter **family** (`wifi`,
-`vendor`, `synthetic`), read from the `adapter:` field of the image's own
-`adapter.contract.yaml`. It describes the image, not the source it is bound to,
-so the image declares it and no deployment restates it.
-
-The engine persists the registry on the same writable volume as the blueprint
-(`ADAPTER_REGISTRY_PATH`, default `/app/data/adapters.json`). No extra PVC. A
-file written before 0.16.0 carries the superseded `base_url` / `registered_via`
-names; the engine reads both and rewrites the file on the next change.
-
-## Routing: which adapter serves a device
-
-Capability-driven, no manual map needed. When the gateway asks for a position it
-passes the source named by the capability it is resolving (`GET /position/{positioning_id}?source=<source>`),
-and the engine polls the adapter whose **`ADAPTER_NAME` equals that source**. So
-the one convention is `asset.source` == `ADAPTER_NAME` (e.g. both `wittra`).
-
-Fallback order in the engine (`position_service._select_adapters`): `source`
-hint → `DEVICE_MAP` → fan out to all registered adapters and fuse. `DEVICE_MAP`
-(engine env, `positioning_id=adapter_name` CSV) is an **optional cold-start
-override**, normally unset; a device it does not list is polled against every
-adapter, and each adapter 404s for devices it does not serve. The full
-identifier chain (assetId → positioning_id → adapter → vendor) is in
-[integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md).
-
-## Relationship to the blueprint
-
-Same authority pattern, same volume, different data: the **blueprint** is the
-venue geometry (`GET/PUT /blueprint`), the **registry** is the set of live
-adapters (`GET/POST/DELETE /adapters`). See
-[`blueprint-vs-bindings.md`](blueprint-vs-bindings.md).
+The position stream uses the same registry. The engine asks each adapter that
+declares `devices` for its device list, and broadcasts each id with the
+adapter that reported it. When two adapters report the same id, an `observed`
+report wins over an `inventory` one, then the adapter name in alphabetical
+order. `DEVICE_IDS` seeds the broadcast only while no adapter declares
+`devices`.

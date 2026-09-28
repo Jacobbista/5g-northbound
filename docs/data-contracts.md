@@ -389,7 +389,7 @@ The dev fixture is [`dev/assets.json`](https://github.com/Jacobbista/5g-northbou
 ```
 
 - `assetId`: the business identifier the consumer sends in `device.assetId`. **Not** a phone number.
-- `capabilities[].positioningId`: the internal id the engine fuses on. For a vendor adapter it **must equal the vendor-native device id** (substituted verbatim into the vendor path). See [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identity-resolution-from-a-camara-assetid-to-a-vendor-fix).
+- `capabilities[].positioningId`: the internal id the engine fuses on. For a vendor adapter it **must equal the vendor-native device id** (substituted verbatim into the vendor path). See [integrating-a-vendor-rest-api.md](integrating-a-vendor-rest-api.md#identifiers).
 - `capabilities[].source`: **must equal the adapter's `ADAPTER_NAME`**, it is the routing key (see [Engine northbound contract](#engine-northbound-contract)).
 - `kind`: asset class (`tool` / `pallet` / `forklift` / `uwb-tag` / …), descriptive.
 - `metadata`: free-form per-asset extras (`floor`, `bay`, …). Carried through untouched. See [asset-registry.md](asset-registry.md).

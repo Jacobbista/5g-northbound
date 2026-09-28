@@ -340,7 +340,7 @@ can pull that list via the `↻ sync vendor` toolbar button in section 3:
    `vendor_device_id`. Re-syncs update positions without creating
    duplicates.
 
-The full schema + workflow is in [`integrating-a-vendor-rest-api.md`](./integrating-a-vendor-rest-api.md#optional-discover-block-vendor-sync-in-the-placement-editor).
+The full schema + workflow is in [`integrating-a-vendor-rest-api.md`](./integrating-a-vendor-rest-api.md#the-device-list).
 
 ## Cheat sheet
 

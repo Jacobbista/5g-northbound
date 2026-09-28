@@ -6,7 +6,7 @@
 # frame, no accuracy class. Those describe the bound vendor, not this binary,
 # and they arrive per deployment in ADAPTER_CAPABILITIES (JSON) - the same
 # reason GET /contract names no vendor's environment variables until a schema
-# is loaded. See docs/adapters.md#what-an-adapter-declares-about-itself.
+# is loaded. See docs/adapters.md#what-an-adapter-declares.
 #
 # What stays here is what is true of the image whatever it is wired to: which
 # endpoints the binary exposes, and how it is driven. `make positioning-check`

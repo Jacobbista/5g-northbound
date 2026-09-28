@@ -209,7 +209,7 @@ not the device list); `synthetic-adapter` reports both tracked tags (asset) and
 fixed anchors (infrastructure), like an on-premise RTLS. For a vendor, the
 `vendor-adapter`'s `discover.classify` block maps structural predicates on the
 vendor's own record to the two axes - see
-[integrating a vendor REST API](integrating-a-vendor-rest-api.md#classifying-devices-for-asset-onboarding).
+[integrating a vendor REST API](integrating-a-vendor-rest-api.md#the-device-list).
 
 ## Tenancy and sensitivity
 
