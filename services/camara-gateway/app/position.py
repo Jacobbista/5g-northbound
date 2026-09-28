@@ -39,14 +39,20 @@ class Position:
     latitude: float
     longitude: float
     radius_m: float
+    # The latest time the position is known to hold (the engine's
+    # establishedAt). Published as CAMARA lastLocationTime and judged by maxAge.
     last_location_time: datetime
     altitude_m: float | None = None
     vertical_accuracy_m: float | None = None
+    # As recent as its sources can provide. maxAge=0 accepts only this.
+    current: bool = False
+    # When the gateway obtained it from the engine. Governs cache reuse only.
+    fetched_at: datetime | None = None
 
 
-# Position cache: the last fix seen per (positioning_id, source). Freshness is
-# judged by the fix's own last_location_time, not by insert time, so a single
-# age metric drives both cache reuse and the CAMARA maxAge contract.
+# Position cache: the last position fetched per (positioning_id, source). Two
+# clocks: the fetch time decides whether the entry may be reused at all, the
+# established time decides whether it satisfies the request's maxAge.
 _cache: dict[tuple[str, str | None], "Position"] = {}
 
 
@@ -164,13 +170,35 @@ def _position_path(device_id: str, source: str | None) -> str:
     return f"/position/{device_id}" + (f"?source={source}" if source else "")
 
 
-def _age_s(pos: Position, now: datetime) -> float:
-    t = pos.last_location_time
+def _seconds_since(t: datetime, now: datetime) -> float:
     # Engine timestamps are tz-aware; guard a naive one so subtracting it from
     # an aware `now` cannot raise.
     if t.tzinfo is None:
         t = t.replace(tzinfo=timezone.utc)
     return (now - t).total_seconds()
+
+
+def _age_s(pos: Position, now: datetime) -> float:
+    return _seconds_since(pos.last_location_time, now)
+
+
+def _established(d: dict) -> tuple[datetime, bool]:
+    """The established time and currency the engine reports. An engine that
+    predates them reports only the fix time: the position then holds as of
+    that time and is not current."""
+    if d.get("establishedAt"):
+        return datetime.fromisoformat(d["establishedAt"]), bool(d.get("current"))
+    return datetime.fromisoformat(d["timestamp"]), False
+
+
+def _satisfies(pos: Position, max_age: int | None, now: datetime) -> bool:
+    """maxAge absent accepts any age. 0 asks for a position as recent as its
+    sources can provide. N accepts one established at most N seconds ago."""
+    if max_age is None:
+        return True
+    if max_age == 0:
+        return pos.current
+    return _age_s(pos, now) <= max_age
 
 
 async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> Position:
@@ -197,13 +225,16 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
     except httpx.HTTPError as exc:
         log.warning("engine unreachable: %s", exc)
         raise CamaraError(503, "UNAVAILABLE", "Position source unreachable.") from exc
+    established, current = _established(d)
     return Position(
         latitude=d["latitude"],
         longitude=d["longitude"],
         radius_m=_radius_or_default(d.get("accuracy")),
-        last_location_time=datetime.fromisoformat(d["timestamp"]),
+        last_location_time=established,
         altitude_m=d.get("altitude"),
         vertical_accuracy_m=d.get("vertical_accuracy_m"),
+        current=current,
+        fetched_at=datetime.now(timezone.utc),
     )
 
 
@@ -214,25 +245,32 @@ async def get_position(
     error_ns: str = "LOCATION_RETRIEVAL",
 ) -> Position:
     """Single seam between the gateway and the position source, honouring the
-    CAMARA maxAge freshness contract.
+    CAMARA maxAge contract as the profile defines it.
 
-    maxAge semantics (spec): absent means "any age" is acceptable; 0 requests a
-    fresh calculation, so the cache is bypassed; N accepts a fix no older than N
-    seconds. A cached fix is reused only while it still satisfies that bound.
-    When even a freshly fetched fix is older than maxAge, the request cannot be
-    fulfilled -> 422 {ns}.UNABLE_TO_FULFILL_MAX_AGE. `error_ns` namespaces the
-    API-specific codes (LOCATION_RETRIEVAL / LOCATION_VERIFICATION).
+    maxAge is judged on the established time, the latest time the position is
+    known to hold. Absent accepts any age. 0 accepts only a position as recent
+    as its sources can provide, and always asks the engine. N accepts a
+    position established at most N seconds ago. A cached position is reused
+    while it was fetched less than LOCATION_CACHE_TTL_S ago and satisfies the
+    request. When a freshly fetched position does not satisfy it either, the
+    request cannot be fulfilled: 422 {ns}.UNABLE_TO_FULFILL_MAX_AGE. `error_ns`
+    namespaces the API-specific codes (LOCATION_RETRIEVAL /
+    LOCATION_VERIFICATION).
     """
     now = datetime.now(timezone.utc)
     key = (device_id, source)
     if max_age != 0:
-        bound = max_age if max_age is not None else get_settings().location_cache_ttl_s
         cached = _cache.get(key)
-        if cached is not None and _age_s(cached, now) <= bound:
+        if (
+            cached is not None
+            and cached.fetched_at is not None
+            and _seconds_since(cached.fetched_at, now) <= get_settings().location_cache_ttl_s
+            and _satisfies(cached, max_age, now)
+        ):
             return cached
     pos = await _fetch_position(device_id, source, error_ns)
     _cache[key] = pos
-    if max_age is not None and max_age > 0 and _age_s(pos, now) > max_age:
+    if not _satisfies(pos, max_age, now):
         raise CamaraError(
             422, f"{error_ns}.UNABLE_TO_FULFILL_MAX_AGE",
             "Unable to provide a location fresh enough for the requested maxAge.",
@@ -280,12 +318,16 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
         latitude=fused["latitude"],
         longitude=fused["longitude"],
         radius_m=fused["accuracy"],
+        # The fused position holds as of its least recent contribution, and is
+        # current only when every contribution is.
         last_location_time=fused["timestamp"],
         altitude_m=fused.get("altitude"),
         vertical_accuracy_m=next(
             (p.vertical_accuracy_m for p in positions if p.vertical_accuracy_m is not None),
             None,
         ),
+        current=all(p.current for p in positions),
+        fetched_at=min((p.fetched_at for p in positions if p.fetched_at), default=None),
     )
 
 
@@ -307,7 +349,7 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
         latitude=d["latitude"],
         longitude=d["longitude"],
         radius_m=_radius_or_default(d.get("accuracy")),
-        last_location_time=datetime.fromisoformat(d["timestamp"]),
+        last_location_time=_established(d)[0],
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),
         altitude_m=d.get("altitude"),
@@ -442,4 +484,6 @@ def _mock_position() -> Position:
     # plan keeps the device on the plan.
     lat = _MOCK_CENTER[0] + random.uniform(-0.00005, 0.00005)
     lon = _MOCK_CENTER[1] + random.uniform(-0.00005, 0.00005)
-    return Position(lat, lon, _MOCK_RADIUS_M, datetime.now(timezone.utc))
+    now = datetime.now(timezone.utc)
+    # Computed on request, so current by construction.
+    return Position(lat, lon, _MOCK_RADIUS_M, now, current=True, fetched_at=now)

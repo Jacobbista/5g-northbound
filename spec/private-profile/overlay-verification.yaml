@@ -20,6 +20,14 @@ actions:
         pattern: '^[A-Za-z0-9._:-]{1,128}$'
         description: First-class asset identifier (private-asset profile).
         example: pkg-4471
+  - target: $.components.schemas.LastLocationTime.description
+    update: |
+      The latest date and time at which the position of the asset was
+      established: by a new fix, or, for a source that reports on motion, by a
+      communication from the device after that fix, which confirms that the
+      asset has not moved. It must follow RFC 3339 and must have time zone.
+      maxAge is judged on this time. maxAge=0 accepts only a position as recent
+      as its sources can provide.
   - target: $.components.schemas.Device.properties.phoneNumber
     remove: true
   - target: $.components.schemas.Device.properties.ipv4Address

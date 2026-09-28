@@ -39,7 +39,7 @@ def test_missing_source_drops_out_continuity():
     assert out["sources"] == ["wittra"]
 
 
-def test_latest_timestamp_and_union_altitude_from_sharpest():
+def test_earliest_timestamp_and_altitude_from_sharpest():
     fixes = [
         {"latitude": 0.0, "longitude": 0.0, "accuracy": 3.0, "timestamp": "2026-01-01T00:00:00Z",
          "altitude": 99.0, "sources": ["wifi"]},
@@ -47,5 +47,5 @@ def test_latest_timestamp_and_union_altitude_from_sharpest():
          "altitude": 1.2, "sources": ["wittra"]},
     ]
     out = fuse_fixes(fixes)
-    assert out["timestamp"] == "2026-01-01T00:00:05Z"  # freshest
+    assert out["timestamp"] == "2026-01-01T00:00:00Z"  # holds as of the least recent
     assert out["altitude"] == 1.2  # from the sharpest fix

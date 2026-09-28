@@ -496,9 +496,19 @@ components:
         latitude: 50.735851
         longitude: 7.10066
     LastLocationTime:
-      description: Last date and time when the device was localized. It must follow
-        [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339#section-5.6) and
-        must have time zone.
+      description: 'The latest date and time at which the position of the asset was
+
+        established: by a new fix, or, for a source that reports on motion, by a
+
+        communication from the device after that fix, which confirms that the
+
+        asset has not moved. It must follow RFC 3339 and must have time zone.
+
+        maxAge is judged on this time. maxAge=0 accepts only a position as recent
+
+        as its sources can provide.
+
+        '
       format: date-time
       type: string
       example: '2023-09-07T10:40:52Z'

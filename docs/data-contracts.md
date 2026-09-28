@@ -57,28 +57,31 @@ Request:
 { "device": { "assetId": "pkg-4471" }, "maxAge": 120 }
 ```
 
-`maxAge` (seconds) bounds fix freshness against `lastLocationTime`: absent = any
-age; `N` = no older than `N` (else `422 …UNABLE_TO_FULFILL_MAX_AGE`); `0` =
-bypass the cache and fetch live. `maxSurface` (m²) rejects a fix whose area
-(`π·radius²`) is larger (`422 …UNABLE_TO_FULFILL_MAX_SURFACE`). A cache reuses
-the last fix per asset only while it still satisfies the request's `maxAge` (or
-`LOCATION_CACHE_TTL_S`, default 5 s, when absent).
+`lastLocationTime` is the latest time the position is known to hold, from the
+source's declared reporting model (see the
+[profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md#freshness-maxage)).
+`maxAge` (seconds) is judged on it: absent accepts any age, `N` accepts a
+position established at most `N` seconds ago, `0` accepts only a position as
+recent as its sources can provide. Otherwise `422 …UNABLE_TO_FULFILL_MAX_AGE`.
+`maxSurface` (m²) rejects a fix whose area (`π·radius²`) is larger
+(`422 …UNABLE_TO_FULFILL_MAX_SURFACE`). A cache reuses the last position per
+asset while it was fetched less than `LOCATION_CACHE_TTL_S` ago (default 5 s)
+and satisfies the request's `maxAge`.
 
 Response (`Location`):
 
 ```json
 {
-  "lastLocationTime": "2024-01-01T12:00:00Z",
+  "lastLocationTime": "2026-09-27T10:00:05Z",
   "area": {
     "areaType": "CIRCLE",
-    "center":   { "latitude": 45.064312, "longitude": 7.659154 },
-    "radius":   50.0
+    "center":   { "latitude": 59.404251, "longitude": 17.949247 },
+    "radius":   1.0
   },
   "source":           "wittra",
   "kind":             "pallet",
-  "horizontalAccuracy": 50.0,
-  "altitude":         240.4,
-  "verticalAccuracy": 2.0
+  "horizontalAccuracy": 0.3,
+  "altitude":         32.6
 }
 ```
 
@@ -95,7 +98,7 @@ Request:
 ```json
 {
   "device": { "assetId": "pkg-4471" },
-  "area":   { "areaType": "CIRCLE", "center": { "latitude": 45.064312, "longitude": 7.659154 }, "radius": 5000 },
+  "area":   { "areaType": "CIRCLE", "center": { "latitude": 59.404210, "longitude": 17.949278 }, "radius": 50 },
   "maxAge": 120
 }
 ```
@@ -103,7 +106,7 @@ Request:
 Response (`VerifyLocationResponse`):
 
 ```json
-{ "verificationResult": "TRUE", "lastLocationTime": "2024-01-01T12:00:00Z" }
+{ "verificationResult": "TRUE", "lastLocationTime": "2026-09-27T10:00:05Z" }
 ```
 
 `verificationResult` is `"TRUE"`, `"FALSE"`, or `"PARTIAL"` (not a boolean; no `UNKNOWN`). The gateway classifies the fix's **uncertainty circle** (centre + the reported accuracy as radius, without the retrieval `radius ≥ 1 m` floor) against the queried area: `TRUE` when it lies fully inside, `FALSE` when fully outside, `PARTIAL` when it straddles the boundary. `matchRate` (1–99) is present only for `PARTIAL` and is the percentage of the fix circle inside the area.

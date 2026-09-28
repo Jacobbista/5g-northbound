@@ -38,8 +38,9 @@ def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     lon = sum(w * f["longitude"] for w, f in zip(weights, usable)) / wsum
     accuracy = math.sqrt(1.0 / wsum)
 
-    # Altitude and timestamps come from the sharpest fix (lowest accuracy_m);
-    # not every source reports altitude, and the freshest position anchors time.
+    # Altitude comes from the sharpest fix (lowest accuracy): not every source
+    # reports one. The fused position holds only as of its least recent
+    # contribution, so its time is the earliest.
     best = min(usable, key=lambda f: f["accuracy"])
     sources: list[str] = []
     for f in usable:
@@ -54,7 +55,7 @@ def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
         "altitude": best.get("altitude"),
         "sources": sources,
     }
-    ts = _latest(usable, "timestamp")
+    ts = _earliest(usable, "timestamp")
     if ts is not None:
         out["timestamp"] = ts
     obs = _latest(usable, "observedAt")
@@ -80,3 +81,8 @@ def _sources_of(fix: dict[str, Any]) -> list[str]:
 def _latest(fixes: list[dict[str, Any]], key: str) -> Any:
     vals = [f[key] for f in fixes if f.get(key) is not None]
     return max(vals) if vals else None
+
+
+def _earliest(fixes: list[dict[str, Any]], key: str) -> Any:
+    vals = [f[key] for f in fixes if f.get(key) is not None]
+    return min(vals) if vals else None

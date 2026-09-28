@@ -267,6 +267,96 @@ async def test_retrieve_maxage_unfulfillable_422(
     assert resp.json()["code"] == "LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE"
 
 
+def _engine_established(established: str, current: bool):
+    body = _engine_ok().json()
+    body["timestamp"] = "2026-06-01T00:00:00+00:00"  # the fix itself is days old
+    body["establishedAt"] = established
+    body["current"] = current
+    return httpx.Response(200, json=body)
+
+
+def _iso_ago(seconds: float) -> str:
+    from datetime import timedelta
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+
+
+async def _engine(monkeypatch):
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+
+async def test_retrieve_maxage_zero_refuses_a_position_that_is_not_current(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    # The KELT case: a silent tag's position is not current, so maxAge=0 cannot
+    # be fulfilled even though the engine still has a fix.
+    await _engine(monkeypatch)
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_established(_iso_ago(5), current=False))
+    resp = await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 0}, headers=auth_headers)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE"
+
+
+async def test_retrieve_maxage_zero_accepts_a_current_position(
+    client, respx_mock, auth_headers, monkeypatch, profiled_location_validator
+):
+    await _engine(monkeypatch)
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_established(_iso_ago(5), current=True))
+    resp = await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 0}, headers=auth_headers)
+    assert resp.status_code == 200
+    profiled_location_validator.validate(resp.json())
+
+
+async def test_retrieve_maxage_is_judged_on_the_established_time(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    # A still asset: the fix is days old, a communication 10 s ago confirms it.
+    await _engine(monkeypatch)
+    established = _iso_ago(10)
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_established(established, current=True))
+    resp = await client.post(RETRIEVE, json={"device": ASSET, "maxAge": 60}, headers=auth_headers)
+    assert resp.status_code == 200
+    expected = datetime.fromisoformat(established).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert resp.json()["lastLocationTime"] == expected
+
+
+async def test_retrieve_reuses_the_cache_by_fetch_time_not_fix_age(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    # An old position is still reused while it was fetched recently.
+    await _engine(monkeypatch)
+    route = respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=_engine_established(_iso_ago(86400), current=False))
+    r1 = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    r2 = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert r1.status_code == r2.status_code == 200
+    assert route.call_count == 1
+
+
+async def test_retrieve_fused_position_holds_as_of_its_least_recent_contribution(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    await _engine(monkeypatch)
+    amap = {"version": 4, "assets": [
+        {"assetId": "robot-9", "kind": "forklift", "org": "acme",
+         "capabilities": [{"source": "wifi", "positioningId": "wifi-9"},
+                          {"source": "wittra", "positioningId": "uwb-9"}]}]}
+    assert (await client.put("/assets", json=amap, headers=auth_headers)).status_code == 200
+    older, newer = _iso_ago(300), _iso_ago(5)
+    for pid, src, est in (("wifi-9", "wifi", older), ("uwb-9", "wittra", newer)):
+        body = _engine_established(est, current=True).json()
+        body["positioningId"] = pid
+        respx_mock.get(f"http://engine.test/position/{pid}?source={src}").mock(
+            return_value=httpx.Response(200, json=body))
+    resp = await client.post(RETRIEVE, json={"device": {"assetId": "robot-9"}}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["lastLocationTime"] == datetime.fromisoformat(older).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 # --- identity + maxSurface ---
 
 

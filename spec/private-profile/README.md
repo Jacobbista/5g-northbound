@@ -189,25 +189,40 @@ named as out of scope, never silently ignored.
 
 ### Freshness: `maxAge`
 
-`maxAge` (seconds) bounds how old an accepted fix may be, measured against the
-fix's own `lastLocationTime`:
+CAMARA treats the moment a device is localized and the moment its position is
+computed as one event. A private RTLS that reports on motion separates them: a
+still asset keeps an old fix, and its recent communications confirm that the
+fix still holds. The profile resolves this through a declaration. Each source
+declares how it reports (`reporting`: `on_request`, `periodic`, `on_motion`,
+with a `reportingInterval`, see
+[adapters.md](../../docs/adapters.md#reporting-and-reportinginterval)), and
+`lastLocationTime` is the **established time**: the latest time at which the
+position is known to hold. For a motion-triggered source it is the later of the
+fix time and the last communication. For a fused position it is the earliest
+among the contributions.
 
-- **absent** - any age is acceptable; the fix is returned with its
-  `lastLocationTime`.
-- **`N`** - a fix older than `N` seconds cannot be served. When even a freshly
-  fetched fix is older than `N`, the request fails with
-  `422 LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE` (the `LOCATION_VERIFICATION.*`
-  code on verify).
-- **`0`** - a fresh calculation is requested; the cache is bypassed and the live
-  source is queried. The sources are pull-based (the gateway fetches the latest
-  vendor/engine fix; it cannot force a new computation), so `0` returns the
-  freshest fix available rather than failing on non-zero age.
+A client that reads a `lastLocationTime` of ten seconds ago for an asset whose
+fix is three days old concludes that the asset was at that position ten seconds
+ago. The declaration makes that conclusion true, so every conclusion a stock
+CAMARA client draws from the field stays correct.
 
-A small position cache backs this: the last fix per `(positioning_id, source)`
-is reused only while it still satisfies the request's `maxAge` (or, absent one,
-`LOCATION_CACHE_TTL_S`, default 5 s). Freshness is judged by `lastLocationTime`,
-so a single age metric drives both cache reuse and the `maxAge` contract - a
-stale fix is never served as current.
+`maxAge` (seconds) is judged on the established time:
+
+- **absent** - any age is acceptable.
+- **`N`** - a position established more than `N` seconds ago cannot be served.
+- **`0`** - only a position as recent as its sources can provide is served:
+  always for a source that computes on request, within one
+  `reportingInterval` for the other models. A source that declares no model is
+  never current. The gateway always queries the engine for `0`.
+
+A request that cannot be satisfied fails with
+`422 LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_AGE` (the `LOCATION_VERIFICATION.*`
+code on verify).
+
+A small position cache keeps the last position per `(positioning_id, source)`.
+Two clocks govern it: an entry is reused while the gateway fetched it less than
+`LOCATION_CACHE_TTL_S` ago (default 5 s), and only when it satisfies the
+request's `maxAge` on its established time.
 
 ### Area size: `maxSurface`
 
