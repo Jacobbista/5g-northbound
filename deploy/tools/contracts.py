@@ -306,6 +306,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
       ERROR  same var name, conflicting `sensitive` across services
       ERROR  sensitive var carries a real (non-placeholder) default
       ERROR  var declares a `type` outside ALLOWED_TYPES
+      ERROR  var is `writable` but its `type` is not `path`
       WARN   api/ui service without external_origin (KELT can't route it)
       WARN   var without set_by (dashboard wizard hides/derives from it)
     """
@@ -328,6 +329,10 @@ def cmd_lint(args: argparse.Namespace) -> int:
                 errors.append(
                     f"{c.service}.{v.name}: type '{v.type}' is not one of {sorted(ALLOWED_TYPES)}"
                 )
+            # `writable` names a path the service writes at runtime, which needs
+            # a persistent volume. Any other value is not a place to write.
+            if v.writable and v.type != "path":
+                errors.append(f"{c.service}.{v.name}: writable but type '{v.type}' is not 'path'")
         if c.kind in ("api", "ui") and not c.external_origin:
             warns.append(f"{c.service}: kind={c.kind} but no external_origin (KELT reachability needs it)")
 

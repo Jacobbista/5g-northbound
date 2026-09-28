@@ -35,3 +35,15 @@ def test_no_service_declares_a_vendor_specific_variable():
     for c in contracts.load_contracts():
         for v in c.vars:
             assert not v.name.startswith("WITTRA_"), f"{c.service}.{v.name}"
+
+
+def test_only_a_path_is_writable():
+    """`writable` means the service writes this path at runtime, so the path
+    needs a persistent volume. A value that is not a path cannot be written."""
+    sys.path.insert(0, str(ROOT / "deploy" / "tools"))
+    import contracts
+
+    for c in contracts.load_contracts():
+        for v in c.vars:
+            if v.writable:
+                assert v.type == "path", f"{c.service}.{v.name}: {v.type}"

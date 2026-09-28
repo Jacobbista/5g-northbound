@@ -47,11 +47,10 @@ class Settings(BaseSettings):
     # in steady state - the editor PUTs the blueprint over HTTP.
     blueprint_seed_path: str = ""
     websocket_interval_ms: int = 500
-    # Cold-start seed for the broadcast set, used ONLY when no adapter
-    # advertises the `devices` capability. In steady state the broadcast learns
-    # its ids + per-id source from the adapters themselves (capability-driven,
-    # see services/discovery.py), so this stays at its default.
-    device_ids: str = "uwb-tag-001"
+    # Seed for the broadcast set, used only when no adapter advertises the
+    # `devices` capability. The broadcast otherwise learns its ids and their
+    # source from the adapters (services/discovery.py). Empty: no seed.
+    device_ids: str = ""
     # How often the broadcast re-discovers its targets from adapter /devices.
     # Decoupled from websocket_interval_ms so discovery polling does not run at
     # the (sub-second) broadcast rate.

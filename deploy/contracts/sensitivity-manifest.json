@@ -97,7 +97,7 @@
       "tier": "configmap",
       "routes_to": "ConfigMap",
       "set_by": "compose",
-      "writable": true,
+      "writable": false,
       "type": "json",
       "consumed_by": [
         "synthetic-adapter",
@@ -119,10 +119,14 @@
       "writable": false,
       "type": "number",
       "consumed_by": [
-        "positioning-engine"
+        "positioning-engine",
+        "vendor-adapter",
+        "wifi-adapter"
       ],
       "services": [
-        "positioning-engine"
+        "positioning-engine",
+        "vendor-adapter",
+        "wifi-adapter"
       ]
     },
     {

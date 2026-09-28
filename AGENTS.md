@@ -71,7 +71,7 @@ Reserved for a test-double of an external system, used in `docker compose` so th
 
 - One router file per logical domain. No business logic in routers; delegate to a service module.
 - All request and response bodies are Pydantic models with `model_config = ConfigDict(extra="ignore")`.
-- Configuration from environment variables via `pydantic_settings.BaseSettings`. No hardcoded URLs, secrets, or credentials in application code. Every configurable service declares its environment surface in `env.contract.yaml` next to the code, and serves it at `GET /contract`; `make env-check` validates the running compose stack against those contracts. `synthetic-adapter` and the mocks are the exception: they generate their own data and an operator never wires them to anything, so there is nothing to configure and no contract to declare.
+- Configuration from environment variables via `pydantic_settings.BaseSettings`. No hardcoded URLs, secrets, or credentials in application code. Every published image declares the environment variables it reads in `env.contract.yaml` next to the code and serves them at `GET /contract`. `make env-check` validates the compose stack against those contracts. The mocks are built only by `make demo`, are never published, and declare no contract.
 - Service dependencies are injected through FastAPI `Depends(...)`. Routes do not instantiate services.
 - `camara-gateway` raises `CamaraError(status, code, message)` and lets a central exception handler render the CAMARA envelope. Other services use `HTTPException` directly. Never return a 200 response with an error body.
 - No comments explaining what code does. Add a short comment only when a constraint is non-obvious (e.g. why a number was chosen, why an order matters).
