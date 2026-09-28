@@ -5,11 +5,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Path to the WiFi adapter's tunables + per-AP BSSID bindings. When
-    # LAYOUT_PATH is set, this file should only carry tunables + bindings
-    # (id → bssids list) - positions are joined from the blueprint.
-    # When LAYOUT_PATH is unset, this file must also carry router x/y
-    # (legacy mode, kept for tests and standalone runs).
+    # The bindings file: tunables, per-anchor BSSIDs and calibration samples.
+    # Anchor positions come from the blueprint, joined by anchor id.
     wifi_config_path: str = "/app/config/wifi-config.json"
 
     # The blueprint (AP positions) is fetched over HTTP from the engine, the

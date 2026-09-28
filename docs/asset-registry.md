@@ -1,74 +1,35 @@
 # Asset registry
 
-The **Asset Identity Map** is the list of tracked things the platform knows
-about - a UWB tag, a tool, a pallet, a forklift. It is the private-asset
-equivalent of a subscriber directory, except an asset has no phone number: it
-is identified by a business id the enterprise chooses (`pkg-4471`,
-`forklift-7`).
+The asset map is the list of assets the gateway knows. An asset has no phone
+number. It is named by an `assetId` the organisation chooses, such as
+`pkg-4471` or `forklift-7`, and carries one or more capabilities, each a way of
+locating it. The gateway holds the map, serves it on `GET /assets`, replaces it
+on `PUT /assets`, and persists it on its own volume.
 
-The gateway is the authority for this registry, exactly as the engine is for
-the blueprint. You read it with `GET /assets`, replace it with `PUT /assets`,
-and it persists to a PVC-backed store. **At runtime it is never a mounted
-file** - mounting one has shadowed live state before. The committed
-`dev/assets.json` is a dev seed only.
+## The document
 
-## What an asset is
+The contract is
+[`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json),
+version 4. The document is `{"version": 4, "assets": [...]}`.
 
-An asset is a physical thing with an enterprise-chosen identity and **one or
-more positioning capabilities**. The identity is first-class and independent of
-any technology; a capability is one way the thing is located - a `source` and
-the id that source knows it by. A single-capability asset is positioned by one
-technology; a multi-capability asset carries several (a robot with a WiFi radio
-and a UWB tag), and the engine fuses their fixes into one. The same physical
-thing is a different id to each source, so each capability names its own
-`positioningId`.
+| Asset field | Required | Content |
+|-------------|----------|---------|
+| `assetId` | yes | `^[A-Za-z0-9._:-]{1,128}$`, the CAMARA `device.assetId` |
+| `kind` | yes | the asset class, published as profile `kind` |
+| `org` | yes | `^[a-z0-9-]{1,64}$`, the organisation that owns the asset, matched against the token's `org` claim |
+| `capabilities` | yes | one or more `{source, positioningId}` |
+| `label` | no | a name for user interfaces |
+| `metadata` | no | a free object, such as `floor` or `bay` |
 
-## Structure
+| Capability field | Content |
+|------------------|---------|
+| `source` | the name of the adapter that serves this capability |
+| `positioningId` | `^[A-Za-z0-9._:-]{1,128}$`, the id that adapter knows the asset by |
 
-The contract is [`schema/asset.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/asset.schema.json)
-(version `3`, pinned in `schema/VERSION`). One entry per asset:
-
-| Field          | Req | Type / values                                        | Meaning |
-|----------------|-----|------------------------------------------------------|---------|
-| `assetId`     | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | First-class CAMARA id (`device.assetId`). A business id, **not** a phone number |
-| `kind`         | ✅  | `uwb-tag` \| `tool` \| `pallet` \| `forklift` \| `asset` \| `ue` | Asset class, surfaced as profile `kind` |
-| `org`          | ✅  | `^[a-z0-9-]{1,64}$`                                   | Tenant. Joined against the token `org` claim - a consumer sees only its own |
-| `capabilities` | ✅  | array, ≥1 `capability`                                | The ways the asset is positioned. Several entries fuse into one fix |
-| `label`        |     | string                                               | Human-readable name for UIs |
-| `metadata`     |     | free-form object                                     | Per-asset extras (e.g. `floor`, `bay`) |
-
-A `capability`:
-
-| Field            | Req | Type / values                                        | Meaning |
-|------------------|-----|------------------------------------------------------|---------|
-| `source`         | ✅  | `wittra` \| `wifi` \| `fiveg` \| `gnss` \| `synthetic`    | Positioning modality / adapter, surfaced as profile `source` |
-| `positioningId` | ✅  | `^[A-Za-z0-9._:-]{1,128}$`                            | The id this source routes on (the engine polls the `source` adapter with it) |
-
-**A `positioningId` is unique across the whole map**, not just within one
-asset: the engine routes it to a single learned source, and the gateway's live
-stream groups broadcasts by `positioningId` to find the owning asset - one
-lookup, so it can resolve to only one asset. `PUT /assets` rejects a write
-where two assets (or two capabilities of the same asset) claim the same
-`positioningId`, with `422 DUPLICATE_POSITIONING_ID` naming both assetIds.
-This is checked only at write time, not on every read, so a map written before
-this check existed is not retroactively invalidated - fix it with a corrected
-`PUT /assets`.
-
-`source` and `kind` are checked against the live fabric on write, not against a
-list in the gateway's source. `PUT /assets` asks the engine which adapters are
-registered at that moment and what kinds they advertise, the same data
-`GET /capabilities` aggregates, and rejects a value no adapter serves with
-`422 UNKNOWN_SOURCE` or `422 UNKNOWN_KIND`. A closed list in code would have to
-be edited and released every time a vendor is onboarded, which is the opposite
-of how a vendor joins here. Two deliberate gaps: a value the stored map already
-uses stays writable, so an adapter that is down long enough to be evicted does
-not make its assets unwritable, and an engine that cannot be reached cannot be
-asked, so the write proceeds rather than blocking an operator during an
-incident.
-
-The whole document is `{ "version": 4, "assets": [ … ] }`. Copy
+A physical thing is a different id to each source, so each capability carries
+its own `positioningId`. The seed in
 [`dev/assets.json`](https://github.com/Jacobbista/5g-northbound/blob/main/dev/assets.json)
-as your starting point:
+has a single-capability pallet and a robot located by WiFi and UWB:
 
 ```json
 {
@@ -78,9 +39,7 @@ as your starting point:
       "assetId": "pkg-4471",
       "kind": "pallet",
       "org": "acme",
-      "capabilities": [
-        { "source": "wittra", "positioningId": "wittra-tag-01" }
-      ],
+      "capabilities": [{ "source": "wittra", "positioningId": "wittra-tag-01" }],
       "label": "Wittra tag 01",
       "metadata": { "floor": 0, "note": "Timber bundle" }
     },
@@ -89,8 +48,8 @@ as your starting point:
       "kind": "forklift",
       "org": "acme",
       "capabilities": [
-        { "source": "wifi", "positioningId": "puppypi-01" },
-        { "source": "wittra", "positioningId": "wittra-tag-07" }
+        { "source": "wifi", "positioningId": "wifi-asset-02" },
+        { "source": "wittra", "positioningId": "wittra-tag-02" }
       ],
       "label": "Mobile robot 2"
     }
@@ -98,125 +57,81 @@ as your starting point:
 }
 ```
 
-## How an asset resolves to a position
+For each capability of `robot-2` the gateway asks the engine for the position
+of that `positioningId` from that `source`, then fuses the answers into one
+CAMARA `Location` ([fusion strategies](fusion-strategies.md)). The first
+capability is the primary one. Device diagnostics and placement use it, and the
+position stream and the asset details report its `positioningId` and `source`
+beside the fused position.
 
-`assetId` is what a CAMARA consumer asks for; everything after it is internal.
-The gateway resolves the asset to its capabilities, asks the engine for each one,
-and fuses the results into a single fix.
+## Checks on write
 
-```mermaid
-flowchart LR
-    A["CAMARA request<br/>device.assetId = robot-2"] --> G["camara-gateway<br/>look up capabilities · fuse the fixes"]
-    G -->|"GET /position/puppypi-01?source=wifi"| E["positioning-engine<br/>route one id by source"]
-    G -->|"GET /position/wittra-tag-07?source=wittra"| E
-    E --> AW["wifi-adapter"]
-    E --> AV["vendor-adapter"]
-    AW --> G
-    AV --> G
-    G --> F["one fused CAMARA fix"]
-```
+`PUT /assets` refuses a document that breaks one of these rules, with `422`:
 
-Each capability's `positioningId` joins to an adapter through the engine's
-[adapter registry / routing](adapter-registry.md); `source` names which modality
-answers. The gateway calls the engine once per capability, weights each fix by its
-accuracy, and reconciles them into one: a sharper source dominates, a source with
-no current fix drops out, so an asset stays located as its coverage changes. The
-engine stays capability-agnostic (it routes a single `positioningId`); the
-cross-capability fusion is the gateway's. A single-capability asset is the same
-path with one capability. Full chain down to a vendor REST API:
-[integrating a vendor REST API](integrating-a-vendor-rest-api.md).
+| Code | Rule |
+|------|------|
+| `DUPLICATE_POSITIONING_ID` | a `positioningId` appears once in the whole map, since the position stream maps it back to one asset |
+| `UNKNOWN_SOURCE` | a `source` is served by an adapter registered with the engine |
+| `UNKNOWN_KIND` | a `kind` is advertised by a registered adapter in its `kinds` |
 
-## Adding a device
+A `source` or `kind` the stored map already uses is accepted, so the assets of
+an adapter that is down stay writable. When the engine cannot be reached, the
+source and kind checks are skipped. The checks run on write only: a stored map
+is not validated again when it is read.
 
-Runtime is authoritative, so add through the gateway - do **not** edit a file on
-the running pod.
+## Writing the map
 
-`PUT /assets` **replaces the whole map**. Never blind-write: read, merge your
-new entry, write back. Only the operator token, which carries no `org` claim,
-may write. A tenant-scoped token gets `403 PERMISSION_DENIED`.
+`PUT /assets` replaces the whole map. Read it, change it, write it back:
 
 ```bash
-# 1. read the current map
-curl -s -H "Authorization: Bearer $JWT" $GW/assets > assets.json
-
-# 2. add your asset to assets.json (keep version: 3)
-
-# 3. write it back
-curl -s -X PUT -H "Authorization: Bearer $JWT" \
-     -H "Content-Type: application/json" \
-     --data @assets.json $GW/assets
+curl -s -H "Authorization: Bearer $JWT" "$GW/assets" > assets.json
+# edit assets.json
+curl -s -X PUT -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+     --data @assets.json "$GW/assets"
 ```
 
-The KELT dashboard does this for you with the operator token. Onboarding
-discovered tags is the dashboard's job, not the editor's.
+Only an operator token, which carries no `org` claim, writes. A token with an
+`org` claim receives `403 PERMISSION_DENIED`. The KELT dashboard writes the map
+with its operator token.
 
-### Seeding a fresh deployment
+The gateway keeps the map in `ASSET_STORE_FILE` (`/app/data/assets.json`),
+which belongs on a persistent volume. When that file is absent at start, the
+gateway copies `ASSET_SEED_FILE` (`/app/config/assets.seed.json`) into it once.
+Without either, it starts with an empty map.
 
-On first boot the store is empty. The gateway seeds it **once** from
-`ASSET_SEED_FILE` (default `/app/config/assets.seed.json`), then persists to
-`ASSET_STORE_FILE` (default `/app/data/assets.json`, the PVC) and never seeds
-again. Mount your `dev/assets.json` shape as the seed for a cold start; after
-that, all changes go through `PUT /assets`.
+## Onboarding discovered devices
 
-## Discovering devices to onboard
+An adapter that advertises the `devices` capability lists the devices its
+source knows on `GET /devices`. The engine merges these lists, and the gateway
+serves on `GET /assets/discoverable` the devices whose id is not yet a
+`positioningId` in the map. The list spans every organisation, so only an
+operator token reads it. The KELT Assets page offers each candidate for
+onboarding: the candidate's `id` becomes a `positioningId`, its `source` the
+capability's source, and the operator adds `assetId`, `kind`, `org` and
+`label`. Nothing is onboarded without a `PUT /assets`.
 
-Typing every asset by hand is mechanical when the source already knows which
-devices exist. Each adapter that advertises the `devices` capability exposes
-`GET /devices`; the engine aggregates them (`GET /devices`), and the gateway
-surfaces the ones **not yet onboarded** at `GET /assets/discoverable`. KELT's
-Assets tab lists those as candidates for one-click onboarding, with `source`
-prefilled. Discovery spans every tenant, so it answers the operator token only.
+| Candidate field | Content |
+|-----------------|---------|
+| `id`, `source` | the device id and the adapter that reports it |
+| `origin` | `inventory` for a list the vendor maintains (vendor-adapter), `observed` for a device seen in recent traffic (wifi-adapter) |
+| `role` | `asset` or `infrastructure`, when the source classifies its devices |
+| `sourceClass` | the positioning technology, when the source states it |
+| `deviceType`, `label` | as the source reports them |
+| `lastCommunicationTime` | when the device last communicated with its source, RFC 3339 |
 
-```mermaid
-flowchart LR
-    W["wifi-adapter<br/>GET /devices (observed)"] --> E["positioning-engine<br/>GET /devices (aggregate + tag source)"]
-    R["vendor-adapter<br/>GET /devices (vendor inventory)"] --> E
-    E --> G["camara-gateway<br/>GET /assets/discoverable<br/>(minus already-onboarded)"]
-    G --> K["KELT Assets tab<br/>one-click onboard → PUT /assets"]
-```
+A device with `role: infrastructure` is a fixed sensor, such as a UWB anchor or
+a gateway: it feeds positioning and is not an asset. A source that does not
+classify leaves `role` out. The vendor-adapter classifies from its schema's
+`classify` block
+([the device list](integrating-a-vendor-rest-api.md#the-device-list)). The
+synthetic-adapter reports its walking tags as assets and its anchors as
+infrastructure.
 
-The candidate `id` becomes a capability's `positioningId` (a new asset with one
-capability, or an added capability on an asset that already exists); the operator
-adds `org`, `kind`, and a `label` at onboarding. Two flavours of discovery, from
-the `origin` field:
+## Organisations
 
-| `origin`     | Source        | Meaning                                                                 | Onboarding |
-|--------------|---------------|-------------------------------------------------------------------------|------------|
-| `inventory`  | vendor (REST) | a **registry**: the vendor cloud maintains a stable, pre-named list, present whether or not the tag is moving | bulk-safe - the ids are the vendor's own |
-| `observed`   | wifi          | **activity-seen**: an id appears once a scan tagged with it is ingested, and lapses when it stops | claim + label - a human confirms the id is asset X |
+`GET /assets` returns only the assets of the token's `org`. For an asset of
+another organisation, `GET /assets/{assetId}/details` and the CAMARA endpoints
+answer `404`, as for an asset that does not exist.
 
-Both are discovery; the difference is that a vendor exports its inventory while
-wifi only reveals what is currently emitting. Neither auto-creates an asset -
-onboarding is always an explicit `PUT /assets`.
-
-### Infrastructure is not an asset
-
-A vendor's device list mixes **assets** (the mobile things you track - tools,
-pallets, forklifts, workers) with **infrastructure** (fixed sensors - UWB
-anchors, BLE gateways). The paper places infrastructure *outside* the 3GPP
-trust domain: it feeds the fusion engine but is never a tracked asset.
-Onboarding a sensor as an asset is wrong, so each candidate carries:
-
-- **`role`** - `asset` vs `infrastructure`. The management UI separates
-  infrastructure into its own non-onboardable section.
-- **`sourceClass`** - the positioning technology (`uwb`/`ble`/`wifi`/`gnss`/
-  `cellular`/`other`), surfaced as a badge and a hint for the asset's kind.
-
-Classification is **schema-declared per vendor**, never guessed - a source that
-doesn't classify leaves `role`/`sourceClass` off and every candidate stays
-onboardable. wifi only ever reports `role: asset` (its APs live in the bindings,
-not the device list); `synthetic-adapter` reports both tracked tags (asset) and
-fixed anchors (infrastructure), like an on-premise RTLS. For a vendor, the
-`vendor-adapter`'s `discover.classify` block maps structural predicates on the
-vendor's own record to the two axes - see
-[integrating a vendor REST API](integrating-a-vendor-rest-api.md#the-device-list).
-
-## Tenancy and sensitivity
-
-`GET /assets` filters by the token's `org` claim - a consumer only ever sees
-its own tenant's assets, and `GET /assets/{id}/details` returns `404` (not
-`403`) for a cross-tenant id so existence never leaks.
-
-The asset inventory is **sensitive** (Tier-1: org + asset list). It is
-gitignored in dev and lives on a PVC in prod - never commit a real map. Only
-the placeholder `dev/assets.json` is in the repo.
+The map lists an organisation's assets, so a real map is never committed. The
+repository holds only the placeholder `dev/assets.json`.

@@ -1,41 +1,42 @@
-# WiFi Scanner - edge client
+# wifi-scanner
 
-Reference edge client for the [`wifi-adapter`](../../) adapter. Runs on a Raspberry Pi (or any Linux host with `nmcli`), scans nearby access points, and posts the per-BSSID RSSI readings to the adapter's `POST /ingest/wifi-scan` endpoint over the 5G data network. The adapter performs the multilateration; this client only scans and posts.
+Reference edge client for the
+[wifi-adapter](../../services/wifi-adapter). It runs on a Raspberry Pi or any
+Linux host with NetworkManager, scans the access points in range with `nmcli`,
+and posts the RSSI per BSSID to the adapter's `POST /ingest/wifi-scan`. The
+adapter computes the position.
 
 ## Files
 
-| File                | Purpose                                                                          |
-|---------------------|----------------------------------------------------------------------------------|
-| `scanner.py`        | The scanner. Configuration via environment variables.                            |
-| `scanner.service`   | Systemd unit; reads `EnvironmentFile=/etc/positioning-scanner.env`.              |
-| `deploy.sh`         | One-shot installer. Reads `./.env`, validates, copies files + service to the Pi. |
-| `.env.example`      | Template for `./.env` (gitignored). Required by `deploy.sh`.                     |
+| File | Content |
+|------|---------|
+| `scanner.py` | the scanner, configured by environment variables |
+| `scanner.service` | systemd unit, reads `/etc/positioning-scanner.env` |
+| `deploy.sh` | copies the scanner and the unit to the Pi and writes the configuration |
+| `.env.example` | template for `.env`, which `deploy.sh` reads and git ignores |
 
-## Runtime configuration (on the Pi)
+## Configuration
 
-| Variable        | Default                            | Notes                                                                 |
-|-----------------|------------------------------------|-----------------------------------------------------------------------|
-| `ADAPTER_URL`   | `http://wifi-adapter:8080`     | Base URL of the wifi-adapter adapter on the cluster data network. |
-| `DEVICE_ID`     | hostname                           | Stable identifier for the asset. Must match the gateway's `DEVICE_REGISTRY` value for this device's CAMARA identifier. |
-| `INTERFACE`     | `wlan0`                            | NetworkManager interface to scan.                                     |
-| `SEND_INTERVAL` | `1.0`                              | Seconds between scans.                                                |
-| `BUFFER_MAX`    | `120`                              | Bounded buffer used when the adapter is unreachable; flushed oldest-first on reconnect. |
-
-These are written to `/etc/positioning-scanner.env` on the Pi by `deploy.sh config`.
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ADAPTER_URL` | none, required by `deploy.sh` | base URL of the wifi-adapter |
+| `DEVICE_ID` | the hostname | the device's `positioningId`: the asset map holds it in a capability with `source: wifi` |
+| `INTERFACE` | `wlan0` | the interface to scan |
+| `SEND_INTERVAL` | `1.0` | seconds between scans |
+| `BUFFER_MAX` | `120` | scans kept while the adapter is unreachable, sent oldest first on reconnection |
 
 ## Deploying to a Pi
 
 ```bash
 cp .env.example .env
-$EDITOR .env                  # set PI_HOST, ADAPTER_URL, DEVICE_ID
-./deploy.sh                   # full deploy: code + service + config
-./deploy.sh config            # retarget only (no code change)
+$EDITOR .env           # PI_HOST, ADAPTER_URL, DEVICE_ID
+./deploy.sh            # code, unit and configuration
+./deploy.sh config     # configuration only
 ```
 
-`deploy.sh` refuses to run if `.env` is missing or still contains `CHANGE-ME` placeholders. No production targets or asset identifiers ever enter the repository.
+`deploy.sh` stops when `.env` is missing or still contains `CHANGE-ME`. A
+configuration change takes effect when the service restarts. The device
+exposes no configuration endpoint.
 
-The deployment model is restart-on-change, not live reload: smaller attack surface, no runtime configuration endpoint on the device.
-
-## Calibration
-
-Room dimensions and the AP map (BSSID → router coordinates) live in the adapter's configuration, not on the device. The repository ships [`dev/wifi-config.json`](../../../dev/wifi-config.json) with placeholder BSSIDs; copy it to `dev/wifi-config.local.json` (gitignored) with your real values and mount that file into the adapter - see [`docs/deployment.md`](../../../docs/deployment.md) for the override pattern. The edge client is unaffected by either choice.
+Anchor positions and BSSIDs live in the adapter's blueprint and bindings, not
+on the device ([blueprint and bindings](../../docs/blueprint-vs-bindings.md)).

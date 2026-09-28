@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Jacobbista/5g-northbound/schema/asset.schema.json",
   "title": "Asset Identity Map",
-  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked physical thing (tool, pallet, forklift, robot), NOT a cellular subscriber: it has no MSISDN/IMSI/NAI. An asset holds an enterprise-chosen identity and one or more positioning capabilities; each capability names a source and the id that source knows the thing by. The gateway resolves a CAMARA `device.assetId` to one entry, the engine polls every capability and fuses the results into one fix, and the gateway serves it through the public retrieval and verification endpoints. Authored over the network via GET/PUT /assets on the camara-gateway (PVC-backed, mirrors the engine's GET/PUT /blueprint); never a mounted file at runtime. Tier-1 (sensitive: org/asset inventory) - gitignored in dev, PVC + dashboard in prod. Full resolution chain (assetId -> capability -> adapter -> vendor): see docs/asset-registry.md and docs/integrating-a-vendor-rest-api.md.",
+  "description": "Entity model for the CAMARA private-asset profile. An asset is a tracked physical thing (tool, pallet, forklift, robot), not a cellular subscriber: it has no MSISDN, IMSI or NAI. An asset holds an identity the organisation chooses and one or more positioning capabilities. Each capability names a source and the id that source knows the thing by. The gateway resolves a CAMARA `device.assetId` to one entry, asks the engine for the position of every capability, and fuses the answers into one fix. Written over GET/PUT /assets on the camara-gateway, which persists it. See docs/asset-registry.md.",
   "type": "object",
   "required": [
     "version",
@@ -35,15 +35,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": [
-            "uwb-tag",
-            "tool",
-            "pallet",
-            "forklift",
-            "asset",
-            "ue"
-          ],
-          "description": "Asset class. Surfaced as profile `kind` so consumers can reason about the entity type."
+          "description": "Asset class, surfaced as profile `kind`. PUT /assets accepts a kind that a registered adapter advertises, or one the stored map already uses."
         },
         "org": {
           "type": "string",
@@ -53,7 +45,7 @@
         "capabilities": {
           "type": "array",
           "minItems": 1,
-          "description": "The positioning capabilities the asset carries. One entry is a single-technology asset; several entries are a multi-technology asset whose fixes the engine fuses into one. The asset identity is independent of any single technology.",
+          "description": "The positioning capabilities of the asset. Several entries are fused by the gateway into one fix.",
           "items": {
             "$ref": "#/$defs/capability"
           }
@@ -85,14 +77,7 @@
       "properties": {
         "source": {
           "type": "string",
-          "enum": [
-            "wittra",
-            "wifi",
-            "fiveg",
-            "gnss",
-            "synthetic"
-          ],
-          "description": "Positioning modality / adapter. Surfaced as profile `source` (a UWB fix is trusted differently from a WiFi fix at the same radius)."
+          "description": "The adapter that serves this capability, by the name it registers under. PUT /assets accepts a source a registered adapter serves, or one the stored map already uses."
         },
         "positioningId": {
           "type": "string",

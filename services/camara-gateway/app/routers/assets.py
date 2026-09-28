@@ -9,8 +9,8 @@ GET /assets/{asset_id}/details is a vendor extension for the demo UI: it joins
 the asset to live engine telemetry (strategy, contributing sources, accuracy,
 altitude) that the CAMARA Location response intentionally hides.
 
-Conforms to schema/asset.schema.json. Authoring shares the read role for now;
-org-scoped write authorisation lands with the 2-legged enterprise-token work.
+Conforms to schema/asset.schema.json. Writes and discovery take an operator
+token, one without an `org` claim.
 """
 
 from datetime import datetime, timezone

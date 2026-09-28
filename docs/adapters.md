@@ -114,7 +114,7 @@ capability's `positioningId` when the device is onboarded. `role` separates
 tracked assets from fixed infrastructure such as anchors, which are never
 onboarded. The engine aggregates the lists of all adapters, and the gateway
 offers the devices not yet onboarded at `GET /assets/discoverable`. See
-[asset registry](asset-registry.md#discovering-devices-to-onboard).
+[asset registry](asset-registry.md#onboarding-discovered-devices).
 
 ## Registration
 

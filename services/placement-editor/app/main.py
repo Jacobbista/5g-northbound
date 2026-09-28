@@ -1,12 +1,9 @@
 """Placement editor service: operator-facing.
 
-Minimal scaffold: serves a static index page (placeholder UI) and exposes a
-small REST surface for reading/writing the layout JSON. The eventual UI is a
-drag-drop floor-plan editor; this image is the artefact that the testbed
-dashboard will mount alongside its own console.
-
-Distinct realm role (`placement-admin`) is assumed when auth is wired in;
-SKIP_AUTH=true is dev-only.
+Serves the editor SPA and proxies its calls: the blueprint to the
+positioning-engine, calibration and bindings to wifi-adapter, device discovery
+to vendor-adapter, adapter capabilities to the engine. The service validates
+no token. Access is enforced by the gate in front of it.
 """
 
 import logging
