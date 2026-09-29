@@ -1,76 +1,65 @@
 # Latency instrumentation
 
-The northbound stack emits a per-hop latency trace so the platform can break a
-single CAMARA call into its stage timings. This document is the **contract** the
-aggregator joins on: the correlator that ties hops together, and the structured
-log line each hop emits.
-
-Northbound owns the instrumentation (correlator propagation + the log line).
-Aggregation into a per-stage breakdown is the platform's (KELT's) job; it reads
-the log lines and joins them by correlator.
+Every service on the position path writes one log line per request, and the
+lines of one CAMARA request share a correlator. The platform joins them into
+the time spent at each hop. This page is the contract of that join. The stack
+writes the lines, and KELT collects and aggregates them.
 
 ## Correlator
 
-Every hop is tied together by the CAMARA `x-correlator` header:
+The CAMARA `x-correlator` header ties the hops together:
 
-- The **gateway mints** it when the client sends none, and echoes it on the
-  response (CAMARA Commonalities).
-- Internal calls **propagate** it: gateway → engine (`GET /position`), engine →
-  adapter (`GET /measurement`, `GET /devices`), and `vendor-adapter` → the vendor
-  cloud. So every hop serving one CAMARA call logs the same `correlator`.
+- The gateway takes the correlator from the request, or generates one, and
+  returns it on the response.
+- Every internal call forwards it: gateway to engine, engine to adapter,
+  vendor-adapter to the vendor cloud.
 
-## The hop log line
+Requests without a correlator write no line. The engine's position broadcast
+polls the adapters without one, so the stream leaves no trace.
 
-Each service on the data path logs exactly one line per request, at `INFO` on
-the `hop` logger, as a single JSON object. The machine-readable contract is
-`schema/hop-log.schema.json` (JSON Schema); the aggregator fetches it and
-validates against it:
+## The line
 
-```
-https://jacobbista.github.io/5g-northbound/schema/hop-log.schema.json
-```
-
-See [Machine-readable contracts](contracts.md) for every published contract, the
-Pages vs pinned-tag URLs, and rate-limit notes. Example line:
+camara-gateway, positioning-engine, wifi-adapter, vendor-adapter and
+synthetic-adapter each write one line per request, at `INFO` on the `hop`
+logger, as one JSON object. The schema is
+[`schema/hop-log.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/hop-log.schema.json),
+also served by the gateway at `GET /contracts/hop-log.schema.json`.
 
 ```json
 {
   "event": "hop",
   "service": "camara-gateway",
   "stage": "POST /location-retrieval/v0.5/retrieve",
-  "correlator": "b6f1…",
+  "correlator": "b6f1c2d4-7a0e-4a3b-9e61-2f1f3c7d8a90",
   "status": 200,
-  "t_receive": 1723900000.123456,
-  "t_emit": 1723900000.145678,
+  "t_receive": 1790000000.123456,
+  "t_emit": 1790000000.145678,
   "span_ms": 22.222
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
-| `event` | Always `"hop"`; the selector for these lines in a mixed log stream. |
-| `service` | Emitting service (`camara-gateway`, `positioning-engine`, `wifi-adapter`, `vendor-adapter`, `synthetic-adapter`). |
-| `stage` | `"<METHOD> <path>"` the hop served. |
-| `correlator` | The `x-correlator`; the join key across services. |
-| `status` | HTTP status the hop returned. |
-| `t_receive` / `t_emit` | Unix epoch seconds (float) at request receipt / response emit. |
-| `span_ms` | `t_emit - t_receive` in milliseconds; this hop's own service time (includes the time it waited on any downstream hop). |
+| `event` | always `hop`, to select these lines in a mixed log |
+| `service` | the service that wrote the line |
+| `stage` | method and path of the request served |
+| `correlator` | the `x-correlator`, the join key |
+| `status` | the HTTP status returned |
+| `t_receive`, `t_emit` | epoch seconds when the request arrived and when the response left |
+| `span_ms` | `t_emit - t_receive` in milliseconds, including the time spent waiting on downstream hops |
 
-A hop with no correlator (an internal call outside a traced request) logs
-nothing, so the stream stays clean.
+## Aggregation
 
-## Aggregating (platform side)
+Group the lines by `correlator` and order them by `t_receive`:
 
-Join all lines sharing a `correlator`, order by `t_receive`:
-
-- **End-to-end** = the gateway hop's `span_ms`.
-- **Stage breakdown**: a downstream hop's `span_ms` is nested inside its
-  caller's, so a stage's own cost is `caller.span_ms - sum(children.span_ms)`.
-- **WAN-free internal baseline**: subtract the `adapter → vendor` span from the
-  trace. There is no separate deployed mock for this; the vendor hop is just one
-  span in the trace, so the internal number is the trace minus that span. A
-  deterministic WAN-free repro points `vendor-adapter` at the local `mock-vendor`
-  (`make demo` only, never the cluster).
-- **Cache**: a `maxAge=0` request bypasses the gateway cache (the fresh path -
-  measure this for pipeline latency); a cache hit returns without a downstream
-  hop and its `span_ms` is near zero. Do not conflate the two.
+- **End to end**: the gateway line's `span_ms`.
+- **Own time of a hop**: its `span_ms` minus the `span_ms` of the hops it
+  called.
+- **Vendor cloud**: the vendor writes no line, so its time is inside the
+  vendor-adapter's own time. A comparison without the network to the vendor
+  uses `make demo`, where the vendor-adapter calls the local `mock-vendor`.
+- **Caches**: the gateway reuses a position fetched less than
+  `LOCATION_CACHE_TTL_S` ago, and the vendor-adapter a vendor response younger
+  than the schema's `cacheTtl`. A hit makes no downstream call and has a short
+  span. A request with `maxAge: 0` always reaches the engine, which is the case
+  to measure for the latency of the whole path.

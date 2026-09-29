@@ -18,8 +18,8 @@ def test_to_discover_entry_extracts_known_fields(wittra_schema, wittra_sample_di
     assert out["label"] == "Position Beacon 01"
     # deviceType is a clean string, surfaced verbatim as deviceType.
     assert out["deviceType"] == "beacon"
-    assert out["latitude"] == pytest.approx(45.064547)
-    assert out["longitude"] == pytest.approx(7.659272)
+    assert out["latitude"] == pytest.approx(59.404251)
+    assert out["longitude"] == pytest.approx(17.949247)
     # z maps from fixedLocation.height.
     assert out["z"] == pytest.approx(2.0)
 

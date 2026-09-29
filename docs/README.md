@@ -1,102 +1,50 @@
 # 5G Northbound
 
-An open positioning stack that exposes the location of **assets** in a private
-venue - tools, tags, pallets, forklifts - to applications, over the standard
-[CAMARA Device Location API](https://camaraproject.org/). Sensing sources
-(WiFi, UWB, vendor RTLS) are fused at the edge and served through one familiar
-API. It runs unchanged from a laptop to a Kubernetes cluster, and new sources
-plug in as new adapters. Written for developers and operators working with the
-stack directly.
-
-New here? Read the **[Overview](overview.md)** first - it gives the mental
-model in one page.
-
----
+The reference implementation of the CAMARA private-asset profile: the location
+of assets in a private venue, such as tools, pallets and forklifts, served
+through the CAMARA Device Location APIs. Positions come from on-site sources
+such as WiFi, UWB or a vendor's positioning cloud, and are fused at the edge.
+The [overview](overview.md) introduces the model and its terms.
 
 ## Where to start
 
-| Goal | Path |
-|------|------|
-| **Understand what this is** | [Overview](overview.md) → [Architecture](architecture.md) |
-| **Run it on your laptop** | repo `README.md` quick start (`make demo`) → [Architecture](architecture.md) |
-| **Add a positioning source** | [Adapters](adapters.md) → [Vendor REST API](integrating-a-vendor-rest-api.md) → [Adapter registry](adapter-registry.md) |
-| **Build a CAMARA client** | [Data contracts](data-contracts.md) → [API reference](api-reference.md) |
-| **Map real devices (assets)** | [Asset registry](asset-registry.md) → [Data contracts](data-contracts.md) |
-| **Author a venue (rooms, walls, anchors)** | [Blueprint vs bindings](blueprint-vs-bindings.md) → [Georeferencing](georeferencing.md) |
-| **Deploy to Kubernetes** | [Deployment](deployment.md) → [Blueprint vs bindings](blueprint-vs-bindings.md) |
-| **Change how positions fuse** | [Fusion strategies](fusion-strategies.md) |
-
----
-
-## Concepts
-
-Read these to understand how the system is designed.
-
-| Document | Description |
-|----------|-------------|
-| [Overview](overview.md) | What it is, the sense → fuse → expose model, key concepts. Start here. |
-| [Private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) | The CAMARA Device Location profile this stack implements: asset identity, source/altitude metadata, streaming, 2-legged org-scoped authz, and the base-contract conformance (`maxAge`, `maxSurface`, error codes) |
-| [Architecture](architecture.md) | Services, request flow, adapter routing, coordinate frames; the 3GPP-to-CAMARA mapping |
-| [Blueprint vs bindings](blueprint-vs-bindings.md) | Portable venue geometry vs per-venue secrets (BSSIDs, MACs) |
-| [Georeferencing](georeferencing.md) | Anchoring the local metric frame to the world: datums, tile drift, N-point calibration |
-| [Authentication](authentication.md) | How the browser apps sign in against the Keycloak realm: in-browser OIDC and the proxy-gated pattern |
-
-## Guides
-
-Task-focused, follow top to bottom.
-
-| Document | Description |
-|----------|-------------|
-| [Adapters](adapters.md) | The HTTP contract every adapter implements, with a minimal Python skeleton |
-| [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) | Wrap a vendor cloud with the schema-driven `vendor-adapter`; the full identity chain |
-| [Adapter registry](adapter-registry.md) | How adapters self-register, heartbeat, and route by `source` |
-| [Asset registry](asset-registry.md) | The Asset Identity Map: asset structure, authoring, seeding, tenancy |
-| [Fusion strategies](fusion-strategies.md) | Fusion algorithms and how to switch between them |
-| [Deployment](deployment.md) | Images, environment variables, ConfigMap and Secret shapes, health probes |
-
-## Reference
-
-Look up exact formats once you know the model.
-
-| Document | Description |
-|----------|-------------|
-| [Data contracts](data-contracts.md) | Exact wire formats across CAMARA, vendor extensions, engine, and the adapter contract |
-| [Machine-readable contracts](contracts.md) | Every published contract (profiled spec, schemas, overlays) and its raw URL - how to fetch and pin |
-| [API reference](api-reference.md) | One row per endpoint across every service |
-| [Latency instrumentation](latency-instrumentation.md) | The per-hop latency trace: x-correlator propagation and the hop log-line contract |
-| [Profile extensions](profile-extensions.md) | The surfaces beside CAMARA, how extension data is contained, and the core diagnostics vocabulary |
+| Goal | Pages |
+|------|-------|
+| Understand the system | [Overview](overview.md), then [Architecture](architecture.md) |
+| Run it on a laptop | the repository [README](https://github.com/Jacobbista/5g-northbound/blob/main/README.md) |
+| Build a CAMARA client | the [profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md), then [Data contracts](data-contracts.md) |
+| Add a positioning source | [Adapters](adapters.md), then [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) |
+| Register assets | [Asset registry](asset-registry.md) |
+| Describe a venue | [Blueprint and bindings](blueprint-vs-bindings.md), then [Georeferencing](georeferencing.md) |
+| Deploy on Kubernetes | [Deployment](deployment.md) |
 
 ## Documentation map
 
-Every topic has one document that owns it. The owner holds the facts, and
-other documents link to it instead of restating them. To change a fact, change
-it at its owner.
+Each topic has one page that owns it. The other pages link to it and do not
+restate it.
 
 | Topic | Owner |
 |-------|-------|
-| What the stack is, the sense, fuse, expose model | [Overview](overview.md) |
-| Services, request flow, coordinate frames | [Architecture](architecture.md) |
-| The CAMARA private-asset profile: identity, extensions, authorisation model, conformance | [Private-asset profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) |
-| Surfaces beside CAMARA and the diagnostics vocabulary | [Profile extensions](profile-extensions.md) |
-| Published contract files, who governs each, the naming convention, how to fetch them | [Machine-readable contracts](contracts.md) |
-| JSON examples of every wire body | [Data contracts](data-contracts.md) |
-| The list of endpoints per service | [API reference](api-reference.md) |
-| The adapter contract and how to write an adapter | [Adapters](adapters.md) |
-| Adapter registration, health and routing | [Adapter registry](adapter-registry.md) |
+| The model and its terms | [Overview](overview.md) |
+| Services, request flow, coordinate frame, time | [Architecture](architecture.md) |
+| The private-asset profile: identity, extensions, authorisation, conformance | [Profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md) |
+| Endpoints beside CAMARA, diagnostics vocabulary | [Profile extensions](profile-extensions.md) |
+| Browser sign-in | [Authentication](authentication.md) |
+| The adapter contract, declarations, writing an adapter | [Adapters](adapters.md) |
 | The schema-driven vendor adapter | [Integrating a vendor REST API](integrating-a-vendor-rest-api.md) |
-| The Asset Identity Map | [Asset registry](asset-registry.md) |
-| What is portable venue geometry and what is per-venue binding | [Blueprint vs bindings](blueprint-vs-bindings.md) |
-| Anchoring the venue frame to the world | [Georeferencing](georeferencing.md) |
-| Browser sign-in against the Keycloak realm | [Authentication](authentication.md) |
-| Fusion algorithms | [Fusion strategies](fusion-strategies.md) |
-| Images, environment, storage, probes | [Deployment](deployment.md) |
-| Per-hop latency trace | [Latency instrumentation](latency-instrumentation.md) |
-| Code conventions, constraints, commits | `AGENTS.md` at the repository root |
+| Adapter registration, health and routing | [Adapter registry](adapter-registry.md) |
+| The asset map and onboarding | [Asset registry](asset-registry.md) |
+| Venue blueprint, WiFi bindings and calibration | [Blueprint and bindings](blueprint-vs-bindings.md) |
+| Tie between the venue frame and WGS84 | [Georeferencing](georeferencing.md) |
+| Fusion in the engine and the gateway | [Fusion strategies](fusion-strategies.md) |
+| Images, configuration, storage, probes | [Deployment](deployment.md) |
+| Published contract files, surface governance, naming | [Machine-readable contracts](contracts.md) |
+| An example of every body | [Data contracts](data-contracts.md) |
+| Every route of every service | [API reference](api-reference.md) |
+| Per-hop latency log | [Latency instrumentation](latency-instrumentation.md) |
+| Environment contract format | [`deploy/contracts`](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/contracts/README.md) |
+| Code conventions and commits | `AGENTS.md` at the repository root |
 | Repository layout | `STRUCTURE.md` at the repository root |
 
----
-
-The Kubernetes manifests live in the companion repository
-[`kelt`](https://github.com/Jacobbista/kelt); this repo defines the contracts
-those manifests consume. Repo conventions (code style, tests, security) are in
-`AGENTS.md` at the repository root.
+The Kubernetes manifests of the testbed are in the
+[KELT](https://github.com/Jacobbista/kelt) repository.

@@ -130,7 +130,7 @@ async def test_measurement_end_to_end(
     body = r.json()
     assert body["source"] == "wittra"
     assert body["frame"] == "wgs84"
-    assert body["latitude"] == 45.064547
+    assert body["latitude"] == 59.404251
 
 
 @pytest.mark.asyncio

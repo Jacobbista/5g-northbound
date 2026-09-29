@@ -58,12 +58,12 @@ nav:
   - Concepts:
       - Architecture: architecture.md
       - Authentication: authentication.md
-      - Blueprint vs bindings: blueprint-vs-bindings.md
+      - Blueprint and bindings: blueprint-vs-bindings.md
       - Georeferencing: georeferencing.md
   - Guides:
       - Adapters: adapters.md
       - Integrating a vendor REST API: integrating-a-vendor-rest-api.md
-      - Adapter registry & routing: adapter-registry.md
+      - Adapter registry: adapter-registry.md
       - Asset registry: asset-registry.md
       - Fusion strategies: fusion-strategies.md
       - Deployment: deployment.md

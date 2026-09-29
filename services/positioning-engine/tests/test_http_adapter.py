@@ -49,7 +49,7 @@ async def test_http_adapter_decodes_wgs84_measurement():
     respx.get("http://wittra/measurement/dev1").mock(
         return_value=Response(200, json={
             "source": "wittra", "frame": "wgs84",
-            "latitude": 45.064412, "longitude": 7.659254,
+            "latitude": 59.404310, "longitude": 17.949378,
             "accuracy": 0.3, "confidence": 0.95, "timestamp": 1700000000.0,
         })
     )
@@ -58,8 +58,8 @@ async def test_http_adapter_decodes_wgs84_measurement():
     await a.aclose()
     assert m is not None
     assert m.frame == "wgs84"
-    assert m.latitude == 45.064412
-    assert m.longitude == 7.659254
+    assert m.latitude == 59.404310
+    assert m.longitude == 17.949378
 
 
 @pytest.mark.asyncio

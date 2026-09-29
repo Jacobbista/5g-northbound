@@ -24,7 +24,7 @@ def test_local_to_gps_rotation_90deg_swaps_axes():
 
 
 def test_roundtrip_local_gps_local_no_rotation():
-    origin = GpsOrigin(latitude=45.064312, longitude=7.659154)
+    origin = GpsOrigin(latitude=59.404210, longitude=17.949278)
     x, z = 12.5, 47.0
     lat, lon = local_to_gps(x, z, origin)
     x2, z2 = gps_to_local(lat, lon, origin)
@@ -33,7 +33,7 @@ def test_roundtrip_local_gps_local_no_rotation():
 
 
 def test_roundtrip_local_gps_local_with_rotation():
-    origin = GpsOrigin(latitude=45.064312, longitude=7.659154, azimuth_deg=37.5)
+    origin = GpsOrigin(latitude=59.404210, longitude=17.949278, azimuth_deg=37.5)
     x, z = 8.3, -21.4
     lat, lon = local_to_gps(x, z, origin)
     x2, z2 = gps_to_local(lat, lon, origin)

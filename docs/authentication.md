@@ -1,79 +1,46 @@
 # Authentication
 
-Every service authenticates against the same Keycloak realm (`5g-testbed`). The
-browser apps reach that realm through **two patterns**, chosen per app according
-to what the app does. Both are standard OpenID Connect. They differ in where the
-token lives.
-
-## The two patterns
-
-### 1. In-browser OIDC (`keycloak-js`) - location-app
-
-The app runs the OIDC Authorization Code + PKCE flow itself, in the browser.
-`keycloak-js` redirects to Keycloak, receives the token, and holds it in
-JavaScript memory. The app then attaches it as a `Bearer` header on every REST
-call to the CAMARA gateway, and in the `Sec-WebSocket-Protocol` header when it
-opens the live positions WebSocket (browsers cannot set an Authorization header
-on a WS handshake, and a bearer token must not go in the URL).
-
-- The frontend **has** the access token and its claims (roles, org, expiry).
-- Keycloak client: **public**, PKCE (`S256`), no client secret.
-
-### 2. Proxy-gated / BFF (`oauth2-proxy`) - placement-editor
-
-A reverse proxy (`oauth2-proxy`) sits in front of the app. It runs the OIDC flow
-on the server side, stores the session in an **encrypted, httpOnly cookie**, and
-proxies already-authenticated requests to the app. The app frontend contains
-**no auth code** and never sees the token.
-
-- The token lives in the cookie, **out of JavaScript's reach**.
-- Keycloak client: **confidential** (proxy holds a client secret).
-- This is the Backend-For-Frontend (BFF) pattern.
-
-## Why two
-
-The split follows each app's job:
+The browser applications sign in against the Keycloak realm `5g-testbed` with
+OpenID Connect, in two ways that differ in where the token lives. The rules the
+gateway applies to a token are in the
+[profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md#4-authorisation-2-legged-organisation-scoped).
 
 | | location-app | placement-editor |
 |---|---|---|
-| Role | CAMARA API **consumer** | self-contained authoring **tool** |
-| Talks to | the CAMARA gateway (REST) + a live **WebSocket** | its own backend, same origin |
-| Needs the token in JS? | **Yes** - `Bearer` on fetch + `Sec-WebSocket-Protocol` on the WS | No |
-| Pattern | `keycloak-js` (token in JS) | `oauth2-proxy` (BFF, token in cookie) |
-| Keycloak client | public + PKCE | confidential |
+| Role | CAMARA consumer | operator tool |
+| Calls | the gateway's REST API and position stream | its own backend, same origin |
+| Flow | authorisation code with PKCE, in the browser (`keycloak-js`) | authorisation code, in `oauth2-proxy` in front of the service |
+| Token | in the page's memory | in an encrypted httpOnly cookie held by the proxy |
+| Keycloak client | public, PKCE `S256` | confidential, with a client secret |
 
-location-app must present a Keycloak-issued JWT that the gateway validates
-against a realm role, and it opens an authenticated WebSocket. Both require the
-token *in the page*, so `keycloak-js` is the fit. It is also the canonical
-picture for this project: a CAMARA consumer that holds and presents a CAMARA
-token is exactly what the profile exposes.
+## location-app
 
-placement-editor only calls its own backend through the proxy. Gating it wholesale
-at `oauth2-proxy` protects the entire app (static assets included) with zero
-frontend auth code, and keeps the token out of the browser.
+The application needs the token itself: it sends it as `Bearer` on every call
+to the gateway, and as the subprotocol `bearer.jwt, <jwt>` when it opens the
+position stream, since a browser cannot set `Authorization` on a WebSocket and
+a token does not belong in a URL.
 
-## Security posture
+`keycloak-js` starts with `onLoad: "check-sso"`: a hidden iframe loads
+`public/silent-check-sso.html` and checks the session without a visible
+redirect. Without a session the application calls `keycloak.login()`. The
+Keycloak client lists `<origin>/silent-check-sso.html` among its valid redirect
+URIs and the origin among its web origins. A browser that blocks the iframe's
+third-party cookie gets a full-page redirect instead.
 
-Both are secure. Current guidance (IETF *OAuth 2.0 for Browser-Based Apps*)
-favours the BFF pattern because the token never reaches JavaScript, which
-removes a class of XSS token-theft risk. location-app uses `keycloak-js` for the
-Bearer and WebSocket needs described above.
+The access token lives about five minutes. The application calls
+`updateToken(60)` periodically, which renews the token when less than 60 s
+remain, reloads the data and reconnects the stream with the new token. A failed
+renewal sends the user back to the login.
 
-## Refresh behaviour and the silent SSO check
+## placement-editor
 
-With `keycloak-js`, a page refresh re-validates the session. Under
-`onLoad: "login-required"` that is a full-page redirect round-trip - instant
-(the SSO cookie means no password) but visible as a brief splash. location-app
-uses `onLoad: "check-sso"` with a **silent iframe** instead
-(`public/silent-check-sso.html`, the official same-origin snippet): the session
-is checked in a hidden iframe with no visible redirect. When no session exists
-the app calls `keycloak.login()` explicitly.
+`oauth2-proxy` runs the flow on the server, keeps the session in its cookie,
+and forwards authenticated requests. The editor contains no authentication code
+and never sees a token. Everything behind the proxy is protected, static files
+included, which matters because the editor's routes reach the WiFi bindings
+with their BSSIDs.
 
-For the silent check to work, the location-app Keycloak client must list
-`<app-origin>/silent-check-sso.html` in **Valid Redirect URIs** and the app
-origin in **Web Origins**. If a browser blocks the iframe's third-party cookie,
-`keycloak-js` falls back to the full-page redirect.
-
-`oauth2-proxy` needs no equivalent: it validates the session cookie server-side
-on each request and serves the app directly, with no redirect unless the cookie
-has expired.
+The IETF guidance on OAuth for browser-based applications prefers this pattern,
+because a token that never reaches JavaScript cannot be taken by a script
+injected into the page. The location-app needs the token in the page for the
+reasons above.

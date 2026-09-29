@@ -22,6 +22,8 @@ import { toast } from "./toast.js";
 const { BaseLayer, Overlay } = LayersControl;
 
 const M_PER_DEG = 111_320.0;
+// Map view before any area exists: the lab venue in Stockholm.
+const DEFAULT_VIEW_CENTER = { latitude: 59.404210, longitude: 17.949278 };
 
 // Reliable tile providers (CARTO + ESRI). The direct openstreetmap.org tile
 // CDN sometimes rate-limits or is blocked by privacy browsers; CARTO is the
@@ -1061,9 +1063,11 @@ export const GeorefMap = forwardRef(function GeorefMap({
     georef.latitude && georef.longitude &&
     Number(georef.width_m) > 0 && Number(georef.height_m) > 0
   );
+  // Without a georef there is no origin: the map opens on the lab venue in
+  // Stockholm, and nothing is written until the operator places an area.
   const origin = {
-    latitude: georef.latitude || 45.064312,
-    longitude: georef.longitude || 7.659154,
+    latitude: georef.latitude || DEFAULT_VIEW_CENTER.latitude,
+    longitude: georef.longitude || DEFAULT_VIEW_CENTER.longitude,
     azimuth_deg: georef.azimuth_deg || 0,
   };
   const room_w = Number(georef.width_m) || 10;
@@ -1396,7 +1400,7 @@ export const GeorefMap = forwardRef(function GeorefMap({
     });
   };
   // Live drag-tooltip content. Set by each handle's drag callback to a short
-  // numeric readout (e.g. "13.5 × 32.0 m", "azimuth 12°", "45.06453, 7.65923")
+  // numeric readout (e.g. "13.5 × 32.0 m", "azimuth 12°", "59.40421, 17.94928")
   // so the operator can see the value snapping in real time without taking
   // their eyes off the map. Cleared on drag-end and on edit-exit.
   const [dragInfo, setDragInfo] = useState(null);

@@ -4,7 +4,7 @@ import { usePosition } from "../usePosition";
 
 const MOCK_POSITION = {
   lastLocationTime: "2024-01-01T12:00:00Z",
-  area: { areaType: "CIRCLE", center: { latitude: 45.064312, longitude: 7.659154 }, radius: 50 },
+  area: { areaType: "CIRCLE", center: { latitude: 59.404210, longitude: 17.949278 }, radius: 50 },
 };
 
 beforeEach(() => {

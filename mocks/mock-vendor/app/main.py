@@ -30,7 +30,7 @@ TRANSPORT = SCHEMA.get("transport", "rest")
 
 # Init placeholder only: the point the synthetic device starts from before the
 # walk moves it. Not meaningful - a real source emits its own coordinates.
-_CENTER = (45.064312, 7.659154)
+_CENTER = (59.404390, 17.949631)  # centre of the demo floor plan in Stockholm
 _HEIGHT_M = 1.2
 _state: dict[str, dict] = {}
 

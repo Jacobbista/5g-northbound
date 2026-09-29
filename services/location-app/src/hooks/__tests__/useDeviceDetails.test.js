@@ -10,8 +10,8 @@ const MOCK_DETAILS = {
   org: "acme",
   label: "Wittra tag 01",
   telemetry: {
-    latitude: 45.064,
-    longitude: 7.659,
+    latitude: 59.404,
+    longitude: 17.949,
     accuracy: 2.4,
     altitude: 1.2,
     lastLocationTime: "2026-06-03T12:00:00Z",

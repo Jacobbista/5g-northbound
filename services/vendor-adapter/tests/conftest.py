@@ -35,7 +35,7 @@ def wittra_sample_payload() -> dict:
                 "location": {
                     "timestamp": "2026-06-03 14:36:17.000000+00:00",
                     "value": {
-                        "latitude": 45.064547, "longitude": 7.659272, "height": 1.2,
+                        "latitude": 59.404251, "longitude": 17.949247, "height": 1.2,
                         "level": 0, "accuracy": 0.85, "label": "",
                         "motion": "STATIONARY",
                     },
@@ -61,8 +61,8 @@ def wittra_sample_discover_page() -> list:
             "name": "Position Beacon 01",
             "isPositioningActive": True,
             "fixedLocation": {
-                "latitude": 45.064547,
-                "longitude": 7.659272,
+                "latitude": 59.404251,
+                "longitude": 17.949247,
                 "height": 2.0,
                 "level": 0,
             },

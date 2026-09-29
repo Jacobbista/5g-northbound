@@ -6,10 +6,9 @@
       "label": "Demo floor",
       "image": null,
       "georef": {
-        "latitude": 45.064312,
-        "longitude": 7.659154,
+        "latitude": 59.40421,
+        "longitude": 17.949278,
         "azimuth_deg": 0,
-        "altitude_m": 0,
         "width_m": 40,
         "depth_m": 40
       },
