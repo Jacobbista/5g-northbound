@@ -1,101 +1,81 @@
 # Profile extensions
 
-The stack extends the CAMARA Device Location profile without altering it. The
-CAMARA retrieve and verify surfaces stay byte-identical to the profiled specs
-(base + overlay), proven by the CI freshness gate. Everything beyond that -
-vendor fidelity, engine fusion metadata, anchor calibration - lives on separate,
-namespaced extension surfaces.
+The gateway serves the two CAMARA APIs and, beside them, endpoints of its own.
+The CAMARA responses follow the profiled specifications, and a client that
+knows only CAMARA reads them unchanged. Everything else sits on separate
+resources with their own published contracts. The gateway tests check that
+every route the gateway serves is published and every published route is
+served, and that stream messages conform to the AsyncAPI document.
 
-## The convention
+## Surfaces
 
-Extension data is grouped under a **named container**, never a field prefix
-sprinkled into a CAMARA payload:
+Data outside CAMARA is grouped in a named container, never added as loose
+fields to a CAMARA body: a separate resource at its own path, or a named
+object inside a shared message (`diagnostics` in the stream).
 
-- On a shared surface (the position stream), it sits in a named sub-object
-  (`diagnostics`).
-- Otherwise it is a **dedicated resource** at its own path, declared in its own
-  contract.
+| Surface | Contract | Content |
+|---------|----------|---------|
+| `GET`, `PUT /assets` | `extensions.yaml`, `schema/asset.schema.json` | the asset map ([asset registry](asset-registry.md)) |
+| `GET /assets/discoverable` | `extensions.yaml` | devices the sources report that are not yet assets |
+| `GET /assets/{assetId}/details` | `extensions.yaml` | the asset with its fused position, strategy and sources |
+| `PUT`, `DELETE /assets/{assetId}/placement` | `extensions.yaml` | the start point of a synthetic asset, in the frame of its room |
+| `GET /device-diagnostics/v0/{assetId}` | `device-diagnostics.yaml`, `schema/device-diagnostics.schema.json` | device telemetry, fetched from the source on request |
+| `diagnostics` in the position stream | `asyncapi-stream.yaml` | telemetry the source sends with each fix |
+| `GET /capabilities` | `extensions.yaml` | what the deployment can do now, from the adapters' declarations and the asset map |
+| `GET /adapters` | `extensions.yaml` | name, state and declared capabilities of each adapter |
+| `GET /anchors/calibration` | `extensions.yaml` | fitted WiFi parameters per anchor |
+| `GET /blueprint` | `extensions.yaml`, `schema/layout.schema.json` | the venue blueprint, read-only |
 
-Each surface has a published, versioned contract, and this page indexes them. A
-consumer that ignores the extension containers sees a conformant CAMARA payload.
+The contract files are under `spec/private-profile/` and `schema/`
+([contracts](contracts.md)). The body of each surface is in
+[data contracts](data-contracts.md).
 
-## Extension surfaces
+## Diagnostics vocabulary
 
-| Surface | Kind | Contract | Carries |
-|---------|------|----------|---------|
-| `GET /device-diagnostics/v0/{assetId}` | resource | `spec/private-profile/device-diagnostics.yaml`, `schema/device-diagnostics.schema.json` | On-demand vendor fidelity: link quality, accuracy provenance, motion |
-| Position stream `diagnostics` sub-object | stream field | `spec/private-profile/asyncapi-stream.yaml` | Stream-tier motion, carried from the routed source |
-| `GET/PUT /assets` | resource | `spec/private-profile/extensions.yaml`, `schema/asset.schema.json` | Asset Identity Map: an asset binds ≥1 positioning capability, fused into one fix |
-| `GET /assets/discoverable` | resource | `spec/private-profile/extensions.yaml` | Onboarding candidates not yet mapped to a capability |
-| `GET /assets/{assetId}/details` | resource | `spec/private-profile/extensions.yaml` | Fusion metadata (strategy, sources, accuracy), fused across capabilities by the gateway |
-| `GET /anchors/calibration` | resource | `spec/private-profile/extensions.yaml` | Per-anchor RF calibration (wifi) |
-| `PUT/DELETE /assets/{assetId}/placement` | resource | `spec/private-profile/extensions.yaml` | Start point of a synthetic asset, in the frame of its room |
-| `GET /capabilities` | resource | `spec/private-profile/extensions.yaml` | What the deployment can do now, from the adapters' declarations and the asset map |
-| `GET /adapters` | resource | `spec/private-profile/extensions.yaml` | Health of each positioning adapter |
-| `GET /blueprint` | resource | `spec/private-profile/extensions.yaml`, `schema/layout.schema.json` | The venue blueprint, read-only |
+Diagnostics carry a small **core** with fixed names and units, and a
+`vendorSpecific` object for everything else. A consumer reads the core the
+same way for every vendor. `vendorSpecific` holds values as the vendor sends
+them, is not comparable across vendors, and is not authoritative.
 
-See [Machine-readable contracts](contracts.md) for the fetch URLs (Pages CDN +
-pinned tag).
+A field enters the core when an external standard defines it and a consumer
+of this profile uses it. The profile adopts the definition and unit, gives the
+field its own name, and records the source in the vocabulary's `standard`
+entry: LwM2M identifies battery level by the numeric resource 3/0/9 and names
+no JSON field, so `battery` is this profile's name for that definition. The
+`vendorSpecific` object corresponds to the `properties` object that omlox uses
+for everything outside its own core.
 
-## Core vocabulary
-
-Diagnostics fields are split into a normative core and a vendor bag. A consumer
-codes against the core once and reads the same names for every vendor.
-
-A field is core only when an external standard already **defines** it, so the
-profile adopts that definition and unit rather than inventing one, and a
-consumer of ours renders it. The profile gives the field its own name and
-records the source in the vocabulary's `standard` entry: LwM2M identifies
-battery level by the numeric resource 3/0/9 and defines no JSON field name, so
-`battery` is ours, anchored to their definition. Anything a schema maps that is
-not core is routed into a `vendorSpecific` sub-object, non-authoritative and
-not comparable across vendors. A vendor field either maps to a core name or
-lands in `vendorSpecific` whole; there is no case in between. This mirrors the
-free-form `properties` bag the omlox RTLS standard uses for everything outside
-its own core.
-
-| Core field | Standard | Type / unit |
-|------------|----------|-------------|
-| `battery` | OMA LwM2M `3/0/9` | number, percent 0-100 |
-| `lastSeen` | omlox `timestamp_generated` | number, epoch seconds |
+| Core field | Standard | Type and unit |
+|------------|----------|---------------|
+| `battery` | OMA LwM2M 3/0/9 | number, percent 0 to 100 |
+| `lastCommunicationTime` | omlox `timestamp_generated` | RFC 3339 UTC |
 | `accuracy` | omlox `accuracy` | number, metres |
 | `moving` | derived | boolean |
 
-This table is the human view of a machine-readable contract: the gateway serves
-the normative vocabulary at `GET /contracts/diagnostics-vocabulary.json` (field
-names, units, adopted standards, default delivery tier, and the `vendorSpecific` rule).
-The vendor-adapter imports the same artifact to route mapped fields, so a
-consumer wiring a vendor reads the targets from the contract rather than from
-prose. The artifact is the single source of truth; the adapter never hardcodes
-the vocabulary.
+The vocabulary is
+[`spec/private-profile/diagnostics-vocabulary.json`](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/diagnostics-vocabulary.json),
+version 2.0.0, and the gateway serves it at
+`GET /contracts/diagnostics-vocabulary.json`. The vendor-adapter reads the same
+file to route the fields its schema maps.
 
-`moving` is derived from the omlox-standard `speed`: `moving = speed >
-MOVING_SPEED_THRESHOLD_MPS`, a normative constant of `0.15` m/s fixed once here,
-not a per-vendor knob. A vendor that exposes its own moving/stationary state maps
-it to `moving` directly instead. A vendor exposing neither omits `moving`; an
-absent core field stays core and never becomes an `vendorSpecific` entry.
+**Routing.** A field the vendor schema maps under a core name is published at
+the top of `diagnostics`. Any other mapped name goes under `vendorSpecific`.
+The schema's mapping (`format`, `transform`) brings a value to the core unit,
+and the vendor-adapter publishes a core time in RFC 3339 whatever form the
+vendor gives it. A field that does not resolve for a record is left out.
 
-A field lives in `vendorSpecific` until it recurs across vendors and a consumer needs
-it, at which point promoting it into the core is a deliberate revision of this
-vocabulary. The core stays small and grows by evidence, the way CAMARA absorbs
-proven extensions. Identity (`name`) is not a diagnostics field: it flows on the
-onboarding path, where the vendor `name` binds to the asset and anchor `label`.
+**`moving`** is true when the omlox `speed` exceeds 0.15 m/s, a constant of the
+vocabulary. A vendor that reports its own moving state maps it to `moving`
+directly. A vendor that reports neither has no `moving`. The Wittra example maps
+the vendor's `motion` string, which is not a core name, so it arrives under
+`vendorSpecific`.
 
-```mermaid
-flowchart LR
-  V[("vendor per-device record<br/>battery, motion, temp, rssi, ...")] --> M["vendor-adapter mapper<br/>route each mapped key"]
-  M -->|"names a core field"| C["core<br/>(coerced to the standard unit)<br/>battery · lastSeen · accuracy · moving"]
-  M -->|"any other key"| X["vendorSpecific<br/>(raw, non-authoritative)<br/>temperature · rssi · ..."]
-  C --> ST["stream diagnostics sub-object<br/>(fast-changing: moving)"]
-  C --> OD["GET /device-diagnostics/v0/{assetId}<br/>(on demand: battery, lastSeen)"]
-  X --> OD
-  ST --> APP["location-app detail panel<br/>+ KELT dashboard"]
-  OD --> APP
-```
+**Delivery.** Each core field has a default tier: `moving` travels in the
+stream with each fix, the others are fetched on request from
+`/device-diagnostics`. The vendor schema chooses per field
+([integrating a vendor REST API](integrating-a-vendor-rest-api.md#the-schema-document)).
 
-## Why this is compliant
-
-CAMARA Commonalities admits additive extensions; the discipline is separation
-and clear identification. Separation here is by resource and namespace, never by
-a field mixed into the core. The CAMARA APIs remain independently valid against
-the upstream specs, and the freshness gate is scoped to them so drift is caught.
+**Growth.** A field stays in `vendorSpecific` until it recurs across vendors
+and a consumer needs it. Promoting it into the core is a new version of the
+vocabulary. The name of a device is not a diagnostics field: it travels with
+onboarding, as the asset's `label`.

@@ -160,7 +160,7 @@ components:
             carried from the routed source; grouped under this named container,
             never mixed into the CAMARA fields above. Core vocabulary fields
             (here, moving) use standard names; vendor-specific extras sit under
-            vendorSpecific, raw. See docs/profile-extensions.md#core-vocabulary.
+            vendorSpecific, raw. See docs/profile-extensions.md#diagnostics-vocabulary.
             Present only when the source reports it.
           properties:
             moving:

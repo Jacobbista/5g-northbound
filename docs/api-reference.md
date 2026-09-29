@@ -1,111 +1,110 @@
 # API reference
 
-One-row-per-endpoint index for every HTTP route in this repository. Auth and error envelopes are documented in [`data-contracts.md`](data-contracts.md); this page is a lookup table.
+Every HTTP route of every service, as the running code declares it. The
+bodies are in [data contracts](data-contracts.md), the semantics in the page
+each row links to. Each FastAPI service serves its OpenAPI document on
+`/openapi.json` and an interactive view on `/docs`.
 
-Live OpenAPI docs (FastAPI):
-
-| Service              | URL                                                |
-|----------------------|----------------------------------------------------|
-| `camara-gateway`     | http://localhost:8087/docs · http://localhost:8087/openapi.json |
-| `positioning-engine` | http://localhost:8081/docs · http://localhost:8081/openapi.json |
-| `wifi-adapter`   | http://localhost:8089/docs · http://localhost:8089/openapi.json |
-| `synthetic-adapter`   | http://localhost:8090/docs · http://localhost:8090/openapi.json |
-| `placement-editor`   | http://localhost:3003/docs · http://localhost:3003/openapi.json |
-
-`location-app` is a static SPA, no HTTP surface.
+| Service | Local port (`make demo`) |
+|---------|--------------------------|
+| camara-gateway | 8087 |
+| positioning-engine | 8081 |
+| wifi-adapter | 8089 |
+| synthetic-adapter | 8090 |
+| mock-vendor | 8091 |
+| vendor-adapter | 8092 |
+| location-app | 3002 |
+| placement-editor | 3003 |
 
 ## camara-gateway
 
-Auth: `Authorization: Bearer <jwt>` with realm role `camara-location-read` on every route except `/health`. `SKIP_AUTH=true` bypasses validation for dev only.
+Access: **none**, a token with the `camara-location-read` role (**read**), or
+such a token without an `org` claim (**operator**). A read token with an `org`
+claim sees only that organisation's assets
+([profile, authorisation](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md#4-authorisation-2-legged-organisation-scoped)).
 
-| Method · path                                          | Returns                      | Notes                                                                  |
-|--------------------------------------------------------|------------------------------|------------------------------------------------------------------------|
-| `GET    /health`                                       | `{"status":"ok"}`            | Liveness; no auth                                                      |
-| `GET    /contract`                                     | env contract (JSON)          | No auth. The variables this service needs, schema only, sensitive values redacted. See [Conventions](#conventions-across-services) |
-| `POST   /location-retrieval/v0.5/retrieve`             | `Location` (CAMARA)          | CAMARA Device Location Retrieval r3.2. `device.assetId` (private-asset profile) |
-| `POST   /location-verification/v3/verify`              | `VerifyLocationResponse`     | CAMARA Device Location Verification r3.2                               |
-| `GET    /assets`                                       | `{"assets":[…]}`             | **Vendor extension**: the caller's tenant assets (Asset Identity Map), `org`-filtered |
-| `PUT    /assets`                                       | `{"status":"ok",…}`          | **Vendor extension**: replace the asset map (operator; conforms to `schema/asset.schema.json`) |
-| `GET    /assets/{assetId}/details`                     | `{…,"telemetry":…}`          | **Vendor extension**: asset entry + engine telemetry. `telemetry: null` when offline; `404` for a missing or cross-tenant id |
-| `GET    /assets/discoverable`                          | `{"candidates":[…]}`         | **Vendor extension**: devices the live sources report (engine `/devices`) that are **not yet onboarded** as assets, `{id, source, origin, role?, sourceClass?, deviceType?, label?, lastCommunicationTime?}`. Operator token only. `id` becomes a capability's `positioningId`; `role: infrastructure` marks fixed sensors (not onboardable); `sourceClass` is the positioning tech; `org` is assigned at onboarding. Drives KELT's onboarding wizard |
-| `GET    /capabilities`                                 | `{"adapters","sources","kinds"}` | **Vendor extension**: live adapter capabilities + the tenant's asset sources/kinds |
-| `GET    /anchors/calibration`                          | `{"anchors":[…]}`            | **Vendor extension**: real per-AP RF (`txPowerRef`, `pathLossExponent`) proxied from wifi-adapter. No BSSIDs. Empty when `WIFI_ADAPTER_URL` unset |
-| `GET    /adapters`                                     | `{"adapters":[…]}`           | **Vendor extension**: name, state and declared capabilities of each adapter. Empty list when the engine is unreachable |
-| `GET    /blueprint`                                    | blueprint JSON               | **Vendor extension**: read-only proxy of the engine's blueprint so the demo (MEC: gateway only) can render the venue. `404` when the engine has none |
-| `WS     /positions/stream`                             | stream of position payloads  | **Vendor extension**: forwards the engine's `/ws/positions` broadcast to authenticated clients, grouped by asset, fused across capabilities, and translated into the profile's field names (`assetId`, `positioningId`, `accuracy`, `altitude`, `observedAt`, `lastCommunicationTime`). The JWT rides the `Sec-WebSocket-Protocol` header (`bearer.jwt, <jwt>`), not the URL, since browsers cannot set `Authorization` on a WS handshake and a bearer token must not go in a URL. Closes with code 4401 on auth failure, 1011 on upstream failure |
+| Route | Access | Content |
+|-------|--------|---------|
+| `GET /health` | none | liveness |
+| `GET /contract` | none | the environment contract |
+| `GET /contracts`, `GET /contracts/{name}` | none | the published contract files ([contracts](contracts.md)) |
+| `POST /location-retrieval/v0.5/retrieve` | read | CAMARA Location Retrieval |
+| `POST /location-verification/v3/verify` | read | CAMARA Location Verification |
+| `WS /positions/stream` | read | the position stream. The token travels as the subprotocol `bearer.jwt, <jwt>` |
+| `GET /assets` | read | the asset map ([asset registry](asset-registry.md)) |
+| `PUT /assets` | operator | replace the asset map |
+| `GET /assets/discoverable` | operator | devices not yet onboarded |
+| `GET /assets/{assetId}/details` | read | the asset with its fused position, strategy and sources |
+| `PUT`, `DELETE /assets/{assetId}/placement` | read | place or remove a synthetic asset ([adapters](adapters.md#placement)) |
+| `GET /device-diagnostics/v0/{assetId}` | read | device telemetry ([profile extensions](profile-extensions.md)) |
+| `GET /capabilities` | read | what the deployment can do now |
+| `GET /adapters` | read | name, state and declared capabilities of each adapter |
+| `GET /anchors/calibration` | read | fitted WiFi parameters per anchor, without BSSIDs |
+| `GET /blueprint` | read | the venue blueprint, read-only |
 
-Error envelope (all non-health routes): `{ "status": <int>, "code": <string>, "message": <string> }`.
+Errors use the CAMARA envelope `{status, code, message}`, and every response
+carries an `x-correlator` header. The stream closes with `4401` on a missing or
+invalid token and `1011` when the engine is unavailable.
 
 ## positioning-engine
 
-No auth (cluster-internal). Mounts:
+Reachable only inside the cluster, without authentication.
 
-| Method · path                          | Returns            | Notes                                                                            |
-|----------------------------------------|--------------------|----------------------------------------------------------------------------------|
-| `GET    /health`                       | `{"status":"ok"}`  | Liveness                                                                         |
-| `GET    /position/{positioning_id}?source=` | `EnginePosition` | Routes by `?source=` (adapter whose `ADAPTER_NAME` matches); else `DEVICE_MAP`; else fan out to all adapters + fuse. `404` when no adapter has a fix (legitimate "offline") |
-| `GET    /blueprint`                     | blueprint JSON     | The engine is the blueprint authority. Returns the persisted venue blueprint (raw layout.json shape); `404` when none authored yet |
-| `PUT    /blueprint`                     | `{"status":"ok",…}` | Replace + persist the blueprint, re-derive `gps_origin` live. No auth (ClusterIP, internal); write control is the placement-editor's front-door gate. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
-| `GET    /adapters`                     | `{"adapters":[…]}` | Registry snapshot per adapter: `name`, `baseUrl`, `kind`, `registeredVia`, `lastSeenSAgo`, `failCount`, `inCooldown`, `cooldownSecondsRemaining`, `state` (`live`/`unreachable`/`stale`). Also proxied by the gateway |
-| `GET    /devices`                      | `{"devices":[…]}`  | Aggregates each live adapter's `GET /devices` (those advertising the `devices` capability), tagging each with `source` (adapter name) + `origin`. Best-effort: unreachable sources are skipped. Powers the gateway's `/assets/discoverable` |
-| `POST   /adapters`                     | `{"status":"ok",…}` | Self-registration / heartbeat: `{name, baseUrl, kind}` upsert. See [`adapter-registry.md`](adapter-registry.md) |
-| `DELETE /adapters/{name}`              | `{"status":"ok",…}` | Deregister on adapter shutdown |
-| `WS     /ws/positions`                 | stream of `{positioningId, latitude, longitude, altitude, accuracy, timestamp}` | Broadcast loop over the ids the engine learns from adapters advertising the `devices` capability (`DEVICE_IDS` is only a cold-start seed), paced by `WEBSOCKET_INTERVAL_MS`. `positioningId` is the capability's positioning id; the gateway enriches it to asset shape and profile names downstream |
+| Route | Content |
+|-------|---------|
+| `GET /health`, `GET /contract` | liveness, environment contract |
+| `GET /position/{positioningId}?source=` | the fused position of one positioning id, in WGS84. `404` without a fix, `503` without a georeference |
+| `WS /ws/positions` | the broadcast the gateway turns into `/positions/stream` |
+| `GET`, `PUT /blueprint` | the venue blueprint ([blueprint and bindings](blueprint-vs-bindings.md)) |
+| `GET /adapters` | the registry with health and counters |
+| `POST /adapters`, `DELETE /adapters/{name}` | register or heartbeat, deregister ([adapter registry](adapter-registry.md)) |
+| `GET /devices` | the device lists of the adapters that advertise `devices` |
 
-## Adapter contract (consumed by the engine)
+## Adapters
 
-Every adapter pod implements:
+Every adapter serves the adapter contract ([adapters](adapters.md)):
 
-| Method · path                          | Returns            | Notes                                                                            |
-|----------------------------------------|--------------------|----------------------------------------------------------------------------------|
-| `GET    /health`                       | `{"status":"ok"}`  | Liveness (always 200); use for `livenessProbe`                                    |
-| `GET    /ready`                         | `{"status":…}`     | Readiness: 200 when startup config loaded, else `503 {status:"not-ready",error}`; use for `readinessProbe` |
-| `GET    /measurement/{positioningId}`      | `Measurement`      | Returns one measurement in the adapter's chosen `frame` (`room`, `venue` or `wgs84`); `404` if no measurement |
-| `GET    /devices`                       | `{"origin","devices":[…]}` | Device discovery for onboarding: ids this source knows, each `{id, role?, sourceClass?, deviceType?, label?, lastSeen?, position?}`. `origin`: `inventory` (vendor registry, bulk-safe) or `observed` (activity-seen, claim + label). `role`: `asset` or `infrastructure` (fixed sensor, not onboardable). `sourceClass`: positioning tech (`uwb`/`ble`/`wifi`/`gnss`/`cellular`/`other`). Advertised via the `devices` capability; aggregated by the engine |
+| Route | Content |
+|-------|---------|
+| `GET /health` | liveness |
+| `GET /ready` | readiness, `503` with the reason |
+| `GET /contract` | the environment contract |
+| `GET /measurement/{positioningId}` | one measurement, `404` without a fix |
+| `GET /devices` | the devices the source knows, with the `devices` capability |
 
-`wifi-adapter` also exposes:
+Routes beyond the contract:
 
-| Method · path                          | Returns         | Notes                                                                  |
-|----------------------------------------|-----------------|------------------------------------------------------------------------|
-| `POST   /ingest/wifi-scan`             | `{"ok":true}`   | Edge client pushes a single scan: `{positioningId, scan:{bssid: rssi}, timestamp?}`. The superseded `device_id` is still accepted, answers with a `warning`, and marks the device on `GET /devices` with `supersededIngestField` |
-| `GET    /bindings`                     | `WifiBindings`  | **Operator plane**: export the live per-venue bindings (BSSIDs + RF + samples), full fidelity. Reached only through the `placement-admin`-gated editor; never proxied to the demo/gateway |
-| `PUT    /bindings`                     | `{"status":"ok",…}` | **Operator plane**: replace the bindings file wholesale + hot-reload (accepts `bindings[]` or legacy `routers[]`). The config-transfer import. See [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md) |
-| `*      /calibration/{...}`            | (various)       | Guided calibration survey: `POST /capture`, `GET /capture/{id}`, `DELETE /capture/{id}`, `GET /state`, `DELETE /samples`, `DELETE /samples/{id}`, `POST /derive`, `POST /apply`, `GET /params`. Proxied by the editor at `/api/wifi/calibration/*`. `/calibration/params` returns per-AP RF **without** BSSIDs |
+| Adapter | Route | Content |
+|---------|-------|---------|
+| wifi-adapter | `POST /ingest/wifi-scan` | a scan from an edge scanner |
+| wifi-adapter | `GET`, `PUT /bindings` | the bindings, BSSIDs included |
+| wifi-adapter | `POST /calibration/capture`, `GET`/`DELETE /calibration/capture/{id}`, `GET /calibration/state`, `DELETE /calibration/samples`, `DELETE /calibration/samples/{id}`, `POST /calibration/derive`, `POST /calibration/apply` | the calibration survey ([calibration](blueprint-vs-bindings.md#calibration)) |
+| wifi-adapter | `GET /calibration/params` | fitted parameters per anchor, without BSSIDs |
+| vendor-adapter | `GET`, `PUT /schema` | the vendor schema ([integrating a vendor REST API](integrating-a-vendor-rest-api.md)) |
+| vendor-adapter | `GET /contract/schema` | the JSON Schema of the vendor schema document |
+| vendor-adapter | `GET /discover` | the vendor's device list, `?raw=1` for the records as received |
+| vendor-adapter | `GET /diagnostics/{positioningId}` | device telemetry, with the `diagnostics` capability |
+| synthetic-adapter | `PUT`, `DELETE /devices/{positioningId}/placement` | place or remove a synthetic device |
 
-`synthetic-adapter` exposes only the contract endpoints, no ingest path (data is synthesised internally).
-
-`vendor-adapter` also exposes admin endpoints for runtime schema management:
-
-| Method · path                          | Returns                          | Notes                                                                  |
-|----------------------------------------|----------------------------------|------------------------------------------------------------------------|
-| `GET    /discover`                     | `{"vendor","devices":[…]}`       | Normalised vendor device list (mapping + classify applied). `?raw=1` → `{"vendor","raw":[…]}` instead: the vendor records **verbatim**, for the guided schema builder (operator points paths at real field names). ⚠️ raw is the full vendor payload - may carry secrets; keep behind operator auth, never log |
-| `GET    /contract/schema`              | JSON Schema of the vendor document | **Operator plane**. Pydantic `Schema` as JSON Schema. No auth; answers with no instance loaded. Not the live schema (`GET /schema`) and not a profile contract |
-| `GET    /schema`                       | schema JSON                      | `404` when no schema is loaded                                         |
-| `PUT    /schema`                       | `{"status":"ok","vendor":"…","persisted":<bool>}` | **Dev / preview hot-patch only** - applies live + clears cache. Production schema changes go through the ConfigMap + `rollout restart` ([`integrating-a-vendor-rest-api.md`](integrating-a-vendor-rest-api.md)). On a read-only ConfigMap/subPath mount returns `persisted:false` + a `warning` and the ConfigMap re-wins on restart |
-
-`mock-vendor` is the schema-driven vendor cloud double, not an adapter. It reads the same schema `vendor-adapter` consumes and serves telemetry + device-list responses on the URL paths that schema declares, behind its auth. See [`mocks/mock-vendor/README.md`](https://github.com/Jacobbista/5g-northbound/blob/main/mocks/mock-vendor/README.md).
+mock-vendor answers `GET /health` and, on any other path, the vendor API its
+schema describes ([mock-vendor](https://github.com/Jacobbista/5g-northbound/blob/main/mocks/mock-vendor/README.md)).
 
 ## placement-editor
 
-No auth wired in the scaffold (`v0.0.1`). Production: front with a Keycloak-protected ingress and the realm role `placement-admin`.
+Behind the operator's access gate. The routes under `/api` forward to the
+service named ([placement-editor](https://github.com/Jacobbista/5g-northbound/blob/main/services/placement-editor/README.md)).
 
-| Method · path                          | Returns                                    | Notes                                          |
-|----------------------------------------|--------------------------------------------|------------------------------------------------|
-| `GET    /health`                       | `{"status":"ok"}`                          | Liveness                                       |
-| `GET    /api/layout`                   | blueprint JSON                             | Proxies the engine's `GET /blueprint` (the editor is a blueprint client, no local file). `404` when none authored yet |
-| `PUT    /api/layout`                   | `{"status":"ok",…}`                        | Proxies the engine's `PUT /blueprint`. Unknown fields preserved verbatim |
-| `GET/PUT /api/wifi/bindings`           | `WifiBindings` / `{"status":"ok",…}`       | Proxies wifi-adapter `GET/PUT /bindings` - the bindings export/import (config transfer). Operator plane; carries BSSIDs |
-| `*      /api/wifi/calibration/*`       | (various)                                  | Proxies wifi-adapter `/calibration/*` (guided survey) |
-| `GET    /api/capabilities`             | `{"adapters":[…]}`                         | Proxies engine `/adapters`; drives the capability-aware toolbar |
-| `GET    /`                             | placeholder HTML                           | Drag-drop UI not yet implemented               |
+| Route | Forwards to |
+|-------|-------------|
+| `GET /health`, `GET /contract` | liveness, environment contract |
+| `GET`, `PUT /api/layout` | positioning-engine `/blueprint` |
+| `GET`, `POST`, `PUT`, `DELETE /api/wifi/calibration/{path}` | wifi-adapter `/calibration/{path}` |
+| `GET`, `PUT /api/wifi/bindings` | wifi-adapter `/bindings` |
+| `GET /api/vendor/discover`, `GET /api/vendor/schema` | vendor-adapter `/discover`, `/schema` |
+| `GET /api/capabilities` | positioning-engine `/adapters` |
+| `GET /env-config.js` | runtime frontend settings |
 
-## Conventions across services
+## location-app
 
-- All Python services: FastAPI, multi-stage `python:3.11-slim` Dockerfile, non-root user (uid 1001), `uvicorn` as PID 1 on port `8080` internally.
-- Health endpoints (`/health`) are always unauthenticated and return `{"status":"ok"}` with HTTP 200. `/health` is liveness; services that load business config at startup also expose `/ready` (503 until that config loads) for the k8s readiness probe.
-- The six configurable services (camara-gateway, positioning-engine, wifi-adapter, vendor-adapter, placement-editor, location-app) expose **`GET /contract`** (unauthenticated, no dependency on business config so it answers even on a misconfigured pod). The mock and the synthetic adapter do not. It returns `{service, kind, external_origin, description, schema, env:{required, recommended, optional}}`, describing which environment variables the service expects. Schema only: it never returns a runtime value, and sensitive entries drop their `default`/`example`. For five of the six services the entries come straight from the committed `env.contract.yaml`; the endpoint is the authoritative surface and the file is its build-time source.
-
-`vendor-adapter` is the exception, because its image is generic and its variables are named by whatever vendor schema an operator loads. Its response carries both halves: the variables the binary reads, from the YAML, and the vendor's, derived from the active schema at request time with `sensitive`, `type` and `declared_at` (the sites in the document where each name appears) on every entry. It also reports the binding itself - `configured`, `vendor`, `schema_source` (`none` / `mounted` / `runtime`), `transports` (the source-side transports the image implements) and `transport` (the one the active schema picked) - plus `mapping` (`supported` / `mapped` / `unmapped`) and, when the schema declares a discover block, `discover_mapping`. An unbound pod reports `configured:false` with an empty `required`, so a wizard asks for a schema instead of guessing a vendor's credentials. location-app (static nginx) serves the same shape from a `contract.json` baked at build. A deploy dashboard reads `/contract` from the live pod to drive a config wizard; the **blueprint** (`layout.json`) is *not* part of the contract - that is shared venue data on a PVC, see [`blueprint-vs-bindings.md`](blueprint-vs-bindings.md). `vendor-adapter` also serves `GET /contract/schema`: the JSON Schema of the document `PUT /schema` accepts. That document is operator-plane (the adapter pod), not a gateway `GET /contracts` entry.
-- Schemas validate request and response bodies; unknown fields are silently dropped (`ConfigDict(extra="ignore")`) except in `placement-editor` where `extra="allow"` lets the layout schema evolve without backend changes.
-- Time fields are RFC 3339 UTC strings (`...Z` suffix). Unix epoch seconds are used only on the adapter contract (`Measurement.timestamp`).
-- Distances are metres, angles WGS84 decimal degrees.
+nginx serves the application, `GET /contract` (the environment contract,
+written at build) and `GET /env-config.js`.

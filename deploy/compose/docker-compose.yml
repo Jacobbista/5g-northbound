@@ -190,7 +190,6 @@ services:
       context: ./services/positioning-engine
     ports:
       - "8081:8080"
-      - "8082:8080"
     volumes:
       # The engine is the blueprint authority: it persists the blueprint on a
       # named volume (survives restarts) and serves it via GET/PUT /blueprint.

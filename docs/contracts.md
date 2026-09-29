@@ -1,189 +1,120 @@
 # Machine-readable contracts
 
-Every contract this stack publishes is a versioned file, fetchable over HTTP two
-ways. Both take the same repo-relative `<path>` (the table below).
+Every contract of the stack is a versioned file in this repository. This page
+lists them, says who governs each surface, and states the naming convention.
 
-**Fetch the latest - GitHub Pages CDN** (no rate limit, works from anywhere):
+## Fetching a contract
 
-```
-https://jacobbista.github.io/5g-northbound/<path>
-# e.g. https://jacobbista.github.io/5g-northbound/schema/hop-log.schema.json
-```
+| Source | URL | Use |
+|--------|-----|-----|
+| a running gateway | `GET /contracts` (index), `GET /contracts/{name}` | the contracts of the deployed image, without authentication |
+| GitHub Pages | `https://jacobbista.github.io/5g-northbound/<path>` | the latest version, without rate limit |
+| a release tag | `https://raw.githubusercontent.com/Jacobbista/5g-northbound/<tag>/<path>` | a fixed version to pin |
 
-**Pin an immutable version - raw at a release tag:**
+`<path>` is the repository path in the table below. The running gateway
+matches the deployed behaviour. Pages and tags serve readers without a
+gateway. `raw.githubusercontent.com` limits anonymous requests, and a
+`github.com/.../blob/...` link returns an HTML page, not the file.
 
-```
-https://raw.githubusercontent.com/Jacobbista/5g-northbound/<tag>/<path>
-# e.g. https://raw.githubusercontent.com/Jacobbista/5g-northbound/v0.9.0/spec/private-profile/generated/location-retrieval.profiled.yaml
-```
+## The contracts
 
-Prefer Pages to fetch; pin a tag via raw when you integrate (the contract may
-evolve). `raw.githubusercontent.com` rate-limits anonymous requests, so behind a
-shared egress IP use Pages or an authenticated request. The
-`github.com/.../blob/...` link is an HTML page, never the file.
+| Contract | `<path>` | Governed by | Served by the gateway |
+|----------|----------|-------------|-----------------------|
+| CAMARA retrieval, base | `services/camara-gateway/spec/location-retrieval.yaml` | CAMARA, pinned r3.2 | no |
+| CAMARA verification, base | `services/camara-gateway/spec/location-verification.yaml` | CAMARA, pinned r3.2 | no |
+| Profile overlays | `spec/private-profile/overlay-retrieval.yaml`, `overlay-verification.yaml` | CAMARA and this profile | no |
+| **Profiled retrieval** | `spec/private-profile/generated/location-retrieval.profiled.yaml` | CAMARA and this profile | yes |
+| **Profiled verification** | `spec/private-profile/generated/location-verification.profiled.yaml` | CAMARA and this profile | yes |
+| Position stream (AsyncAPI) | `spec/private-profile/asyncapi-stream.yaml` | this project | yes |
+| Extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | yes |
+| Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | yes |
+| Device diagnostics body | `schema/device-diagnostics.schema.json` | this project | yes |
+| Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | yes |
+| Accuracy classes | `spec/private-profile/accuracy-class-vocabulary.json` | this project | yes |
+| Asset map | `schema/asset.schema.json` | this project, operator data | yes |
+| Hop log line | `schema/hop-log.schema.json` | this project | yes |
+| Blueprint | `schema/layout.schema.json` | operator data | no |
+| Adapter measurement | `schema/adapter-measurement.schema.json` | this project | no |
+| Adapter announcement | `schema/adapter-announcement.schema.json` | this project | no |
+| Adapter devices | `schema/adapter-devices.schema.json` | this project | no |
+| Engine position | `schema/engine-position.schema.json` | this project | no |
 
-**Fetch from a running gateway - self-describing at runtime:**
+The profiled documents are the ones to pin: base and overlays applied, in one
+file ([profile](https://github.com/Jacobbista/5g-northbound/blob/main/spec/private-profile/README.md#formal-specification)).
+The four engine schemas are generated from the engine's models by
+`make contract-schemas`, and the engine's tests fail when a committed copy
+differs. The gateway serves the files a CAMARA consumer integrates against,
+and not the ones between internal services.
 
-```
-GET https://<gateway>/contracts                 # index of the baked contracts
-GET https://<gateway>/contracts/<name>          # one contract, e.g. device-diagnostics.schema.json
-```
-
-The gateway bakes the consumer-facing contracts into its image and serves them
-with no auth, so an integrator reads them from the gateway it already talks to,
-pinned to the deployed image, with no external fetch. This is authoritative for a
-live integration (it matches the running behaviour); Pages and raw are the public
-mirror for anyone without a running gateway. Each service also serves its env
-contract this way at `GET /contract`.
+Each service also serves its environment contract on `GET /contract`
+([format](https://github.com/Jacobbista/5g-northbound/blob/main/deploy/contracts/README.md)).
+The vendor-adapter's answer adds the variables its loaded vendor schema names,
+the schema binding (`configured`, `vendor`, `schema_source`, `transport`), the
+coverage of the mapping, and the declared source behaviour with what the
+payloads show against it
+([integrating a vendor REST API](integrating-a-vendor-rest-api.md#declaring-how-the-source-reports)).
+Its `GET /contract/schema` is the JSON Schema of the vendor schema document.
 
 ## Who governs which surface
 
-Not every contract here answers to the same authority. Establish which of these
-a field belongs to before changing its name.
+The authority over a name differs by surface. A field is placed in one of
+four kinds before its name is discussed.
 
-**1. CAMARA surfaces.** The request and response bodies of
-`POST /location-retrieval/v0.5/retrieve` and `/location-verification/v3/verify`,
-the error envelope, paths and query parameters, and the fields the profile
-overlays add inside those bodies. Governed by the pinned DeviceLocation r3.2
-documents and by
-[CAMARA Commonalities](https://github.com/camaraproject/Commonalities/blob/main/documentation/CAMARA-API-Design-Guide.md),
-which makes lowerCamelCase mandatory for JSON properties and kebab-case for
-paths.
+1. **CAMARA surfaces.** The retrieval and verification bodies, the error
+   envelope, paths, query parameters, and the fields the overlays add inside
+   those bodies. Governed by the pinned CAMARA documents and by the
+   [CAMARA API design guide](https://github.com/camaraproject/Commonalities/blob/main/documentation/CAMARA-API-Design-Guide.md),
+   which requires lowerCamelCase properties and kebab-case paths.
+2. **What this project names.** The extension endpoints, the stream, the
+   diagnostics vocabulary, and the contracts between the stack's own services:
+   the adapter contract, the engine position, the adapter registry,
+   `/devices`, `/discover`, `/diagnostics`. No standard governs them, and the
+   convention below applies.
+3. **Operator documents.** The asset map, the blueprint, the WiFi bindings, the
+   vendor schema, the environment contracts. A key rename here is a data
+   migration. Each document keeps its own convention, consistent with itself
+   and with what it references: the vendor schema follows the diagnostics
+   vocabulary because its mapping keys must match core names, while the
+   blueprint references nothing and keeps its snake_case keys. The asset map
+   and the blueprint are also request and response bodies, of `/assets` and
+   `/blueprint`.
+4. **Foreign data carried as received.** The content of `vendorSpecific`, and
+   the names an operator chooses inside a document: `pathVars` names and
+   diagnostics mapping names outside the core. Nothing interprets them.
 
-**2. Everything else this project names.** The extension endpoints published
-beside CAMARA (`/assets*`, `/anchors/calibration`, `/capabilities`, `/adapters`,
-`/device-diagnostics/v0/{assetId}`, `/positions/stream`), the core diagnostics
-vocabulary, and the contracts between this stack's own services (the adapter
-contract `GET /measurement/{id}`, the engine contract `GET /position/{id}`, the
-adapter registry, `/devices`, `/discover`, `/diagnostics`). No standard governs
-any of them: Commonalities mandates a convention for CAMARA-defined attributes
-and is silent on added ones. The project therefore declares one, below, and
-applies it to all of them. The reason is not that outsiders read them; it is
-that a name carrying its own unit is a worse name wherever it appears, and two
-conventions inside one stack cost a translation layer that buys nothing.
+Tying a field to an external standard fixes its definition, not its spelling.
+`battery` means what OMA LwM2M defines at object 3, resource 9. LwM2M names no
+JSON field, so `battery` is this profile's name, and the vocabulary's
+`standard` entry records the source. A definition this profile makes itself
+says so: the accuracy classes carry a `provenance` field stating that their
+boundaries are the profile's own, since omlox has no classes and 3GPP TR 38.855
+sets targets for public networks.
 
-**3. Operator documents and data at rest.** The Asset Identity Map, the venue
-blueprint, the WiFi bindings, the vendor schema, the env contracts.
-Configuration, not APIs. A key rename here is a data migration of ConfigMaps and
-volumes. Each document keeps its own convention and must be coherent with itself
-and with anything it references: the vendor schema follows the vocabulary
-because its diagnostics mapping keys must match a core name exactly, while the
-blueprint references nothing and is left alone. Two documents carry a second
-authority as well, because the same shape is also a request or response body:
-the asset map is the body of `GET/PUT /assets`, the blueprint of the engine's
-`GET/PUT /blueprint`.
+## Naming convention
 
-**4. Foreign data carried without interpretation.** The contents of the
-`vendorSpecific` bag, and the keys an operator invents inside their own
-document: the `pathVars` names substituted into their own path template, and any
-non-core diagnostics mapping name. Nothing here interprets them, so no
-convention applies and they are carried as authored.
-
-**Anchoring is not spelling.** Binding a field to an external standard fixes its
-*definition*. The core vocabulary says `battery` means what OMA LwM2M defines at
-object 3, resource 9: integer, percent, 0 to 100. LwM2M identifies that resource
-by numeric id and labels it "Battery Level"; it defines no JSON field name, so
-`battery` is this project's name for a borrowed definition. The pointer to the
-source lives in the `standard` field of
-`spec/private-profile/diagnostics-vocabulary.json`.
-
-**Not everything can be anchored, and saying so is part of the contract.** The
-accuracy-class taxonomy (`coarse` / `metre` / `sub-metre`, declared by each
-adapter) has no external source to borrow from: omlox specifies accuracy as a
-continuous value with no classes, and 3GPP TR 38.855 publishes targets per
-public-network use case, a regulatory and outdoor framing that does not describe
-a private indoor deployment. The boundaries are this profile's own. Rather than
-leave that implicit, `spec/private-profile/accuracy-class-vocabulary.json`
-carries a `provenance` field that states it, so a reader can tell a borrowed
-definition from one we chose. An unanchored definition is legitimate. An
-unanchored definition presented as a borrowed one is not.
-
-### The convention
-
-- **Field names are lowerCamelCase.** `assetId`, `positioningId`,
-  `lastCommunicationTime`, `observedAt`.
-- **The name states the quantity, not the unit.** `accuracy`, not `accuracy_m`.
-  CAMARA does the same with `radius` ("Distance from the center in meters").
-- **The unit is declared, not implied.** `x-unit` on the schema property, with
-  the prose in `description`. OpenAPI and JSON Schema have no unit facility and
-  `format` describes the type, so without this the unit survives only as prose a
-  generator drops. Pydantic models carry it through
-  `json_schema_extra={"x-unit": "m"}`, so it reaches each service's
-  `/openapi.json`.
+- **Field names are lowerCamelCase:** `assetId`, `positioningId`,
+  `lastCommunicationTime`.
+- **The name states the quantity, not the unit:** `accuracy`, not
+  `accuracy_m`, as CAMARA's `radius` is in metres.
+- **The unit is declared** in the schema as `x-unit`, with prose in
+  `description`. The Pydantic models carry it through
+  `json_schema_extra={"x-unit": "m"}` into each service's `/openapi.json`.
+  A quantity without a unit is named for what it is: `pathLossExponent`.
+- **Times are RFC 3339 UTC** on every surface the gateway publishes. Epoch
+  seconds appear only on the internal contracts, from the adapters to the
+  engine and the gateway.
 
 ```yaml
 accuracy:
   type: number
   format: double
   x-unit: m
-  description: Horizontal 1-sigma uncertainty radius.
+  description: Horizontal one-sigma error radius.
 ```
 
-  Where the unit is not conventional for the quantity, the declaration is what
-  carries it: `txPowerRef` with `x-unit: dBm`. A quantity with no unit takes a
-  name that says so: `pathLossExponent`, since the `n` was a symbol.
-
-**One surface crosses over gradually.** `POST /ingest/wifi-scan` takes its
-identifier as `positioningId` and still accepts the superseded `device_id`. Its
-client is the scanner running on edge hardware, outside the images this
-repository builds and outside a deploy window, so it cannot be moved in step
-with the services. A scan that uses the old name is served, and the response
-carries a `warning` naming the replacement. The adapter already knows which
-device sent the scan, so it reports the fact per device on `GET /devices` as
-`supersededIngestField`, and logs it once per device rather than once per scan.
-The old name is removed once no device reports it.
-
-## The contracts
-
-Take each `<path>` and prefix it with a base above.
-
-| Contract | `<path>` | Governed by | What |
-|----------|----------|------|------|
-| CAMARA base - retrieval | `services/camara-gateway/spec/location-retrieval.yaml` | CAMARA | Pinned upstream OpenAPI (do not edit) |
-| CAMARA base - verification | `services/camara-gateway/spec/location-verification.yaml` | CAMARA | Pinned upstream OpenAPI |
-| Profile overlay - retrieval | `spec/private-profile/overlay-retrieval.yaml` | CAMARA | OpenAPI Overlay delta (assetId, source/altitude) |
-| Profile overlay - verification | `spec/private-profile/overlay-verification.yaml` | CAMARA | OpenAPI Overlay delta |
-| **Profiled spec - retrieval** | `spec/private-profile/generated/location-retrieval.profiled.yaml` | CAMARA | Base + overlay applied; **the pinnable self-contained contract** |
-| **Profiled spec - verification** | `spec/private-profile/generated/location-verification.profiled.yaml` | CAMARA | Base + overlay applied |
-| Streaming (AsyncAPI) | `spec/private-profile/asyncapi-stream.yaml` | this project | `/positions/stream` channel + message |
-| Asset map schema | `schema/asset.schema.json` | this project + operator data | Asset Identity Map entries (`GET/PUT /assets`); an asset binds ≥1 positioning capability, fused |
-| Blueprint schema | `schema/layout.schema.json` | operator data | Venue geometry (`layout.json`) |
-| Hop-log schema | `schema/hop-log.schema.json` | this project | Per-hop latency log line ([latency-instrumentation.md](latency-instrumentation.md)) |
-| Adapter measurement | `schema/adapter-measurement.schema.json` | this project | `GET /measurement/{positioningId}`, what an adapter sends the engine ([adapters.md](adapters.md)) |
-| Adapter announcement | `schema/adapter-announcement.schema.json` | this project | `POST /adapters`, registration and declared capabilities ([adapter-registry.md](adapter-registry.md)) |
-| Adapter devices | `schema/adapter-devices.schema.json` | this project | `GET /devices`, the devices a source knows, for onboarding |
-| Engine position | `schema/engine-position.schema.json` | this project | `GET /position/{positioningId}`, what the engine sends the gateway |
-| Device diagnostics (OpenAPI) | `spec/private-profile/device-diagnostics.yaml` | this project | `GET /device-diagnostics/v0/{assetId}` extension resource ([profile-extensions.md](profile-extensions.md)) |
-| Device diagnostics schema | `schema/device-diagnostics.schema.json` | this project | Diagnostics payload (motion, link quality, accuracy provenance) |
-| Diagnostics vocabulary | `spec/private-profile/diagnostics-vocabulary.json` | this project | The core diagnostics names, their units and the standard each is anchored to, and the rule that routes every other field to `vendorSpecific` ([profile-extensions.md](profile-extensions.md#core-vocabulary)) |
-| Accuracy-class vocabulary | `spec/private-profile/accuracy-class-vocabulary.json` | this project | The bands an adapter declares (`accuracy_class`), their boundaries, and how a band resolves to a nominal accuracy ([adapters.md](adapters.md#what-an-adapter-declares)) |
-| Profile extensions (OpenAPI) | `spec/private-profile/extensions.yaml` | this project | Management and extension endpoints: `/assets`, `/assets/discoverable`, `/assets/{id}/details`, `/assets/{id}/placement`, `/anchors/calibration`, `/capabilities`, `/adapters`, `/blueprint` |
-
-The four engine schemas are generated from the engine's models with
-`make contract-schemas`. The engine parses with the same models, and its test
-suite fails when a committed schema differs from them.
-
-Per-service **env contracts** (`services/<svc>/env.contract.yaml`) and **adapter
-contracts** (`services/<svc>/adapter.contract.yaml`) follow the same pattern. The
-env contract is served live, as JSON, at each service's `GET /contract`, and that
-endpoint is the authoritative one: the committed YAML is its build-time source.
-
-On the vendor-adapter the response has two halves. The variables the binary
-itself reads come from the YAML. The variables the VENDOR needs are named by the
-active schema, so they are derived from it at request time - this image is
-generic and holds no vendor's names. The same response carries `configured`,
-`vendor` and `schema_source` (`none` / `mounted` / `runtime`), so a caller can
-tell an unbound instance from a bound one, and `mapping.unmapped`, which lists
-the mapping fields this binary supports that the loaded document does not map.
-
-It also carries `transports`, the source-side transports this image can drive,
-and `transport`, the one the active schema picked. That is a different axis from
-the `streaming` capability, which says whether the ENGINE is pushed to or polls
-the adapter. A caller reads `transports` as a fact when it holds one entry and
-offers a choice only when it holds more; the full set the grammar accepts is in
-`GET /contract/schema`.
-
-The vendor-adapter additionally serves `GET /contract/schema` (JSON Schema of
-the operator-authored vendor document). That is adapter config, not a profile
-contract: it is not listed in the table above and is not baked into the gateway
-image.
+One surface renames with a transition. `POST /ingest/wifi-scan` takes
+`positioningId` and still accepts the older `device_id`, since its client runs
+on edge devices outside the release cycle. A scan with the old name is served
+with a `warning` in the response, `GET /devices` marks the device with
+`supersededIngestField`, and the adapter logs it once per device. The old name
+is removed when no device reports it.
