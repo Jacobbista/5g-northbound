@@ -14,6 +14,7 @@ import { blueprintToCanvas } from "../lib/blueprintFrame";
 import { frameFromBlueprint, gpsToScene } from "../lib/venueFrame";
 import { ema2d } from "../lib/smoothing";
 import { shortLabel } from "../lib/label";
+import { deviceState } from "../lib/deviceState";
 
 // Scene labels sit below the UI chrome (detail panel, header). Cap the drei
 // Html z-index so a floating label never covers an open panel.
@@ -47,7 +48,6 @@ const techOfAnchor = (a) => (a && a.technology) || "wifi";
 const techPalette = (a) => TECH_PALETTE[techOfAnchor(a)] || TECH_PALETTE.wifi;
 const TRAIL_MAX = 60;
 const MARGIN = 6;
-const STALE_MS = 10000;
 // The blueprint changes only on an operator's action in the placement editor
 // (georef, room size, anchor positions), not on the demo's own cadence, so a
 // slow poll is enough. Without it, a tab open across such an edit keeps
@@ -55,12 +55,6 @@ const STALE_MS = 10000;
 // drifts off where the anchors and walls now are, and only a reload (which
 // re-fetches once, on mount) corrects it. Matches useAdapterHealth's poll.
 const BLUEPRINT_POLL_MS = 15000;
-// Display threshold for the reported fix accuracy (metres). Matches the
-// sidebar's `imprecise` state in App.jsx; override per deployment via
-// runtime env.
-const ACCURACY_MAX_M = Number(
-  (typeof window !== "undefined" && window.__ENV__?.VITE_ACCURACY_MAX_M) || 15
-);
 const DEFAULT_WALL_HEIGHT = 2.7;
 const DEFAULT_OPENING_HEIGHT = 2.1;
 const DEFAULT_WALL_THICK = 0.2;
@@ -915,18 +909,10 @@ function DeviceTracks({ positions, onSelectDevice, wifiAps, frame, inert = false
 
     const local = smoothedRef.current[phone] || raw;
     const trail = trailsRef.current[phone] || [];
-    // Liveness is measured from observedAt (when the source last answered), not
-    // from the fix time: a stationary asset keeps the same lastLocationTime yet
-    // is still reachable. The trail above only grows on a NEW fix; staleness
-    // here only greys a source that has gone silent. Grey the marker when the
-    // source is silent OR its reported accuracy is worse than the display
-    // threshold: a device far outside the calibrated room still yields a fresh
-    // fix near the room centre with a huge radius, and a confident-looking dot
-    // there would be a lie.
-    const liveAt = position?.observedAt || position?.lastLocationTime;
-    const tooOld = !liveAt || Date.now() - new Date(liveAt).getTime() > STALE_MS;
-    const imprecise = radius != null && radius > ACCURACY_MAX_M;
-    const stale = tooOld || imprecise;
+    // Grey the marker when the asset is not live: the same state the sidebar
+    // and the detail pill show, from the device's last communication and from
+    // its accuracy against what its sources declare.
+    const stale = deviceState({ position, deviceId: phone }) !== "live";
     const hasWifi = sources.includes("wifi");
 
     return (

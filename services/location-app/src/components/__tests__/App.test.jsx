@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deviceState } from "../App.jsx";
+import { deviceState } from "../../lib/deviceState.js";
 
 // One function serves both the sidebar row and the detail pill, so the two can
 // never disagree about the same asset.

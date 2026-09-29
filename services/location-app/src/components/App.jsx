@@ -7,7 +7,10 @@ import { usePositionsStream } from "../hooks/usePositionsStream";
 import { useSelection } from "../hooks/useSelection";
 import { useDeviceDiagnostics } from "../hooks/useDeviceDiagnostics";
 import { relevantAnchorIds as computeRelevant } from "../lib/relevance";
-import { livenessFor, recordLastSeen } from "../lib/liveness";
+import { recordLastSeen } from "../lib/liveness";
+import { deviceState } from "../lib/deviceState";
+import { setAccuracyDeclarations } from "../lib/imprecision";
+import { useAccuracyClasses } from "../hooks/useAccuracyClasses";
 import { sourcesAdvertising } from "../lib/capabilities";
 import { placeAsset, placeableSources, removeAsset } from "../lib/placement";
 import { blueprintToCanvas } from "../lib/blueprintFrame";
@@ -87,20 +90,12 @@ function adaptStreamItem(item) {
       center: { latitude: item.latitude, longitude: item.longitude },
       radius: item.accuracy,
     },
+    horizontalAccuracy: item.accuracy,
     sources: item.sources || [],
     strategy: item.strategy,
   };
 }
 
-const STALE_MS = 30000;
-// Above this reported accuracy the fix is treated as unusable for display
-// purposes: a WiFi device far outside the calibrated room still produces a
-// "fresh" fix (the trilateration collapses toward the room centre with a
-// huge radius), and painting that as a confident live dot misleads the
-// viewer. Configurable per deployment via runtime env.
-const ACCURACY_MAX_M = Number(
-  (typeof window !== "undefined" && window.__ENV__?.VITE_ACCURACY_MAX_M) || 15
-);
 
 const shell = {
   height: "100vh",
@@ -487,30 +482,6 @@ const sceneWrap = {
   userSelect: "none",
   WebkitUserSelect: "none",
 };
-
-export function deviceState({ position, deviceId }) {
-  // Called only for a SELECTED device; deselected rows show "hidden" upstream.
-  // One function, used by the sidebar row AND the detail pill, so the two can
-  // never disagree about the same asset.
-  const radius = position?.area?.radius;
-  const imprecise = radius != null && radius > ACCURACY_MAX_M;
-  // Prefer the device's own last communication when the source reports it,
-  // judged against that device's learned cadence. Neither the fix time (which
-  // freezes for a still asset) nor observedAt (fresh on every tick) can tell a
-  // quiet device from a live one.
-  if (position?.lastSeen) {
-    const state = livenessFor(deviceId, position.lastSeen);
-    if (state !== "live") return state;
-    return imprecise ? "imprecise" : "live";
-  }
-  // No last-communication signal here. observedAt is the broadcast tick and
-  // stays fresh while the source answers, so the fix age is the signal left.
-  const liveAt = position?.lastLocationTime;
-  if (!liveAt) return "offline";
-  const ageMs = Date.now() - new Date(liveAt).getTime();
-  if (ageMs > STALE_MS) return "stale";
-  return imprecise ? "imprecise" : "live";
-}
 
 const standbyPill = {
   fontSize: 9,
@@ -934,6 +905,9 @@ export function App() {
   const allAssetIds = devices.map((d) => d.assetId);
   const { isSelected, toggle } = useSelection(allAssetIds);
   const adapters = useAdapterHealth(token, { paused });
+  const accuracyClasses = useAccuracyClasses();
+  // The imprecise state compares each position with what its sources declare.
+  setAccuracyDeclarations(adapters, accuracyClasses);
   // Sources that synthesise their position, so where an asset starts is a
   // choice rather than a fact. Their assets can be dragged onto the plan.
   const placeable = useMemo(() => placeableSources(adapters), [adapters]);

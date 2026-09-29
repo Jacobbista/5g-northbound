@@ -15,12 +15,13 @@ _MIN_ACCURACY_M = 0.01
 
 
 class WeightedAvgFusion:
-    """Baseline strategy: weighted mean with w = confidence / accuracy, and
-    w = 1 / accuracy for a source that reports no confidence.
+    """Baseline strategy: inverse-variance weighted mean, w = confidence /
+    accuracy^2, with confidence 1 for a source that reports none.
 
-    Output accuracy is the inverse-RMS of input accuracies. Both use each
-    measurement's accuracy floored at `_MIN_ACCURACY_M`.
-    Stateless; one instance per engine process.
+    The output accuracy is the one-sigma error of that mean for independent
+    errors, sqrt(sum(w_i^2 * a_i^2)) / sum(w_i), which is 1 / sqrt(sum(1 /
+    a_i^2)) when every confidence is equal. Both use each measurement's accuracy
+    floored at `_MIN_ACCURACY_M`. Stateless; one instance per engine process.
     """
 
     name = "weighted_avg"
@@ -36,7 +37,7 @@ class WeightedAvgFusion:
 
         accuracies = [max(m.accuracy, _MIN_ACCURACY_M) for m in measurements]
         weights = [
-            (1.0 if m.confidence is None else m.confidence) / a
+            (1.0 if m.confidence is None else m.confidence) / (a * a)
             for m, a in zip(measurements, accuracies)
         ]
         total_w = sum(weights)
@@ -59,7 +60,7 @@ class WeightedAvgFusion:
                 sum((w * max(m.verticalAccuracy, _MIN_ACCURACY_M)) ** 2 for w, m in with_height)
             ) / height_w
 
-        accuracy = 1.0 / math.sqrt(sum(1.0 / (a ** 2) for a in accuracies))
+        accuracy = math.sqrt(sum((w * a) ** 2 for w, a in zip(weights, accuracies))) / total_w
         sources = [m.source for m in measurements]
         # A fused position is no newer than its oldest contribution.
         times = [m.timestamp for m in measurements if m.timestamp is not None]

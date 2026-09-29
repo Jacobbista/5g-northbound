@@ -121,3 +121,22 @@ def test_weighted_avg_weights_a_source_without_confidence_by_accuracy(floor_plan
     near = Measurement(source="a", x=0.0, y=0.0, accuracy=1.0, confidence=None, frame="venue")
     far = Measurement(source="b", x=10.0, y=0.0, accuracy=1.0, confidence=1.0, frame="venue")
     assert strat.fuse("d", [near, far], floor_plan).x == 5.0
+
+
+def test_weighted_avg_weights_by_inverse_variance(floor_plan):
+    strat = get_strategy("weighted_avg")
+    sharp = Measurement(source="a", x=0.0, y=0.0, accuracy=1.0, confidence=None, frame="venue")
+    coarse = Measurement(source="b", x=10.0, y=0.0, accuracy=3.0, confidence=None, frame="venue")
+    out = strat.fuse("d", [sharp, coarse], floor_plan)
+    # Weights 1 and 1/9: the mean sits at 10 * (1/9) / (10/9) = 1 m.
+    assert out.x == pytest.approx(1.0)
+    # With equal confidences the error of the mean is the inverse-variance one.
+    assert out.accuracy == pytest.approx(1.0 / (1.0 + 1.0 / 9.0) ** 0.5)
+
+
+def test_weighted_avg_accuracy_is_the_error_of_the_mean_it_computed(floor_plan):
+    strat = get_strategy("weighted_avg")
+    a = Measurement(source="a", x=0.0, y=0.0, accuracy=1.0, confidence=1.0, frame="venue")
+    b = Measurement(source="b", x=0.0, y=0.0, accuracy=1.0, confidence=0.25, frame="venue")
+    # Weights 1 and 0.25 on two 1 m errors: sqrt(1 + 0.0625) / 1.25.
+    assert strat.fuse("d", [a, b], floor_plan).accuracy == pytest.approx(1.0625 ** 0.5 / 1.25)
