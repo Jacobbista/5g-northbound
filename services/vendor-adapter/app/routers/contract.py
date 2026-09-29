@@ -95,6 +95,7 @@ def contract(request: Request) -> dict:
         "reporting": caps.get("reporting"),
         "reportingInterval": caps.get("reportingInterval"),
         "z": caps.get("z"),
+        "nominalVerticalAccuracy": caps.get("nominalVerticalAccuracy"),
         "errors": list(getattr(store, "declaration_errors", [])),
         "observed": store.observed.as_dict() if store is not None else None,
     }

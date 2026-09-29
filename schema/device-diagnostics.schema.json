@@ -34,9 +34,10 @@
           "type": "boolean",
           "description": "derived from omlox speed"
         },
-        "lastSeen": {
-          "type": "number",
-          "description": "omlox timestamp_generated, epoch seconds"
+        "lastCommunicationTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "omlox timestamp_generated: when the device last communicated with its source, RFC 3339 UTC"
         },
         "vendorSpecific": {
           "type": "object",

@@ -68,6 +68,7 @@ CORE_DIAGNOSTICS: dict[str, dict] = {
     name: {
         "unit": spec.get("unit"),
         "type": spec["type"],
+        "format": spec.get("format"),
         "tier_default": spec.get("tierDefault"),
     }
     for name, spec in _CORE.items()
@@ -76,3 +77,7 @@ CORE_DIAGNOSTICS: dict[str, dict] = {
 
 def is_core(name: str) -> bool:
     return name in CORE_DIAGNOSTICS
+
+
+def is_core_time(name: str) -> bool:
+    return CORE_DIAGNOSTICS.get(name, {}).get("format") == "date-time"

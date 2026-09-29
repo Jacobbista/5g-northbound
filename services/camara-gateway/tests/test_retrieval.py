@@ -418,3 +418,18 @@ async def test_retrieve_publishes_vertical_accuracy_only_with_altitude(
     route.mock(return_value=httpx.Response(200, json={**body, "verticalAccuracy": 0.4}))
     flat = (await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)).json()
     assert "altitude" not in flat and "verticalAccuracy" not in flat
+
+
+async def test_retrieve_503_when_the_engine_cannot_serve(client, respx_mock, auth_headers, monkeypatch):
+    # The engine answers 503 when the venue has no georeference: the gateway
+    # reports the service as unavailable, not as an upstream fault.
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=httpx.Response(503, json={"detail": "the venue has no georeference"})
+    )
+    resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "UNAVAILABLE"

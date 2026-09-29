@@ -66,7 +66,7 @@ def test_core_vocabulary_and_vendorSpecific_validate():
     schema = json.loads(pathlib.Path(__file__).resolve().parents[3]
                         .joinpath("schema/device-diagnostics.schema.json").read_text())
     body = {"assetId": "a", "source": "wittra",
-            "diagnostics": {"battery": 84, "lastCommunicationTime": 1700000000, "moving": True,
+            "diagnostics": {"battery": 84, "lastCommunicationTime": "2023-11-14T22:13:20Z", "moving": True,
                             "vendorSpecific": {"temperature": 22.5}}}
     jsonschema.validate(body, schema)
 

@@ -27,8 +27,8 @@ def test_candidate_paths_include_repo_spec_dir():
     assert (_REPO / "spec/private-profile/diagnostics-vocabulary.json") in paths
 
 
-def test_core_names_cover_v1():
-    assert set(CORE_DIAGNOSTICS) == {"battery", "lastSeen", "accuracy", "moving"}
+def test_core_names_cover_v2():
+    assert set(CORE_DIAGNOSTICS) == {"battery", "lastCommunicationTime", "accuracy", "moving"}
 
 
 def test_vocabulary_loaded_from_artifact():

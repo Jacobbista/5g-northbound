@@ -150,7 +150,8 @@ function fmtTime(iso) {
 function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosable = true }) {
   const { details, error, loading } = useDeviceDetails(token, device.assetId);
   // Diagnostics come from a per-device vendor GET, independent of a current
-  // position fix: an offline asset still reports battery / lastSeen. Fetch
+  // position fix: an offline asset still reports battery and its last
+  // communication. Fetch
   // regardless of liveness, but only from a source that serves them.
   const { diagnostics: diag } = useDeviceDiagnostics(token, device.assetId, diagnosable);
   const t = details?.telemetry;
@@ -290,8 +291,8 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosabl
               {diag.moving != null && (
                 <div style={statRow}><span style={sLabel}>motion</span><span style={sVal}>{diag.moving ? "moving" : "stationary"}</span></div>
               )}
-              {diag.lastSeen != null && (
-                <div style={statRow}><span style={sLabel}>last seen</span><span style={sVal}>{new Date(diag.lastSeen * 1000).toLocaleTimeString()}</span></div>
+              {diag.lastCommunicationTime != null && (
+                <div style={statRow}><span style={sLabel}>last seen</span><span style={sVal}>{new Date(diag.lastCommunicationTime).toLocaleTimeString()}</span></div>
               )}
               {diag.accuracy != null && (
                 <div style={statRow}><span style={sLabel}>accuracy</span><span style={sVal}>±{Number(diag.accuracy).toFixed(2)} m</span></div>

@@ -1,6 +1,6 @@
 """Translate a vendor JSON response into a Measurement dict using a schema."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .schema import (
@@ -15,7 +15,7 @@ from .schema import (
     PathSpec,
     FRAME_FIELDS,
 )
-from .vocabulary import EXTENSION_BAG, MOVING_SPEED_THRESHOLD_MPS, is_core
+from .vocabulary import EXTENSION_BAG, MOVING_SPEED_THRESHOLD_MPS, is_core, is_core_time
 
 
 def get_path(obj: Any, dotted: str) -> Any:
@@ -240,8 +240,11 @@ def classify_entry(classify: Optional[Classify], entry: Any) -> dict[str, Any]:
 
 def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
     """Resolve each mapped field, then split by the core vocabulary: core names
-    at the top, everything else under `vendorSpecific`, raw. `moving` is derived from
-    the omlox-standard `speed` when the schema did not map `moving` directly.
+    at the top, everything else under `vendorSpecific`, raw. The schema's own
+    mapping (`format`, `transform`) brings a value to the core unit. A core time
+    is published in RFC 3339 UTC whatever form the vendor gives it, and one that
+    cannot be read as a time is dropped. `moving` is derived from the
+    omlox-standard `speed` when the schema did not map `moving` directly.
     Omits any field that does not resolve, so a sparse record stays clean."""
     core: dict[str, Any] = {}
     extra: dict[str, Any] = {}
@@ -249,6 +252,10 @@ def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
         value = resolve_field(spec, payload)
         if value is None:
             continue
+        if is_core(name) and is_core_time(name):
+            value = _rfc3339(value)
+            if value is None:
+                continue
         (core if is_core(name) else extra)[name] = value
 
     # `speed` is not a core output field in v1; it only feeds `moving`.
@@ -263,6 +270,23 @@ def _route_diagnostics(mapping: dict, payload: Any) -> dict[str, Any]:
     if extra:
         out[EXTENSION_BAG] = extra
     return out
+
+
+def _rfc3339(value: Any) -> Optional[str]:
+    """Epoch seconds or an ISO 8601 string, as RFC 3339 UTC. None when the
+    value is neither."""
+    try:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            moment = datetime.fromtimestamp(float(value), timezone.utc)
+        elif isinstance(value, str):
+            moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)
+        else:
+            return None
+    except (ValueError, OverflowError, OSError):
+        return None
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def map_stream_diagnostics(block, payload: Any) -> dict[str, Any]:

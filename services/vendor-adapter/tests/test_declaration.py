@@ -97,12 +97,13 @@ async def test_put_schema_refuses_a_contradiction(wittra_schema_dict, monkeypatc
 
 
 async def test_contract_reports_the_declaration(wittra_schema, monkeypatch):
-    monkeypatch.setenv("ADAPTER_CAPABILITIES", json.dumps(ON_MOTION))
+    monkeypatch.setenv("ADAPTER_CAPABILITIES", json.dumps({**ON_MOTION, "nominalVerticalAccuracy": 0.8}))
     app.state.store = State()
     app.state.store.schema = wittra_schema
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         body = (await client.get("/contract")).json()
     assert body["declaration"]["reporting"] == "on_motion"
+    assert body["declaration"]["nominalVerticalAccuracy"] == 0.8
     assert body["declaration"]["errors"] == []
     assert body["declaration"]["observed"]["measurements"] == 0

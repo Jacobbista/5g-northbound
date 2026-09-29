@@ -21,7 +21,7 @@ vi.mock("../../hooks/useDeviceDiagnostics", () => ({
   useDeviceDiagnostics: () => ({
     diagnostics: {
       battery: 84,
-      lastSeen: 1700000000,
+      lastCommunicationTime: "2023-11-14T22:13:20Z",
       vendorSpecific: { motion: "MOVING", accuracy_value: 0.42, accuracy_kind: "vendor-confidence-score", rssi: [-93, -87] },
     },
     loading: false, error: null,

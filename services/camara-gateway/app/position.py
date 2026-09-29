@@ -220,6 +220,10 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
                 422, f"{error_ns}.UNABLE_TO_LOCATE",
                 "No location could be determined for this asset.",
             ) from exc
+        if exc.response.status_code == 503:
+            # The engine is up and says it cannot serve, for example a venue
+            # without a georeference.
+            raise CamaraError(503, "UNAVAILABLE", "Position source unavailable.") from exc
         log.warning("engine HTTP error %s for %s", exc.response.status_code, device_id)
         raise CamaraError(502, "BAD_GATEWAY", "Position source returned an error.") from exc
     except httpx.HTTPError as exc:

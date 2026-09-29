@@ -1,14 +1,14 @@
 openapi: 3.0.3
 info:
   title: Device diagnostics - private-asset profile extension
-  version: 0.1.0
+  version: 0.2.0
   description: |
     A private-profile extension surface, NOT CAMARA Device Location. It exposes
     device diagnostics that the CAMARA Device Location payloads intentionally do
-    not carry. Core vocabulary fields (battery, lastSeen, accuracy, moving)
-    surface at the top of the payload with standard names and units; any
-    vendor-specific extra surfaces under vendorSpecific, raw and non-authoritative.
-    See docs/profile-extensions.md#core-vocabulary. The CAMARA retrieve/verify
+    not carry. Core vocabulary fields (battery, lastCommunicationTime, accuracy,
+    moving) surface at the top of the payload with standard names and units.
+    Any other field surfaces under vendorSpecific, raw and non-authoritative.
+    See docs/profile-extensions.md#diagnostics-vocabulary. The CAMARA retrieve/verify
     APIs are unchanged; this is a separate, namespaced resource.
 servers:
   - url: https://{gateway}

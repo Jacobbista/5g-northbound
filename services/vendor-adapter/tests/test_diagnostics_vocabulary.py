@@ -43,11 +43,19 @@ def test_no_vendorSpecific_key_when_all_core():
 
 def test_fetch_mapping_routes_the_same():
     fetch = DiagnosticsFetch(
-        path="/d", mapping={"lastSeen": PathSpec(path="ts"), "rssi": PathSpec(path="r")}
+        path="/d", mapping={"lastCommunicationTime": PathSpec(path="ts"), "rssi": PathSpec(path="r")}
     )
     out = map_fetch_diagnostics(fetch, {"ts": 1700000000, "r": -60})
-    assert out["lastSeen"] == 1700000000
+    assert out["lastCommunicationTime"] == "2023-11-14T22:13:20Z"
     assert out["vendorSpecific"] == {"rssi": -60}
+
+
+def test_a_core_time_is_published_in_rfc3339_whatever_the_vendor_sends():
+    fetch = DiagnosticsFetch(path="/d", mapping={"lastCommunicationTime": PathSpec(path="ts")})
+    iso = map_fetch_diagnostics(fetch, {"ts": "2026-06-03 14:40:02.000000+00:00"})
+    assert iso["lastCommunicationTime"] == "2026-06-03T14:40:02Z"
+    # A value that is not a time is not published as one.
+    assert "lastCommunicationTime" not in map_fetch_diagnostics(fetch, {"ts": "soon"})
 
 
 _ARTIFACT = (
@@ -64,7 +72,7 @@ def test_core_names_follow_the_profile_convention():
     for name in vocab["core"]:
         assert re.fullmatch(r"[a-z]+([A-Z][a-z0-9]*)*", name), name
     assert vocab["extensionBag"] == "vendorSpecific"
-    assert "lastSeen" in vocab["core"]
+    assert "lastCommunicationTime" in vocab["core"]
 
 
 def test_every_core_entry_still_records_its_source_definition():
