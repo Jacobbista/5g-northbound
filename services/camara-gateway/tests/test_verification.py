@@ -7,7 +7,7 @@ ROLE = "camara-location-read"
 VERIFY = "/location-verification/v3/verify"
 
 # Mock position is centred near here; a huge radius must match, a tiny one must not.
-NEAR = {"latitude": 45.064312, "longitude": 7.659154}
+NEAR = {"latitude": 59.404210, "longitude": 17.949278}
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ async def test_verify_maxage_unfulfillable_422(
 
     respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
         return_value=httpx.Response(200, json={
-            "positioningId": "wifi-asset-01", "latitude": 45.064312, "longitude": 7.659154,
+            "positioningId": "wifi-asset-01", "latitude": 59.404210, "longitude": 17.949278,
             "accuracy": 1.5, "timestamp": "2026-06-03T14:36:17+00:00",
             "sources": ["wifi"], "strategy": "weighted_avg",
         })

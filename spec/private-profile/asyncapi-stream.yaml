@@ -103,6 +103,13 @@ components:
             Height above the WGS84 ellipsoid in metres: the ellipsoidal height
             of the venue origin plus the measured height of the asset above the
             venue floor. Null when no source measures height.
+        verticalAccuracy:
+          type: number
+          format: double
+          description: |
+            1-sigma uncertainty of the measured height in metres, as reported by
+            the source, without the uncertainty of the origin survey. Present
+            only with `altitude`, and only when the sources report it.
         accuracy:
           type: number
           format: double

@@ -116,6 +116,7 @@ class HttpAdapter(Adapter):
             x=body.x if body.x is not None else 0.0,
             y=body.y if body.y is not None else 0.0,
             z=body.z,
+            verticalAccuracy=body.verticalAccuracy if body.z is not None else None,
             latitude=body.latitude if body.latitude is not None else 0.0,
             longitude=body.longitude if body.longitude is not None else 0.0,
             timestamp=body.timestamp,

@@ -191,6 +191,7 @@ class AssetTelemetry(BaseModel):
     longitude: float
     accuracy: float
     altitude: Optional[float] = None
+    verticalAccuracy: Optional[float] = None
     lastLocationTime: str
     strategy: str
     sources: list[str]
@@ -228,6 +229,7 @@ async def asset_details(
             longitude=details.longitude,
             accuracy=details.radius_m,
             altitude=details.altitude_m,
+            verticalAccuracy=details.vertical_accuracy_m,
             lastLocationTime=_rfc3339(details.last_location_time),
             strategy=details.strategy,
             sources=details.sources,

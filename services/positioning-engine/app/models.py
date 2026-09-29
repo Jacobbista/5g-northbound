@@ -80,6 +80,10 @@ class EnginePosition(BaseModel):
     altitude: Optional[float] = Field(
         default=None, json_schema_extra={"x-unit": "m"}
     )
+    verticalAccuracy: Optional[float] = Field(
+        default=None, json_schema_extra={"x-unit": "m"},
+        description="One-sigma error of `altitude` from the measured heights, without the error of the origin survey. Present only with `altitude`.",
+    )
     establishedAt: Optional[str] = Field(
         default=None,
         description=(

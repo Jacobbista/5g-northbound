@@ -22,11 +22,13 @@ async def get_position(
     source: str | None = None,
     svc: PositionService = Depends(get_position_service),
 ):
+    origin = request.app.state.floor_plan.gps_origin
+    if origin is None:
+        # No georeference, no WGS84 position. Not a missing fix: the venue
+        # cannot be placed on the Earth until the blueprint carries a georef.
+        raise HTTPException(503, detail="the venue has no georeference")
     try:
         result = await svc.get_position(device_id, source)
-        origin = request.app.state.floor_plan.gps_origin
-        if origin is None:
-            log.warning("floor plan has no gps_origin; returning 0,0 for %s", device_id)
 
         if result is None:
             # No adapter has a fix for this device. Surface as 404 so the
@@ -59,6 +61,10 @@ async def get_position(
             strategy=result.primary.name,
             fusions=fusions,
             altitude=altitude,
+            verticalAccuracy=(
+                round(primary.verticalAccuracy, 4)
+                if altitude is not None and primary.verticalAccuracy is not None else None
+            ),
             establishedAt=(
                 ts_to_iso(primary.establishedAt) if primary.establishedAt is not None else None
             ),

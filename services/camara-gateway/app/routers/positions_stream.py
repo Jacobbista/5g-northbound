@@ -89,8 +89,9 @@ def _enrich(raw: str, org: str | None = None) -> str:
             base["longitude"] = fused["longitude"]
             base["accuracy"] = fused["accuracy"]
             base["sources"] = fused["sources"]
-            if fused.get("altitude") is not None:
-                base["altitude"] = fused["altitude"]
+            # Altitude and its error come as a pair from one fix.
+            base["altitude"] = fused.get("altitude")
+            base["verticalAccuracy"] = fused.get("verticalAccuracy")
             if fused.get("timestamp") is not None:
                 base["timestamp"] = fused["timestamp"]
             if fused.get("observedAt") is not None:
@@ -116,7 +117,9 @@ def _enrich(raw: str, org: str | None = None) -> str:
             "timestamp": base.get("timestamp"),
             "sources": base.get("sources") or [],
         }
-        for name in ("altitude", "observedAt", "lastCommunicationTime",
+        if base.get("altitude") is None:
+            base.pop("verticalAccuracy", None)
+        for name in ("altitude", "verticalAccuracy", "observedAt", "lastCommunicationTime",
                      "strategy", "diagnostics"):
             if base.get(name) is not None:
                 item[name] = base[name]

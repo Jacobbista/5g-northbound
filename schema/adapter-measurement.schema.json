@@ -153,6 +153,21 @@
       "title": "Z",
       "x-unit": "m"
     },
+    "verticalAccuracy": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One-sigma error of `z`. Sent only with `z`, and only when the source reports it.",
+      "title": "Verticalaccuracy",
+      "x-unit": "m"
+    },
     "accuracy": {
       "anyOf": [
         {

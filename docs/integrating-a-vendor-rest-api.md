@@ -69,6 +69,8 @@ values).
   the nominal accuracy of the declared `accuracy_class`.
 - **`z`** is the height above the venue floor. Map it only when the vendor
   measures height. A `linear` transform converts another reference.
+  `verticalAccuracy` is the one-sigma error of that height. It needs a `z`
+  mapping and is carried only with a resolved height.
 - **`lastSeen`** is when the device last communicated with the vendor, which
   differs from the fix time for a still device. The live Wittra cloud leaves
   it null on every device, so mapping it does not guarantee it arrives.

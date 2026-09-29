@@ -34,6 +34,9 @@ class Measurement:
     x: float = 0.0
     y: float = 0.0
     z: Optional[float] = None
+    # One-sigma error of z, metres. None when the source reports none, and
+    # always None when z is None.
+    verticalAccuracy: Optional[float] = None
     latitude: float = 0.0
     longitude: float = 0.0
     timestamp: Optional[float] = None

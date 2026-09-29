@@ -46,6 +46,13 @@ def test_a_mapped_height_needs_the_declaration(wittra_schema):
     assert any("z: true" in e for e in errors)
 
 
+def test_a_nominal_vertical_error_needs_a_declared_height(wittra_schema):
+    ok = check(wittra_schema, {**ON_MOTION, "nominalVerticalAccuracy": 0.8})
+    assert not any("nominalVerticalAccuracy" in e for e in ok)
+    flat = check(_without(wittra_schema, "z"), {**ON_MOTION, "z": False, "nominalVerticalAccuracy": 0.8})
+    assert any("nominalVerticalAccuracy requires z: true" in e for e in flat)
+
+
 def _m(ts, seen=None, lat=59.4, **extra):
     out = {"frame": "wgs84", "latitude": lat, "longitude": 17.9, "timestamp": ts, **extra}
     if seen is not None:

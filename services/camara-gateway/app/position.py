@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -14,16 +13,16 @@ from .obs import corr_headers
 
 log = logging.getLogger(__name__)
 
-# Fixed reference point for the mock; jittered per call so the demo shows motion.
-_MOCK_CENTER = (45.064312, 7.659154)
-_MOCK_RADIUS_M = 50.0
+# Radius reported for an engine position whose accuracy is missing or not
+# positive: an unknown accuracy is a coarse one, never a sharp one.
+_UNKNOWN_RADIUS_M = 50.0
 
 
 def _radius_or_default(accuracy) -> float:
     """A missing or non-positive accuracy is unknown, not infinitely precise."""
     if isinstance(accuracy, (int, float)) and accuracy > 0:
         return float(accuracy)
-    return _MOCK_RADIUS_M
+    return _UNKNOWN_RADIUS_M
 
 # Engine call resilience. A 5xx or network error on the engine call gets one
 # retry after a short backoff - most engine restarts and brief blips clear
@@ -75,6 +74,7 @@ class PositionDetails:
     strategy: str
     sources: list[str]
     altitude_m: float | None = None
+    vertical_accuracy_m: float | None = None
 
 
 def _asset_id_from_nai(nai: str) -> str | None:
@@ -202,7 +202,7 @@ def _satisfies(pos: Position, max_age: int | None, now: datetime) -> bool:
 
 
 async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> Position:
-    """Fetch one fix from the engine, or the dev mock when no engine is set.
+    """Fetch one fix from the engine.
 
     Maps engine outcomes to CAMARA errors: a 404 ("no measurements") becomes a
     422 {ns}.UNABLE_TO_LOCATE; a persistent 5xx becomes 502 BAD_GATEWAY; an
@@ -211,7 +211,7 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
     """
     url = get_settings().positioning_engine_url
     if not url:
-        return _mock_position()
+        raise CamaraError(503, "UNAVAILABLE", "No position source is configured.")
     try:
         d = await _engine_get(_position_path(device_id, source))
     except httpx.HTTPStatusError as exc:
@@ -232,7 +232,7 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
         radius_m=_radius_or_default(d.get("accuracy")),
         last_location_time=established,
         altitude_m=d.get("altitude"),
-        vertical_accuracy_m=d.get("vertical_accuracy_m"),
+        vertical_accuracy_m=d.get("verticalAccuracy") if d.get("altitude") is not None else None,
         current=current,
         fetched_at=datetime.now(timezone.utc),
     )
@@ -308,7 +308,8 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
     fused = fuse_fixes([
         {
             "latitude": p.latitude, "longitude": p.longitude, "accuracy": p.radius_m,
-            "altitude": p.altitude_m, "timestamp": p.last_location_time,
+            "altitude": p.altitude_m, "verticalAccuracy": p.vertical_accuracy_m,
+            "timestamp": p.last_location_time,
         }
         for p in positions
     ])
@@ -322,10 +323,7 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
         # current only when every contribution is.
         last_location_time=fused["timestamp"],
         altitude_m=fused.get("altitude"),
-        vertical_accuracy_m=next(
-            (p.vertical_accuracy_m for p in positions if p.vertical_accuracy_m is not None),
-            None,
-        ),
+        vertical_accuracy_m=fused.get("verticalAccuracy"),
         current=all(p.current for p in positions),
         fetched_at=min((p.fetched_at for p in positions if p.fetched_at), default=None),
     )
@@ -353,6 +351,7 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),
         altitude_m=d.get("altitude"),
+        vertical_accuracy_m=d.get("verticalAccuracy") if d.get("altitude") is not None else None,
     )
 
 
@@ -374,7 +373,8 @@ async def get_fused_details(capabilities) -> PositionDetails | None:
     fused = fuse_fixes([
         {
             "latitude": d.latitude, "longitude": d.longitude, "accuracy": d.radius_m,
-            "altitude": d.altitude_m, "timestamp": d.last_location_time,
+            "altitude": d.altitude_m, "verticalAccuracy": d.vertical_accuracy_m,
+            "timestamp": d.last_location_time,
             "sources": d.sources or [cap.source],
         }
         for cap, d in collected
@@ -389,6 +389,7 @@ async def get_fused_details(capabilities) -> PositionDetails | None:
         strategy="weighted_avg",
         sources=fused["sources"],
         altitude_m=fused.get("altitude"),
+        vertical_accuracy_m=fused.get("verticalAccuracy"),
     )
 
 
@@ -477,13 +478,3 @@ async def get_wifi_calibration() -> dict | None:
     except Exception as exc:
         log.warning("wifi calibration unreachable (%s)", exc)
         return None
-
-
-def _mock_position() -> Position:
-    # ~0.00005 deg ≈ 5 m, so a consumer converting back to a small indoor floor
-    # plan keeps the device on the plan.
-    lat = _MOCK_CENTER[0] + random.uniform(-0.00005, 0.00005)
-    lon = _MOCK_CENTER[1] + random.uniform(-0.00005, 0.00005)
-    now = datetime.now(timezone.utc)
-    # Computed on request, so current by construction.
-    return Position(lat, lon, _MOCK_RADIUS_M, now, current=True, fetched_at=now)

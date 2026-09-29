@@ -89,3 +89,26 @@ def test_a_single_capability_entry_keeps_its_own_last_seen(monkeypatch):
     ])
     out = json.loads(_enrich(raw))
     assert out[0]["lastCommunicationTime"] == "2026-01-01T00:10:00Z"
+
+
+def test_fused_item_carries_altitude_and_its_error_as_one_pair(monkeypatch):
+    monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
+    raw = json.dumps([
+        # The sharper fix has no height, so neither altitude nor its error come
+        # from it: both come from the fix that measured height.
+        {"positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0,
+         "altitude": 32.0, "verticalAccuracy": 0.6, "sources": ["wifi"]},
+        {"positioningId": "uwb-9", "latitude": 1.0, "longitude": 1.0, "accuracy": 0.5,
+         "sources": ["wittra"]},
+    ])
+    e = json.loads(_enrich(raw))[0]
+    assert (e["altitude"], e["verticalAccuracy"]) == (32.0, 0.6)
+
+
+def test_item_without_altitude_carries_no_vertical_error(monkeypatch):
+    monkeypatch.setattr("app.routers.positions_stream.list_assets", lambda: [_robot()])
+    raw = json.dumps([
+        {"positioningId": "wifi-9", "latitude": 0.0, "longitude": 0.0, "accuracy": 3.0,
+         "verticalAccuracy": 0.6, "sources": ["wifi"]},
+    ])
+    assert "verticalAccuracy" not in json.loads(_enrich(raw))[0]

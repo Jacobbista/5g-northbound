@@ -266,6 +266,19 @@ async def test_height_counts_only_from_a_source_that_declares_it(floor_plan, cap
 
 
 @pytest.mark.asyncio
+async def test_a_height_dropped_by_the_declaration_takes_its_error_with_it(floor_plan):
+    m = Measurement(source="src", x=5.0, y=5.0, z=1.2, verticalAccuracy=0.3,
+                    accuracy=1.0, confidence=0.9, frame="venue")
+    svc = PositionService(
+        adapters={"src": _StaticAdapter(m)}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: {"z": False},
+    )
+    fused = (await svc.get_position("dev1")).primary.fused
+    assert fused.z is None and fused.verticalAccuracy is None
+
+
+@pytest.mark.asyncio
 async def test_room_measurement_is_placed_through_its_room(floor_plan):
     # room-01 sits at (2, 3) in the floor plan, unrotated.
     m = Measurement(source="a", frame="room", room="room-01", x=1.0, y=2.0, accuracy=1.0, confidence=1.0)
@@ -285,3 +298,20 @@ async def test_room_measurement_naming_an_unknown_room_is_dropped(floor_plan):
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
     assert await svc.get_position("dev1") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reported, caps, expected", [
+    (None, {"z": True, "nominalVerticalAccuracy": 0.8}, 0.8),   # declared nominal fills in
+    (0.3, {"z": True, "nominalVerticalAccuracy": 0.8}, 0.3),    # the fix's own error wins
+    (None, {"z": True}, None),                                  # nothing declared: absent
+])
+async def test_a_height_without_its_error_takes_the_declared_nominal(floor_plan, reported, caps, expected):
+    m = Measurement(source="src", x=5.0, y=5.0, z=1.2, verticalAccuracy=reported,
+                    accuracy=1.0, confidence=0.9, frame="venue")
+    svc = PositionService(
+        adapters={"src": _StaticAdapter(m)}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+        capabilities_for=lambda name: caps,
+    )
+    assert (await svc.get_position("dev1")).primary.fused.verticalAccuracy == expected

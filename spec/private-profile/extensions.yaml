@@ -279,6 +279,11 @@ components:
           type: number
           format: double
           nullable: true
+        verticalAccuracy:
+          type: number
+          format: double
+          nullable: true
+          description: 1-sigma uncertainty of the measured height, present only with `altitude`.
         lastLocationTime: { type: string, format: date-time }
         strategy: { type: string }
         sources:

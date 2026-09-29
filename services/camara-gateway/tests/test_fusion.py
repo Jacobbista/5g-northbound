@@ -49,3 +49,24 @@ def test_earliest_timestamp_and_altitude_from_sharpest():
     out = fuse_fixes(fixes)
     assert out["timestamp"] == "2026-01-01T00:00:00Z"  # holds as of the least recent
     assert out["altitude"] == 1.2  # from the sharpest fix
+
+
+def test_altitude_and_its_error_come_from_the_same_fix():
+    fixes = [
+        # Sharpest horizontally, but no height.
+        {"latitude": 0.0, "longitude": 0.0, "accuracy": 0.3, "sources": ["a"]},
+        {"latitude": 0.0, "longitude": 0.0, "accuracy": 1.0, "altitude": 32.0,
+         "verticalAccuracy": 0.5, "sources": ["b"]},
+        {"latitude": 0.0, "longitude": 0.0, "accuracy": 2.0, "altitude": 35.0,
+         "verticalAccuracy": 0.1, "sources": ["c"]},
+    ]
+    out = fuse_fixes(fixes)
+    assert (out["altitude"], out["verticalAccuracy"]) == (32.0, 0.5)
+
+
+def test_no_altitude_means_no_vertical_error():
+    out = fuse_fixes([
+        {"latitude": 0.0, "longitude": 0.0, "accuracy": 1.0, "sources": ["a"]},
+        {"latitude": 0.0, "longitude": 0.0, "accuracy": 2.0, "sources": ["b"]},
+    ])
+    assert out["altitude"] is None and out["verticalAccuracy"] is None

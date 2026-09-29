@@ -17,6 +17,9 @@ class FusedPosition:
     accuracy: float
     sources: list[str]
     timestamp: Optional[float] = None
+    # One-sigma error of z. None when z is None or when a measurement that
+    # contributed to z reported no vertical error.
+    verticalAccuracy: Optional[float] = None
     # Latest moment the fused position is known to hold, epoch seconds: the
     # earliest established time among the contributions. Attached after
     # fusion from the sources' declared reporting models.

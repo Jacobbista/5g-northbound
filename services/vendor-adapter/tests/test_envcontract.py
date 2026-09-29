@@ -75,7 +75,9 @@ def test_the_reference_document_maps_every_field_of_its_frame_but_accuracy(wittr
     # whole mapping surface of its wgs84 frame. The venue pair `x`/`y` belongs
     # to the other frame. `accuracy` is unmapped because this account's
     # "accuracy" field is a [0,1] confidence score, mapped to `confidence`.
-    assert mapping_coverage(wittra_schema)["unmapped"] == ["x", "y", "accuracy"]
+    # `verticalAccuracy` is unmapped because the payload reports no error of
+    # its height.
+    assert mapping_coverage(wittra_schema)["unmapped"] == ["x", "y", "accuracy", "verticalAccuracy"]
     assert discover_mapping_coverage(wittra_schema)["unmapped"] == []
 
 

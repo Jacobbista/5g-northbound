@@ -150,10 +150,17 @@ class PositionService:
     def _apply_height_declaration(self, m: Measurement) -> Measurement:
         """A height counts only from a source that declares `z: true`. A source
         that declares no height, or declares nothing, contributes a horizontal
-        fix only."""
-        if m.z is None or self._capabilities_for(m.source).get("z") is True:
+        fix only. A height without its own error takes the source's declared
+        `nominalVerticalAccuracy`, when there is one."""
+        if m.z is None:
             return m
-        return replace(m, z=None)
+        caps = self._capabilities_for(m.source)
+        if caps.get("z") is not True:
+            return replace(m, z=None, verticalAccuracy=None)
+        nominal = caps.get("nominalVerticalAccuracy")
+        if m.verticalAccuracy is None and nominal is not None:
+            return replace(m, verticalAccuracy=float(nominal))
+        return m
 
     def _normalise(self, m: Measurement) -> Optional[Measurement]:
         """Express a measurement in the venue frame. A room measurement is
@@ -168,7 +175,11 @@ class PositionService:
                 return None
             x, y = room_to_venue(m.x, m.y, room)
         else:
-            x, y = gps_to_local(m.latitude, m.longitude, self._floor_plan.gps_origin)
+            origin = self._floor_plan.gps_origin
+            if origin is None:
+                log.warning("measurement from '%s' is in wgs84 and the venue has no georeference; dropping", m.source)
+                return None
+            x, y = gps_to_local(m.latitude, m.longitude, origin)
         return replace(m, frame="venue", room=None, x=x, y=y)
 
     async def get_position(self, device_id: str, source: Optional[str] = None) -> Optional[PositionResult]:

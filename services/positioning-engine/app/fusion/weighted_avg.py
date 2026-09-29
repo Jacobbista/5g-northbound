@@ -47,9 +47,17 @@ class WeightedAvgFusion:
         y = sum(w * m.y for w, m in zip(weights, measurements)) / total_w
         # Height is averaged over the measurements that carry it, with the
         # same weights: a source without height contributes nothing to it.
-        with_height = [(w, m.z) for w, m in zip(weights, measurements) if m.z is not None]
+        with_height = [(w, m) for w, m in zip(weights, measurements) if m.z is not None]
         height_w = sum(w for w, _ in with_height)
-        z = sum(w * h for w, h in with_height) / height_w if height_w > 0 else None
+        z = sum(w * m.z for w, m in with_height) / height_w if height_w > 0 else None
+        # The error of that weighted mean, for independent errors:
+        # sqrt(sum(w_i^2 * s_i^2)) / sum(w_i). Unknown as soon as one height
+        # in the mean carries no error.
+        vertical_accuracy = None
+        if z is not None and all(m.verticalAccuracy is not None for _, m in with_height):
+            vertical_accuracy = math.sqrt(
+                sum((w * max(m.verticalAccuracy, _MIN_ACCURACY_M)) ** 2 for w, m in with_height)
+            ) / height_w
 
         accuracy = 1.0 / math.sqrt(sum(1.0 / (a ** 2) for a in accuracies))
         sources = [m.source for m in measurements]
@@ -60,6 +68,7 @@ class WeightedAvgFusion:
         return FusedPosition(
             x=x, y=y, z=z,
             accuracy=accuracy,
+            verticalAccuracy=vertical_accuracy,
             sources=sources,
             timestamp=timestamp,
         )

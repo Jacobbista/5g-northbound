@@ -203,3 +203,11 @@ def test_a_geographic_mapping_that_still_maps_y_as_height_is_rejected():
 def test_the_retired_local_frame_is_rejected():
     with pytest.raises(ValidationError):
         Schema.model_validate(_mapping(frame={"const": "local"}, x={"path": "a"}, y={"path": "b"}))
+
+
+def test_a_vertical_error_without_a_height_is_rejected():
+    with pytest.raises(ValidationError):
+        Schema.model_validate(_mapping(
+            frame={"const": "wgs84"}, latitude={"path": "a"}, longitude={"path": "b"},
+            verticalAccuracy={"path": "e"},
+        ))

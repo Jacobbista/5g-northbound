@@ -169,6 +169,14 @@ class Mapping(BaseModel):
             "`linear` transform. A record where it resolves to null carries no height."
         ),
     )
+    verticalAccuracy: Optional[FieldSpec] = Field(
+        default=None,
+        json_schema_extra={"x-unit": "m"},
+        description=(
+            "One-sigma error of `z`, in metres. Map it only with `z`, and only when the vendor "
+            "reports it. A record where it resolves to null carries no vertical error."
+        ),
+    )
     timestamp: FieldSpec = Field(
         description="Fix time. A PathSpec with format:'iso8601' coerces an ISO string to epoch seconds; a numeric epoch passes through.",
     )
@@ -181,6 +189,12 @@ class Mapping(BaseModel):
             "the vendor exposes no such field."
         ),
     )
+
+    @model_validator(mode="after")
+    def _vertical_error_needs_height(self) -> "Mapping":
+        if self.verticalAccuracy is not None and self.z is None:
+            raise ValueError("verticalAccuracy is the error of z: map z too")
+        return self
 
     @model_validator(mode="after")
     def _horizontal_pair(self) -> "Mapping":

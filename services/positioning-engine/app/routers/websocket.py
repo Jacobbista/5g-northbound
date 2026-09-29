@@ -52,6 +52,9 @@ def build_payload_item(did, res, origin):
         "sources": res.primary.fused.sources,
         "strategy": res.primary.name,
     }
+    va = res.primary.fused.verticalAccuracy
+    if alt is not None and va is not None:
+        item["verticalAccuracy"] = round(va, 4)
     lastSeen = getattr(res.primary.fused, "lastSeen", None)
     if lastSeen is not None:
         item["lastCommunicationTime"] = ts_to_iso(lastSeen)
@@ -98,6 +101,9 @@ async def broadcast_loop(app):
 
         svc = app.state.position_service
         origin = app.state.floor_plan.gps_origin
+        if origin is None:
+            # No georeference, no WGS84 position to broadcast.
+            continue
         ids = list(targets)
         results = await asyncio.gather(
             *[svc.get_position(did, targets[did]) for did in ids],

@@ -90,6 +90,30 @@ def test_weighted_avg_height_is_absent_when_no_measurement_carries_it(floor_plan
     assert strat.fuse("d", [flat], floor_plan).z is None
 
 
+def test_weighted_avg_vertical_accuracy_is_the_error_of_the_weighted_height(floor_plan):
+    strat = get_strategy("weighted_avg")
+    alone = Measurement(source="a", x=0.0, y=0.0, z=2.0, verticalAccuracy=0.4,
+                        accuracy=1.0, confidence=1.0, frame="venue")
+    assert strat.fuse("d", [alone], floor_plan).verticalAccuracy == pytest.approx(0.4)
+    # Equal weights: sqrt(0.3^2 + 0.4^2) / 2.
+    a = Measurement(source="a", x=0.0, y=0.0, z=2.0, verticalAccuracy=0.3,
+                    accuracy=1.0, confidence=1.0, frame="venue")
+    b = Measurement(source="b", x=0.0, y=0.0, z=2.2, verticalAccuracy=0.4,
+                    accuracy=1.0, confidence=1.0, frame="venue")
+    assert strat.fuse("d", [a, b], floor_plan).verticalAccuracy == pytest.approx(0.25)
+
+
+def test_weighted_avg_vertical_accuracy_is_absent_when_a_height_has_none(floor_plan):
+    strat = get_strategy("weighted_avg")
+    known = Measurement(source="a", x=0.0, y=0.0, z=2.0, verticalAccuracy=0.3,
+                        accuracy=1.0, confidence=1.0, frame="venue")
+    unknown = Measurement(source="b", x=0.0, y=0.0, z=2.2, accuracy=1.0, confidence=1.0, frame="venue")
+    flat = Measurement(source="c", x=0.0, y=0.0, accuracy=1.0, confidence=1.0, frame="venue")
+    assert strat.fuse("d", [known, unknown], floor_plan).verticalAccuracy is None
+    # A source without height does not take part in the height or its error.
+    assert strat.fuse("d", [known, flat], floor_plan).verticalAccuracy == pytest.approx(0.3)
+
+
 def test_weighted_avg_weights_a_source_without_confidence_by_accuracy(floor_plan):
     strat = get_strategy("weighted_avg")
     alone = Measurement(source="a", x=4.0, y=6.0, accuracy=2.0, confidence=None, frame="venue")

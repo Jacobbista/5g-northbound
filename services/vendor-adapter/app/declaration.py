@@ -33,11 +33,13 @@ def check(schema: Schema, caps: dict) -> list[str]:
         errors.append("z: true requires a z mapping")
     if caps.get("z") is False and mapping.z is not None:
         errors.append("a z mapping requires z: true")
+    if caps.get("nominalVerticalAccuracy") is not None and caps.get("z") is not True:
+        errors.append("nominalVerticalAccuracy requires z: true")
     return errors
 
 
 # Mapping fields whose resolution shows up as the same key in the measurement.
-_OPTIONAL_KEYS = ("accuracy", "confidence", "z", "timestamp", "lastSeen")
+_OPTIONAL_KEYS = ("accuracy", "confidence", "z", "verticalAccuracy", "timestamp", "lastSeen")
 
 
 @dataclass

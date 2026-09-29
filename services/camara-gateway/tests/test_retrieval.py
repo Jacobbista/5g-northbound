@@ -127,8 +127,8 @@ async def test_retrieve_503_when_engine_unreachable(
 def _engine_ok():
     return httpx.Response(200, json={
         "positioningId": "wifi-asset-01",
-        "latitude": 45.064312,
-        "longitude": 7.659154,
+        "latitude": 59.404210,
+        "longitude": 17.949278,
         "accuracy": 1.5,
         "timestamp": "2026-06-03T14:36:17+00:00",
         "sources": ["wifi"],
@@ -386,3 +386,35 @@ async def test_retrieve_maxsurface_ok(client, auth_headers, location_validator):
     )
     assert resp.status_code == 200
     location_validator.validate(resp.json())
+
+
+async def test_retrieve_503_when_no_engine_is_configured(client, auth_headers, monkeypatch):
+    # No engine, no position: the gateway never invents one.
+    monkeypatch.delenv("POSITIONING_ENGINE_URL", raising=False)
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "UNAVAILABLE"
+
+
+async def test_retrieve_publishes_vertical_accuracy_only_with_altitude(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    body = _engine_ok().json()
+    route = respx_mock.get("http://engine.test/position/wifi-asset-01")
+
+    route.mock(return_value=httpx.Response(200, json={**body, "altitude": 32.6, "verticalAccuracy": 0.4}))
+    located = (await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)).json()
+    assert (located["altitude"], located["verticalAccuracy"]) == (32.6, 0.4)
+
+    import app.position as position
+    position.reset_cache()
+    route.mock(return_value=httpx.Response(200, json={**body, "verticalAccuracy": 0.4}))
+    flat = (await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)).json()
+    assert "altitude" not in flat and "verticalAccuracy" not in flat

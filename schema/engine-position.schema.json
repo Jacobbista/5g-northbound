@@ -98,6 +98,20 @@
       "title": "Altitude",
       "x-unit": "m"
     },
+    "verticalAccuracy": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One-sigma error of `altitude` from the measured heights, without the error of the origin survey. Present only with `altitude`.",
+      "title": "Verticalaccuracy",
+      "x-unit": "m"
+    },
     "establishedAt": {
       "anyOf": [
         {

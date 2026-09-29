@@ -11,6 +11,10 @@ from jose import jwk, jwt
 from jsonschema import Draft7Validator, RefResolver
 
 KID = "test-key-1"
+ENGINE_URL = "http://engine.default"
+# The position the simulated engine reports for any id: the Stockholm venue,
+# a coarse 50 m radius, computed on request and therefore current.
+ENGINE_CENTER = {"latitude": 59.404210, "longitude": 17.949278}
 CERTS_URL = "http://kc.test/auth/realms/5g-testbed/protocol/openid-connect/certs"
 
 _SPEC_DIR = Path(__file__).resolve().parents[1] / "spec"
@@ -85,7 +89,9 @@ def settings_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KEYCLOAK_URL", "http://kc.test/auth")
     monkeypatch.setenv("KEYCLOAK_REALM", "5g-testbed")
     monkeypatch.setenv("SKIP_AUTH", "false")
-    monkeypatch.delenv("POSITIONING_ENGINE_URL", raising=False)  # -> mock
+    # A simulated engine at ENGINE_URL answers every /position request (see
+    # respx_mock). A test that needs another answer mocks its own route.
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", ENGINE_URL)
     # Asset registry: seed a writable store (no mounted-file path at runtime).
     store = tmp_path / "assets.json"
     store.write_text(json.dumps(_TEST_ASSETS))
@@ -115,7 +121,22 @@ def app(settings_env):
 async def respx_mock(app, jwks):
     with respx.mock(assert_all_called=False, assert_all_mocked=False) as mock:
         mock.get(CERTS_URL).mock(return_value=httpx.Response(200, json=jwks))
+        mock.get(url__regex=rf"^{ENGINE_URL}/position/[^/?]+").mock(side_effect=_engine_position)
         yield mock
+
+
+def _engine_position(request: httpx.Request) -> httpx.Response:
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return httpx.Response(200, json={
+        "positioningId": request.url.path.rsplit("/", 1)[-1],
+        **ENGINE_CENTER,
+        "accuracy": 50.0,
+        "timestamp": now,
+        "establishedAt": now,
+        "current": True,
+        "sources": ["test"],
+        "strategy": "weighted_avg",
+    })
 
 
 @pytest.fixture

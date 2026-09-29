@@ -53,8 +53,8 @@ async def test_details_joins_engine_telemetry(client, respx_mock, auth_headers, 
     respx_mock.get("http://engine.test/position/wittra-tag-01").mock(
         return_value=httpx.Response(200, json={
             "positioningId": "wittra-tag-01",
-            "latitude": 45.064,
-            "longitude": 7.659,
+            "latitude": 59.404,
+            "longitude": 17.949,
             "accuracy": 0.85,
             "altitude": 1.2,
             "timestamp": "2026-06-03T12:00:00+00:00",

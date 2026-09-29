@@ -306,6 +306,25 @@ async def test_http_adapter_reads_height_and_leaves_it_absent_when_missing():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_http_adapter_reads_vertical_accuracy_only_with_a_height():
+    respx.get("http://a/measurement/with").mock(return_value=Response(200, json={
+        "source": "a", "x": 1.0, "y": 2.0, "z": 1.4, "verticalAccuracy": 0.2,
+        "accuracy": 1.0, "timestamp": 1700000000.0,
+    }))
+    respx.get("http://a/measurement/without").mock(return_value=Response(200, json={
+        "source": "a", "x": 1.0, "y": 2.0, "verticalAccuracy": 0.2,
+        "accuracy": 1.0, "timestamp": 1700000000.0,
+    }))
+    a = HttpAdapter("a", "http://a")
+    with_height = await a.get_measurement("with")
+    without = await a.get_measurement("without")
+    await a.aclose()
+    assert with_height.verticalAccuracy == 0.2
+    assert without.verticalAccuracy is None
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_http_adapter_reads_a_room_measurement():
     respx.get("http://a/measurement/d").mock(return_value=Response(200, json={
         "source": "a", "frame": "room", "room": "room-01", "x": 1.0, "y": 2.0,

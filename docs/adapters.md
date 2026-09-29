@@ -77,7 +77,8 @@ it is dropped as malformed.
 | `x`, `y` | metres | Required with `room` or `venue`: x along the width, y along the depth, from the lower-left corner. |
 | `latitude`, `longitude` | degrees | Required with `wgs84`. The engine applies the venue georef. |
 | `z` | metres, optional | Height above the venue floor. Sent only when measured for this fix, by a source that declares `z: true`. |
-| `accuracy` | metres, optional | One-sigma horizontal error radius. When absent the engine uses the nominal accuracy of the declared `accuracy_class`. |
+| `verticalAccuracy` | metres, optional | One-sigma error of `z`. Sent only with `z`, when the source reports it. |
+| `accuracy` | metres, optional | One-sigma horizontal error radius. When absent the engine uses the declared nominal accuracy ([below](#accuracy_class-and-nominal-accuracies)). |
 | `confidence` | 0 to 1, optional | The source's own reliability score, a multiplier on the fusion weight. |
 | `timestamp` | epoch seconds | Required. When the fix was taken. |
 | `lastSeen` | epoch seconds, optional | When the device last communicated with its source. For an `on_motion` source it confirms the last fix. Published as `lastCommunicationTime`. |
@@ -147,9 +148,10 @@ agree.
 | `source` | technology tag of the fixes |
 | `kinds` | asset kinds the source positions |
 | `frame` | frame of its measurements |
-| `z` | the source measures height. A height from a source without `z: true` is discarded |
+| `z` | the source measures height. A height from a source without `z: true` is discarded, with its `verticalAccuracy` |
 | `accuracy_class` | `sub-metre`, `metre` or `coarse` |
-| `nominalAccuracy` | metres, for a source that reports no per-fix accuracy |
+| `nominalAccuracy` | metres, for a fix that reports no `accuracy` |
+| `nominalVerticalAccuracy` | metres, for a fix that carries `z` without `verticalAccuracy`. Requires `z: true` |
 | `reporting`, `reportingInterval` | how the source produces fixes |
 | `streaming` | the adapter pushes instead of being polled (none does today) |
 | `devices`, `discover`, `diagnostics`, `calibration`, `placement` | the optional endpoints it serves |
@@ -191,7 +193,7 @@ contribution is current. The gateway judges `maxAge` on them.
 | `wifi-adapter` | `periodic` | 2 s, for the edge scanner's default of one scan a second |
 | `vendor-adapter` | per deployment | per deployment |
 
-### `accuracy_class` and `nominalAccuracy`
+### `accuracy_class` and nominal accuracies
 
 `accuracy_class` is the band the source's technology usually delivers. The
 bands are defined in
@@ -204,8 +206,16 @@ The engine also uses them for a source that reports no accuracy. It takes the
 adapter's `nominalAccuracy` if declared, otherwise the upper bound of the
 declared class. `coarse` has no upper bound, so a `coarse` source without
 per-fix accuracy must declare `nominalAccuracy`. A measurement with no way to
-obtain an accuracy is dropped with a warning. `nominalAccuracy` describes the
-deployed hardware, so it belongs in the deployment's `ADAPTER_CAPABILITIES`.
+obtain an accuracy is dropped with a warning.
+
+`nominalVerticalAccuracy` does the same for the height: a fix that carries `z`
+without `verticalAccuracy` takes it. There are no vertical classes. Without the
+declaration such a fix has no vertical error, and a fused height that includes
+it has none either. The fusion needs no vertical error, so the fix is kept.
+
+Both nominal values describe the deployed hardware, so they belong in the
+deployment's `ADAPTER_CAPABILITIES`. `confidence` is a different quantity: the
+source's score for one fix, which multiplies its weight in the fusion.
 
 ### `placement`
 

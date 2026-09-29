@@ -116,3 +116,16 @@ async def test_persist_restore_only_seed_manual(tmp_path):
     reg2 = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=path)
     reg2.load_persisted()
     assert set(reg2.adapters) == {"wifi"}  # self not persisted
+
+
+@pytest.mark.parametrize("capabilities, status", [
+    ({"z": True, "nominalVerticalAccuracy": 0.8}, 200),
+    ({"z": False, "nominalVerticalAccuracy": 0.8}, 422),   # an error of a height it does not measure
+    ({"z": True, "nominalVerticalAccuracy": 0}, 422),
+])
+async def test_nominal_vertical_accuracy_is_declared_only_with_height(tmp_path, capabilities, status):
+    _app.state.registry = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as c:
+        r = await c.post("/adapters", json={"name": "uwb", "baseUrl": "http://uwb:8080",
+                                            "capabilities": capabilities})
+    assert r.status_code == status

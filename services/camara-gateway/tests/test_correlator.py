@@ -27,8 +27,8 @@ def auth_headers(make_token):
 def _engine_ok():
     return httpx.Response(200, json={
         "positioningId": "wifi-asset-01",
-        "latitude": 45.064312,
-        "longitude": 7.659154,
+        "latitude": 59.404210,
+        "longitude": 17.949278,
         "accuracy": 1.5,
         "timestamp": "2026-06-03T14:36:17+00:00",
         "sources": ["wifi"],

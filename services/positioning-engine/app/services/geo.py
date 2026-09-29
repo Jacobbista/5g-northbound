@@ -37,17 +37,14 @@ def room_to_venue(x: float, y: float, room: RoomPlacement) -> tuple[float, float
     return cx + dx * cos(a) + dy * sin(a), cy - dx * sin(a) + dy * cos(a)
 
 
-def local_to_gps(x: float, y: float, origin: Optional[GpsOrigin]) -> tuple[float, float]:
+def local_to_gps(x: float, y: float, origin: GpsOrigin) -> tuple[float, float]:
     """Convert venue metres to WGS84 lat/lon.
 
     Venue frame: origin at the floor plan's lower-left corner, x along its
     width, y along its depth. `azimuth_deg` rotates the venue axes relative to
-    true north/east before the metres-to-degrees projection.
-
-    Returns (0.0, 0.0) when no GPS origin is configured (graceful degradation).
+    true north/east before the metres-to-degrees projection. Without a
+    georeference there is no WGS84 position: callers check first.
     """
-    if origin is None:
-        return 0.0, 0.0
     c, s, _, _ = _rot_matrix(origin.azimuth_deg)
     east = x * c + y * s
     north = -x * s + y * c
@@ -56,15 +53,12 @@ def local_to_gps(x: float, y: float, origin: Optional[GpsOrigin]) -> tuple[float
     return lat, lon
 
 
-def gps_to_local(latitude: float, longitude: float, origin: Optional[GpsOrigin]) -> tuple[float, float]:
+def gps_to_local(latitude: float, longitude: float, origin: GpsOrigin) -> tuple[float, float]:
     """Inverse of local_to_gps. Returns venue (x, y) in metres.
 
     Used to project WGS84-native adapter measurements (e.g. Wittra) into the
-    venue frame so the fusion stage operates in one coordinate space. Returns
-    (0.0, 0.0) when no GPS origin is configured.
+    venue frame so the fusion stage operates in one coordinate space.
     """
-    if origin is None:
-        return 0.0, 0.0
     d_east = (longitude - origin.longitude) * _M_PER_DEG * cos(radians(origin.latitude))
     d_north = (latitude - origin.latitude) * _M_PER_DEG
     c, s, _, _ = _rot_matrix(origin.azimuth_deg)

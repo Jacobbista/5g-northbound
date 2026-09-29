@@ -74,6 +74,10 @@ class MeasurementBody(BaseModel):
             "`z: true`, and only when measured for this fix."
         ),
     )
+    verticalAccuracy: Optional[float] = Field(
+        default=None, gt=0.0, json_schema_extra={"x-unit": "m"},
+        description="One-sigma error of `z`. Sent only with `z`, and only when the source reports it.",
+    )
     accuracy: Optional[float] = Field(
         default=None, json_schema_extra={"x-unit": "m"},
         description=(
@@ -125,8 +129,18 @@ class AdapterCapabilities(BaseModel):
         default=None, description="Band from spec/private-profile/accuracy-class-vocabulary.json.",
     )
     nominalAccuracy: Optional[float] = Field(
-        default=None, json_schema_extra={"x-unit": "m"},
-        description="Nominal accuracy for an open-ended accuracy class.",
+        default=None, gt=0, json_schema_extra={"x-unit": "m"},
+        description=(
+            "Nominal horizontal accuracy of the installed source, used for a fix that reports none. "
+            "Takes precedence over `accuracy_class`, and is required with the open-ended `coarse`."
+        ),
+    )
+    nominalVerticalAccuracy: Optional[float] = Field(
+        default=None, gt=0, json_schema_extra={"x-unit": "m"},
+        description=(
+            "Nominal one-sigma error of the height of the installed source, used for a fix that "
+            "carries `z` without `verticalAccuracy`. Requires `z: true`."
+        ),
     )
     calibration: bool = Field(default=False, description="Serves the calibration tool.")
     devices: bool = Field(default=False, description="Serves GET /devices for onboarding.")
@@ -154,6 +168,12 @@ class AdapterCapabilities(BaseModel):
     def _interval_for_reporting(self) -> "AdapterCapabilities":
         if self.reporting in ("periodic", "on_motion") and self.reportingInterval is None:
             raise ValueError(f"reporting {self.reporting!r} requires reportingInterval")
+        return self
+
+    @model_validator(mode="after")
+    def _vertical_error_needs_height(self) -> "AdapterCapabilities":
+        if self.nominalVerticalAccuracy is not None and not self.z:
+            raise ValueError("nominalVerticalAccuracy requires z: true")
         return self
 
 

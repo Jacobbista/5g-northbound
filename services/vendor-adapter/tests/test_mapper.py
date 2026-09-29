@@ -198,3 +198,18 @@ def test_to_measurement_omits_confidence_the_vendor_does_not_report():
     )
     out = to_measurement(mapping, {"lat": 59.4, "lon": 17.9, "acc": 3.0}, vendor_name="x")
     assert "confidence" not in out
+
+
+def test_to_measurement_carries_vertical_accuracy_only_with_its_height():
+    from app.schema import Mapping
+
+    m = Mapping.model_validate({
+        "frame": {"const": "wgs84"},
+        "latitude": {"path": "lat"}, "longitude": {"path": "lon"},
+        "z": {"path": "h"}, "verticalAccuracy": {"path": "hacc"},
+        "timestamp": {"path": "ts"},
+    })
+    both = to_measurement(m, {"lat": 59.4, "lon": 17.9, "h": 1.2, "hacc": 0.3, "ts": 1.0}, vendor_name="v")
+    assert (both["z"], both["verticalAccuracy"]) == (1.2, 0.3)
+    no_height = to_measurement(m, {"lat": 59.4, "lon": 17.9, "hacc": 0.3, "ts": 1.0}, vendor_name="v")
+    assert "z" not in no_height and "verticalAccuracy" not in no_height

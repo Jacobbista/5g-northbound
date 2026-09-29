@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import settings
+from app.models import GpsOrigin
 from app.registry import SEED, AdapterRegistry
 from app.routers import websocket as ws
 
@@ -55,7 +56,7 @@ async def test_broadcast_routes_to_discovered_source(tmp_path):
     app = SimpleNamespace(state=SimpleNamespace(
         registry=reg,
         position_service=SimpleNamespace(get_position=get_position),
-        floor_plan=SimpleNamespace(gps_origin=None),
+        floor_plan=SimpleNamespace(gps_origin=GpsOrigin(latitude=59.40, longitude=17.95)),
     ))
     await _run_until_called(app, get_position)
     # Broadcast routed puppypi-01 to the adapter that reported it, not fan-out.
@@ -70,7 +71,7 @@ async def test_broadcast_falls_back_to_seed_when_no_capability(tmp_path, monkeyp
     app = SimpleNamespace(state=SimpleNamespace(
         registry=reg,
         position_service=SimpleNamespace(get_position=get_position),
-        floor_plan=SimpleNamespace(gps_origin=None),
+        floor_plan=SimpleNamespace(gps_origin=GpsOrigin(latitude=59.40, longitude=17.95)),
     ))
     await _run_until_called(app, get_position)
     # No capable adapter -> seed id with source None (legacy fan-out).

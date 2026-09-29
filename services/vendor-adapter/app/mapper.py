@@ -122,6 +122,10 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     z = _resolve_optional(mapping.z, payload)
     if z is not None:
         out["z"] = float(z)
+        # The error of a height travels only with that height.
+        vertical = _resolve_optional(mapping.verticalAccuracy, payload)
+        if vertical is not None:
+            out["verticalAccuracy"] = float(vertical)
     ts = resolve_field(mapping.timestamp, payload)
     if ts is not None:
         out["timestamp"] = float(ts)

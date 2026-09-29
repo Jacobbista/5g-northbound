@@ -73,6 +73,7 @@
         "nominalAccuracy": {
           "anyOf": [
             {
+              "exclusiveMinimum": 0.0,
               "type": "number"
             },
             {
@@ -80,8 +81,23 @@
             }
           ],
           "default": null,
-          "description": "Nominal accuracy for an open-ended accuracy class.",
+          "description": "Nominal horizontal accuracy of the installed source, used for a fix that reports none. Takes precedence over `accuracy_class`, and is required with the open-ended `coarse`.",
           "title": "Nominalaccuracy",
+          "x-unit": "m"
+        },
+        "nominalVerticalAccuracy": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nominal one-sigma error of the height of the installed source, used for a fix that carries `z` without `verticalAccuracy`. Requires `z: true`.",
+          "title": "Nominalverticalaccuracy",
           "x-unit": "m"
         },
         "calibration": {

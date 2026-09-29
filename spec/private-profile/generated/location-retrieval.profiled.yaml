@@ -423,6 +423,8 @@ components:
 
             the source. The uncertainty of the origin survey is not included.
 
+            Present only with `altitude`, and only when the sources report it.
+
             '
     Area:
       description: Base schema for all areas

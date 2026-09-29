@@ -4,11 +4,6 @@ from app.models import GpsOrigin
 from app.services.geo import gps_to_local, local_to_gps
 
 
-def test_local_to_gps_identity_when_origin_none():
-    lat, lon = local_to_gps(5.0, 10.0, None)
-    assert (lat, lon) == (0.0, 0.0)
-
-
 def test_local_to_gps_no_rotation():
     """With azimuth=0, local +z is true north and local +x is true east."""
     origin = GpsOrigin(latitude=45.0, longitude=7.0)

@@ -68,3 +68,4 @@ actions:
         description: |
           1-sigma uncertainty of the measured height in metres, as reported by
           the source. The uncertainty of the origin survey is not included.
+          Present only with `altitude`, and only when the sources report it.
