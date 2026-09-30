@@ -26,9 +26,26 @@ def test_floor_plan_from_a_v3_blueprint():
 
 
 def test_no_georef_yields_none_origin_not_crash():
-    fp = floor_plan_from_blueprint({"version": 3, "rooms": [{"id": "r", "width_m": 10, "depth_m": 10}]})
+    room = {"id": "r", "x_m": 0, "y_m": 0, "width_m": 10, "depth_m": 10}
+    fp = floor_plan_from_blueprint({"version": 3, "rooms": [room]})
     assert fp.gps_origin is None
     assert "r" in fp.rooms
+    assert fp.rooms["r"].rotation_deg == 0.0
+
+
+def test_a_georef_without_its_bearing_is_no_georeference():
+    georef = {"latitude": 59.4042, "longitude": 17.9492, "width_m": 40, "depth_m": 30}
+    fp = floor_plan_from_blueprint({"version": 3, "floor_plans": [{"id": "fp", "georef": georef}], "rooms": []})
+    assert fp.gps_origin is None
+    georef["azimuth_deg"] = 0
+    assert floor_plan_from_blueprint(
+        {"version": 3, "floor_plans": [{"id": "fp", "georef": georef}], "rooms": []}
+    ).gps_origin is not None
+
+
+def test_a_room_that_is_not_placed_is_skipped():
+    fp = floor_plan_from_blueprint({"version": 3, "rooms": [{"id": "r", "width_m": 10, "depth_m": 10}]})
+    assert "r" not in fp.rooms
 
 
 def test_a_stored_v2_blueprint_is_migrated_and_persisted_once(tmp_path):

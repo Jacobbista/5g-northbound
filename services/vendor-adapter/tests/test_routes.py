@@ -201,3 +201,26 @@ async def test_measurement_carries_stream_diagnostics(
     r = await client.get("/measurement/D001")
     assert r.status_code == 200
     assert r.json()["diagnostics"] == {"vendorSpecific": {"motion": "STATIONARY"}}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_record_without_its_fix_time_is_no_fix_and_is_counted(
+    client, fresh_state, wittra_schema, wittra_sample_payload, monkeypatch
+):
+    import copy
+
+    monkeypatch.setenv("WITTRA_ORG_ID", "orgA")
+    monkeypatch.setenv("WITTRA_API_KEY", "k")
+    monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
+    monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-vendor")
+    fresh_state.schema = wittra_schema
+    payload = copy.deepcopy(wittra_sample_payload)
+    del payload["latest"]["data"]["location"]["timestamp"]
+    respx.get(
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
+    ).mock(return_value=httpx.Response(200, json=payload))
+
+    r = await client.get("/measurement/D001")
+    assert r.status_code == 404
+    assert fresh_state.observed.as_dict()["noFix"] == {"timestamp": 1}

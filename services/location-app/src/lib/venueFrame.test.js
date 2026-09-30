@@ -32,3 +32,14 @@ describe("venueFrame", () => {
     expect(frameFromBlueprint({ version: 3, floor_plans: [{ id: "fp" }], rooms: [] })).toBeNull();
   });
 });
+
+describe("frameFromBlueprint without a complete georef", () => {
+  it("has no frame when the georef lacks its bearing", () => {
+    const bp = {
+      version: 3,
+      floor_plans: [{ id: "fp", georef: { latitude: 59.4, longitude: 17.9 } }],
+      rooms: [{ id: "r", floor_plan_id: "fp", x_m: 0, y_m: 0, width_m: 10, depth_m: 8 }],
+    };
+    expect(frameFromBlueprint(bp)).toBeNull();
+  });
+});

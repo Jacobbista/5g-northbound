@@ -1,7 +1,7 @@
 overlay: 1.0.0
 info:
   title: CAMARA Device Location Retrieval - private-asset profile overlay
-  version: 0.1.0
+  version: 0.2.0
 # Applies to ../../services/camara-gateway/spec/location-retrieval.yaml (CAMARA
 # r3.2, pinned). Formalises the schema deltas of the private-asset profile; the
 # base document is never hand-edited. Behavioural conformance (maxAge, maxSurface
@@ -49,6 +49,7 @@ actions:
       altitude:
         type: number
         format: double
+        x-unit: m
         description: |
           Height above the WGS84 ellipsoid in metres, the datum of latitude and
           longitude, as in W3C Geolocation and 3GPP TS 23.032: the ellipsoidal
@@ -58,6 +59,7 @@ actions:
       horizontalAccuracy:
         type: number
         format: double
+        x-unit: m
         description: |
           Horizontal uncertainty in metres as reported by the source, without
           the 1 m floor `area.radius` must respect. Treated as 1-sigma when
@@ -65,7 +67,40 @@ actions:
       verticalAccuracy:
         type: number
         format: double
+        x-unit: m
         description: |
-          1-sigma uncertainty of the measured height in metres, as reported by
-          the source. The uncertainty of the origin survey is not included.
-          Present only with `altitude`, and only when the sources report it.
+          1-sigma error of the measured height in metres, from the sources or
+          from a source's declared nominal value, fused like the position. The
+          error of the origin survey is not included. Present only with
+          `altitude`.
+  # The base examples identify the device by phone number or IP, or omit it.
+  # The profile refuses all three, so its examples use assetId.
+  - target: $.paths./retrieve.post.requestBody.content.application/json.examples
+    remove: true
+  - target: $.paths./retrieve.post.requestBody.content.application/json.examples
+    update:
+      INPUT_ASSET_ID_MAX_AGE:
+        summary: Asset identifier and maxAge
+        description: Retrieve the location of an asset, accepting a position established at most 120 seconds ago
+        value:
+          device:
+            assetId: pkg-4471
+          maxAge: 120
+      INPUT_ASSET_ID_MAX_AGE_AND_SURFACE:
+        summary: Asset identifier, maxAge and maxSurface
+        description: Retrieve the location of an asset, providing a maxAge and a maxSurface
+        value:
+          device:
+            assetId: pkg-4471
+          maxAge: 120
+          maxSurface: 100
+      INPUT_NAI_ALIAS:
+        summary: Asset alias in networkAccessIdentifier
+        description: Retrieve the location of an asset through the alias form of the NAI
+        value:
+          device:
+            networkAccessIdentifier: pkg-4471@acme.assets
+  - target: $.paths./retrieve.post.responses.200.content.application/json.examples.LOCATION_CIRCLE_WITH_DEVICE
+    remove: true
+  - target: $.components.examples.LOCATION_CIRCLE_WITH_DEVICE
+    remove: true

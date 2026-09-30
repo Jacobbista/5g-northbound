@@ -45,10 +45,11 @@ const btn = (active = false, danger = false) => ({
 // devices using this projection when the operator presses Import.
 function gpsToFloorPlanLocal(lat, lon, fp) {
   const georef = fp?.georef;
-  if (!georef || georef.latitude == null || georef.longitude == null) return null;
+  // Without origin and bearing the vendor position cannot be placed.
+  if (!georef || [georef.latitude, georef.longitude, georef.azimuth_deg].some((v) => v == null)) return null;
   const lat0 = Number(georef.latitude);
   const lon0 = Number(georef.longitude);
-  const az = ((Number(georef.azimuth_deg) || 0) * Math.PI) / 180;
+  const az = (Number(georef.azimuth_deg) * Math.PI) / 180;
   const mPerDegLat = 111320;
   const mPerDegLon = 111320 * Math.cos((lat0 * Math.PI) / 180);
   const east = (lon - lon0) * mPerDegLon;

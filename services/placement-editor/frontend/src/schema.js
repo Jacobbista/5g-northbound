@@ -124,16 +124,8 @@ export function emptyLayoutV2() {
         id: DEFAULT_FP_ID,
         label: "Floor plan",
         image: null,
-        georef: {
-          latitude: 0,
-          longitude: 0,
-          azimuth_deg: 0,
-          altitude_m: null,
-          // 0 → "no area defined yet" - UI prompts the operator to
-          // upload a reference image or draw a rectangle in step 1.
-          width_m: 0,
-          height_m: 0,
-        },
+        // No georef until the operator places the area in step 1, by an
+        // image or a rectangle. An origin at 0,0 would be a real place.
         // Persisted scale-calibration references. Each entry: { id, p1: [x, y],
         // p2: [x, y], knownM }. Coordinates are in floor-plan-local metres at
         // the current scale (rescaled in lock-step when the plan's scale
@@ -161,6 +153,23 @@ export function emptyLayoutV2() {
   };
 }
 
+// A floor plan the version 2 editor created but the operator never placed
+// carries an origin at 0,0 with bearing 0 and an extent of 0. They are
+// placeholders, not a place, and the engine refuses an extent of 0.
+function dropEditorSeed(fp) {
+  if (!fp?.georef) return fp;
+  const georef = { ...fp.georef };
+  for (const k of ["width_m", "height_m"]) if (georef[k] === 0) delete georef[k];
+  if (georef.latitude === 0 && georef.longitude === 0) {
+    delete georef.latitude;
+    delete georef.longitude;
+    delete georef.azimuth_deg;
+  }
+  if (georef.altitude_m === null) delete georef.altitude_m;
+  const { georef: _old, ...rest } = fp;
+  return Object.keys(georef).length ? { ...rest, georef } : rest;
+}
+
 // Read either v1 or v2; emit v2. v1 layouts get a single floor_plan and a
 // single room derived from the top-level fields.
 export function normalizeLayout(raw) {
@@ -174,6 +183,7 @@ export function normalizeLayout(raw) {
     return {
       ...raw,
       version: 2,
+      floor_plans: raw.floor_plans.map(dropEditorSeed),
       rooms: raw.rooms.map((r) => {
         if (!Array.isArray(r.perimeter_openings)) return r;
         const lifted = r.perimeter_openings
@@ -194,20 +204,18 @@ export function normalizeLayout(raw) {
   // v1 had no floor-plan concept - a layout was a single room. Do NOT
   // fabricate a floor footprint from the room's dimensions; that would make
   // a 13×32 m rectangle appear on the world map as if the operator had
-  // already defined a building outline. Leave width_m/height_m at 0 so the
+  // already defined a building outline. The extent stays absent so the
   // step-1 empty-state prompt fires and the operator picks image or rectangle.
+  // The georef carries only what the v1 document had.
+  const georef = {};
+  for (const k of ["latitude", "longitude", "azimuth_deg", "altitude_m"]) {
+    if (gps[k] != null) georef[k] = Number(gps[k]);
+  }
   const fp = {
     id: DEFAULT_FP_ID,
     label: raw.label || "Floor plan",
     image: raw.floor_plan_image || null,
-    georef: {
-      latitude: Number(gps.latitude) || 0,
-      longitude: Number(gps.longitude) || 0,
-      azimuth_deg: Number(gps.azimuth_deg) || 0,
-      altitude_m: gps.altitude_m == null ? null : Number(gps.altitude_m),
-      width_m: 0,
-      height_m: 0,
-    },
+    ...(Object.keys(georef).length ? { georef } : {}),
   };
   const room = {
     id: DEFAULT_ROOM_ID,

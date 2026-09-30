@@ -16,7 +16,6 @@ or on PUT (see blueprint_migration.py).
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,15 +26,19 @@ log = logging.getLogger(__name__)
 
 
 def validate_blueprint(raw: dict) -> None:
-    """Best-effort validation against schema/layout.schema.json (the versioned
-    layout contract). No-op when jsonschema or the schema file is unavailable -
-    the engine degrades rather than blocking authoring. Raises ValueError with a
-    one-line reason on a genuine violation; the PUT handler maps it to 422."""
+    """Validate against schema/layout.schema.json, which `make stage-contracts`
+    bakes into the image. Raises ValueError with a one-line reason on a
+    violation, which the PUT handler maps to 422. When the schema cannot be
+    found the document is accepted and a warning says that it was not
+    validated."""
     try:
         import jsonschema
     except ImportError:
         return
-    candidates = [os.environ.get("LAYOUT_SCHEMA_PATH"), "/app/schema/layout.schema.json"]
+    candidates = [
+        "/app/contracts/layout.schema.json",  # staged into the image by `make stage-contracts`
+        "/app/schema/layout.schema.json",
+    ]
     # Repo-root fallback for running outside a container (tests). Guarded:
     # in-container __file__ has fewer than 4 parents, so index defensively.
     parents = Path(__file__).resolve().parents
@@ -43,18 +46,20 @@ def validate_blueprint(raw: dict) -> None:
         candidates.append(str(parents[3] / "schema" / "layout.schema.json"))
     schema_path = next((c for c in candidates if c and Path(c).is_file()), None)
     if not schema_path:
+        log.warning("layout.schema.json not found; blueprint accepted without validation")
         return
     try:
         schema = json.loads(Path(schema_path).read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        log.warning("layout.schema.json unreadable (%s); blueprint accepted without validation", exc)
         return
     try:
         jsonschema.validate(raw, schema)
     except jsonschema.ValidationError as exc:
         raise ValueError(exc.message) from exc
 
-# Engine still works with no blueprint at all: it degrades to lat/lon 0 with a
-# warning (see geo.py), which is the documented "no GPS reference yet" state.
+# The engine starts without a blueprint. It then has no georeference and
+# answers 503 on GET /position until one is written.
 DEFAULT_FLOOR_PLAN = FloorPlan()
 
 
@@ -65,28 +70,36 @@ def floor_plan_from_blueprint(raw: dict) -> FloorPlan:
     fp = fps[0] if fps else {}
     georef = fp.get("georef") or {}
     gps = None
-    if georef.get("latitude") is not None and georef.get("longitude") is not None:
+    # A georeference places the venue only with its origin and its bearing.
+    # Without the bearing the orientation is unknown, not north.
+    if all(georef.get(k) is not None for k in ("latitude", "longitude", "azimuth_deg")):
         gps = GpsOrigin(
             latitude=float(georef["latitude"]),
             longitude=float(georef["longitude"]),
-            azimuth_deg=float(georef.get("azimuth_deg") or 0.0),
+            azimuth_deg=float(georef["azimuth_deg"]),
             altitude_m=georef.get("altitude_m"),
         )
-    rooms = {
-        str(r["id"]): RoomPlacement(
-            x_m=float(r.get("x_m") or 0.0),
-            y_m=float(r.get("y_m") or 0.0),
-            width_m=float(r.get("width_m") or 0.0),
-            depth_m=float(r.get("depth_m") or 0.0),
-            rotation_deg=float(r.get("rotation_deg") or 0.0),
+    elif any(georef.get(k) is not None for k in ("latitude", "longitude", "azimuth_deg")):
+        log.warning("floor plan georef lacks latitude, longitude or azimuth_deg; the venue has no georeference")
+    rooms: dict[str, RoomPlacement] = {}
+    for r in raw.get("rooms") or []:
+        if r.get("id") is None or r.get("floor_plan_id", fp.get("id")) != fp.get("id"):
+            continue
+        placement = [r.get(k) for k in ("x_m", "y_m", "width_m", "depth_m")]
+        if any(v is None for v in placement):
+            # Not placed in the floor plan: a measurement in it cannot be placed.
+            log.warning("room %s lacks x_m, y_m, width_m or depth_m; skipped", r["id"])
+            continue
+        x_m, y_m, width_m, depth_m = (float(v) for v in placement)
+        rooms[str(r["id"])] = RoomPlacement(
+            x_m=x_m, y_m=y_m, width_m=width_m, depth_m=depth_m,
+            # Absent means unrotated, the default the layout schema declares.
+            rotation_deg=float(r.get("rotation_deg", 0.0)),
         )
-        for r in raw.get("rooms") or []
-        if r.get("id") is not None and r.get("floor_plan_id", fp.get("id")) == fp.get("id")
-    }
     return FloorPlan(
         gps_origin=gps,
-        width_m=float(georef.get("width_m") or 0.0),
-        depth_m=float(georef.get("depth_m") or 0.0),
+        width_m=georef.get("width_m"),
+        depth_m=georef.get("depth_m"),
         rooms=rooms,
     )
 

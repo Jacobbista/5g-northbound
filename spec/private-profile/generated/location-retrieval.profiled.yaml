@@ -140,47 +140,30 @@ paths:
             schema:
               $ref: '#/components/schemas/RetrievalLocationRequest'
             examples:
-              INPUT_PHONE_NUMBER_MAX_AGE:
-                summary: Phone number and maxAge
-                description: Retrieve location for a device identified by a phone
-                  number, providing a maxAge
+              INPUT_ASSET_ID_MAX_AGE:
+                summary: Asset identifier and maxAge
+                description: Retrieve the location of an asset, accepting a position
+                  established at most 120 seconds ago
                 value:
                   device:
-                    phoneNumber: '+123456789'
+                    assetId: pkg-4471
                   maxAge: 120
-              INPUT_PHONE_NUMBER_MAX_AGE_AND_SURFACE:
-                summary: Phone number, maxAge and maxSurface
-                description: Retrieve location for a device identified by a phone
-                  number, providing a maxAge and maxSurface
+              INPUT_ASSET_ID_MAX_AGE_AND_SURFACE:
+                summary: Asset identifier, maxAge and maxSurface
+                description: Retrieve the location of an asset, providing a maxAge
+                  and a maxSurface
                 value:
                   device:
-                    phoneNumber: '+123456789'
+                    assetId: pkg-4471
                   maxAge: 120
-                  maxSurface: 1000000
-              INPUT_IP_ADDRESS_V4:
-                summary: IPv4 address without maxAge
-                description: Retrieve location for a device identified by an IPv4
-                  address, without an indication for maxAge
+                  maxSurface: 100
+              INPUT_NAI_ALIAS:
+                summary: Asset alias in networkAccessIdentifier
+                description: Retrieve the location of an asset through the alias form
+                  of the NAI
                 value:
                   device:
-                    ipv4Address:
-                      publicAddress: 123.234.1.2
-                      publicPort: 1234
-              INPUT_NO_DEVICE_AND_MAX_AGE:
-                summary: Device not provided, only maxAge
-                description: The device has to be deducted from token
-                value:
-                  maxAge: 120
-              INPUT_PHONE_NUMBER_IP_ADDRESS_V4:
-                summary: Both phone number and IPv4 address, without maxAge
-                description: Retrieve location for a device identified both by a phone
-                  number and an IPv4 address, without an indication for maxAge
-                value:
-                  device:
-                    phoneNumber: '+123456789'
-                    ipv4Address:
-                      publicAddress: 123.234.1.2
-                      publicPort: 1234
+                    networkAccessIdentifier: pkg-4471@acme.assets
       responses:
         '200':
           description: Location retrieval result
@@ -196,8 +179,6 @@ paths:
                   $ref: '#/components/examples/RETRIEVAL_CIRCLE'
                 LOCATION_POLYGON:
                   $ref: '#/components/examples/RETRIEVAL_POLYGON'
-                LOCATION_CIRCLE_WITH_DEVICE:
-                  $ref: '#/components/examples/LOCATION_CIRCLE_WITH_DEVICE'
         '400':
           $ref: '#/components/responses/Generic400'
         '401':
@@ -392,6 +373,7 @@ components:
         altitude:
           type: number
           format: double
+          x-unit: m
           description: 'Height above the WGS84 ellipsoid in metres, the datum of latitude
             and
 
@@ -407,6 +389,7 @@ components:
         horizontalAccuracy:
           type: number
           format: double
+          x-unit: m
           description: 'Horizontal uncertainty in metres as reported by the source,
             without
 
@@ -418,12 +401,15 @@ components:
         verticalAccuracy:
           type: number
           format: double
-          description: '1-sigma uncertainty of the measured height in metres, as reported
-            by
+          x-unit: m
+          description: '1-sigma error of the measured height in metres, from the sources
+            or
 
-            the source. The uncertainty of the origin survey is not included.
+            from a source''s declared nominal value, fused like the position. The
 
-            Present only with `altitude`, and only when the sources report it.
+            error of the origin survey is not included. Present only with
+
+            `altitude`.
 
             '
     Area:
@@ -763,20 +749,3 @@ components:
             longitude: 4.861125
           - latitude: 45.751442
             longitude: 4.859827
-    LOCATION_CIRCLE_WITH_DEVICE:
-      summary: circle-based device location retrieval, returning the device identifier
-        used by the implementation
-      description: The device is localized within a circle with a center at the specified
-        coordinates and a radius of 800 meters. Response when the request used a 2-legged
-        access token with multiple device identifiers, or possibly only a single device
-        identifier.
-      value:
-        lastLocationTime: '2023-10-17T13:18:23.682Z'
-        area:
-          areaType: CIRCLE
-          center:
-            latitude: 45.754114
-            longitude: 4.860374
-          radius: 800
-        device:
-          phoneNumber: '+123456789'

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from app.fusion import fuse_fixes
 
 
@@ -70,3 +72,26 @@ def test_no_altitude_means_no_vertical_error():
         {"latitude": 0.0, "longitude": 0.0, "accuracy": 2.0, "sources": ["b"]},
     ])
     assert out["altitude"] is None and out["verticalAccuracy"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", [("down", "silent"), ("silent", "down")])
+async def test_the_error_of_a_failed_asset_does_not_depend_on_capability_order(monkeypatch, order):
+    from types import SimpleNamespace
+
+    import app.position as position
+    from app.errors import CamaraError
+
+    outcomes = {
+        "down": CamaraError(503, "UNAVAILABLE", "Position source unreachable."),
+        "silent": CamaraError(422, "LOCATION_RETRIEVAL.UNABLE_TO_LOCATE", "No location."),
+    }
+
+    async def fake_get_position(pid, source, max_age, error_ns):
+        raise outcomes[pid]
+
+    monkeypatch.setattr(position, "get_position", fake_get_position)
+    caps = [SimpleNamespace(positioningId=pid, source="s") for pid in order]
+    with pytest.raises(CamaraError) as exc:
+        await position.get_fused_position(caps, None, "LOCATION_RETRIEVAL")
+    assert exc.value.status == 503

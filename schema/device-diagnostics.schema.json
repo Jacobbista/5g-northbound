@@ -24,11 +24,13 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100,
-          "description": "LwM2M 3/0/9, percent"
+          "description": "LwM2M 3/0/9, percent",
+          "x-unit": "percent"
         },
         "accuracy": {
           "type": "number",
-          "description": "omlox accuracy, metres"
+          "description": "omlox accuracy, metres",
+          "x-unit": "m"
         },
         "moving": {
           "type": "boolean",

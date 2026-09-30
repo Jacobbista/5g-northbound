@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import client as vendor_client
-from ..mapper import map_stream_diagnostics, to_measurement
+from ..mapper import map_measurement, map_stream_diagnostics
 from ..register import declared_capabilities
 
 log = logging.getLogger(__name__)
@@ -35,10 +35,11 @@ async def get_measurement(device_id: str, request: Request):
     if payload is None:
         raise HTTPException(404, detail="no measurement")
 
-    measurement = to_measurement(schema.mapping, payload, schema.vendor)
+    measurement, reason = map_measurement(schema.mapping, payload, schema.vendor)
     if measurement is None:
-        # Vendor answered but the record has no resolvable position: no fix, not
-        # a (0,0) phantom. 404 = the adapter contract's "no fix" so the engine
+        state.observed.record_no_fix(reason)
+        # Vendor answered but the record is not a fix: no position, no fix time,
+        # or a confidence outside 0..1. 404 = the adapter contract's "no fix" so the engine
         # drops it this cycle (no cooldown) and the gateway maps it to
         # LOCATION_RETRIEVAL.UNABLE_TO_LOCATE.
         raise HTTPException(404, detail="no position in vendor payload")

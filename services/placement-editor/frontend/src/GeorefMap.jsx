@@ -1539,35 +1539,6 @@ export const GeorefMap = forwardRef(function GeorefMap({
     [onDrawRectangle]
   );
 
-  const onUploadImage = (image) => {
-    if (onFloorPlanImageChange) onFloorPlanImageChange(image);
-    if (!image || !mapRef.current) return;
-    // The image *is* the area. Its real-world footprint must follow the
-    // image's pixel aspect ratio - squishing a rectangular floor plan into
-    // a pre-existing 13×32 m box is exactly what we don't want.
-    // Always overwrite width_m / height_m on upload so the image is laid out
-    // at its native aspect (defaulting to 30 m on the longer side).
-    const c = mapRef.current.getCenter();
-    const img = new Image();
-    img.onload = () => {
-      const w = img.naturalWidth || 1;
-      const h = img.naturalHeight || 1;
-      const longSideM = 30;
-      const widthM = w >= h ? longSideM : longSideM * (w / h);
-      const heightM = h >= w ? longSideM : longSideM * (h / w);
-      onOriginChange({
-        latitude: c.lat,
-        longitude: c.lng,
-        width_m: Number(widthM.toFixed(2)),
-        height_m: Number(heightM.toFixed(2)),
-      });
-    };
-    img.onerror = () => {
-      onOriginChange({ latitude: c.lat, longitude: c.lng, width_m: 30, height_m: 30 });
-    };
-    img.src = image.data_url;
-  };
-
   const onPickFly = (target) => {
     setFlyTarget(target);
     if (target.accuracy_m != null) {

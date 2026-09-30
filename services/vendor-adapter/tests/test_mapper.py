@@ -213,3 +213,19 @@ def test_to_measurement_carries_vertical_accuracy_only_with_its_height():
     assert (both["z"], both["verticalAccuracy"]) == (1.2, 0.3)
     no_height = to_measurement(m, {"lat": 59.4, "lon": 17.9, "hacc": 0.3, "ts": 1.0}, vendor_name="v")
     assert "z" not in no_height and "verticalAccuracy" not in no_height
+
+
+def test_a_record_without_its_fix_time_or_with_an_invalid_confidence_is_no_fix():
+    from app.mapper import map_measurement
+    from app.schema import Mapping
+
+    m = Mapping.model_validate({
+        "frame": {"const": "wgs84"},
+        "latitude": {"path": "lat"}, "longitude": {"path": "lon"},
+        "confidence": {"path": "c"}, "timestamp": {"path": "ts"},
+    })
+    ok, reason = map_measurement(m, {"lat": 59.4, "lon": 17.9, "c": 0.5, "ts": 1.0}, vendor_name="v")
+    assert ok is not None and reason is None
+    assert map_measurement(m, {"lat": 59.4, "lon": 17.9, "c": 0.5}, vendor_name="v") == (None, "timestamp")
+    assert map_measurement(m, {"lat": 59.4, "lon": 17.9, "c": 42, "ts": 1.0}, vendor_name="v") == (None, "confidence")
+    assert map_measurement(m, {"lon": 17.9, "ts": 1.0}, vendor_name="v") == (None, "position")

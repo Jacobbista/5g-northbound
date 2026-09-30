@@ -11,7 +11,7 @@ Replace-semantics, mirroring the engine's PUT /blueprint and vendor-adapter's
 PUT /schema: the uploaded document is authoritative.
 
 BSSIDs are sensitive (real network MACs). This surface is the OPERATOR plane
-only - reached through the placement-editor behind `placement-admin`. It is
+only - reached through the placement-editor behind the operator's access gate. It is
 never proxied to the demo / gateway; the bssid-free `/calibration/params` and
 the gateway's `/anchors/calibration` stay the read paths for untrusted clients.
 """

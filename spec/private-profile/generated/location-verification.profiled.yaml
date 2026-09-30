@@ -143,62 +143,19 @@ paths:
             schema:
               $ref: '#/components/schemas/VerifyLocationRequest'
             examples:
-              INPUT_PHONE_NUMBER_CIRCLE:
-                summary: Phone number, circle and maxAge
-                description: Verify if device identified by a phone number is within
-                  a circle, providing a maxAge
+              INPUT_ASSET_ID_CIRCLE:
+                summary: Asset identifier, circle and maxAge
+                description: Verify whether an asset lies within a circle, accepting
+                  a position established at most 120 seconds ago
                 value:
                   device:
-                    phoneNumber: '+123456789'
+                    assetId: pkg-4471
                   area:
                     areaType: CIRCLE
                     center:
-                      latitude: 50.735851
-                      longitude: 7.10066
-                    radius: 50000
-                  maxAge: 120
-              INPUT_IP_ADDRESS_V4_CIRCLE:
-                summary: IPv4 address, circle, without maxAge
-                description: Verify if device identified by an IPv4 address is within
-                  a circle, not indicating a maxAge
-                value:
-                  device:
-                    ipv4Address:
-                      publicAddress: 123.234.1.2
-                      publicPort: 1234
-                  area:
-                    areaType: CIRCLE
-                    center:
-                      latitude: 50.735851
-                      longitude: 7.10066
-                    radius: 50000
-              INPUT_PHONE_NUMBER_IP_ADDRESS_V4_CIRCLE:
-                summary: Both phone number and IPv4 address, circle and maxAge
-                description: Verify if device identified both by a phone number and
-                  an IPv4 address is within a circle, providing a maxAge
-                value:
-                  device:
-                    phoneNumber: '+123456789'
-                    ipv4Address:
-                      publicAddress: 123.234.1.2
-                      publicPort: 1234
-                  area:
-                    areaType: CIRCLE
-                    center:
-                      latitude: 50.735851
-                      longitude: 7.10066
-                    radius: 50000
-                  maxAge: 120
-              INPUT_NO_DEVICE:
-                summary: Device not provided
-                description: The device has to be deducted from token
-                value:
-                  area:
-                    areaType: CIRCLE
-                    center:
-                      latitude: 50.735851
-                      longitude: 7.10066
-                    radius: 50000
+                      latitude: 59.40421
+                      longitude: 17.949278
+                    radius: 50
                   maxAge: 120
       responses:
         '200':
@@ -218,17 +175,6 @@ paths:
                   value:
                     verificationResult: 'TRUE'
                     lastLocationTime: '2023-09-07T10:40:52Z'
-                VERIFICATION_TRUE_WITH_DEVICE:
-                  summary: Match returning the device identifier used by the implementation
-                  description: The network locates the device within the requested
-                    area. Response when the request used a 2-legged access token with
-                    multiple device identifiers, or possibly only a single device
-                    identifier
-                  value:
-                    verificationResult: 'TRUE'
-                    lastLocationTime: '2023-09-07T10:40:52Z'
-                    device:
-                      phoneNumber: '+123456789'
                 VERIFICATION_FALSE:
                   summary: No match
                   description: The requested area does not match the area where the

@@ -132,7 +132,8 @@ class AdapterCapabilities(BaseModel):
         default=None, gt=0, json_schema_extra={"x-unit": "m"},
         description=(
             "Nominal horizontal accuracy of the installed source, used for a fix that reports none. "
-            "Takes precedence over `accuracy_class`, and is required with the open-ended `coarse`."
+            "Takes precedence over `accuracy_class`. A `coarse` source whose fixes carry no "
+            "accuracy needs it, since that class has no upper bound."
         ),
     )
     nominalVerticalAccuracy: Optional[float] = Field(

@@ -315,3 +315,23 @@ async def test_a_height_without_its_error_takes_the_declared_nominal(floor_plan,
         capabilities_for=lambda name: caps,
     )
     assert (await svc.get_position("dev1")).primary.fused.verticalAccuracy == expected
+
+
+@pytest.mark.asyncio
+async def test_a_fix_with_zero_confidence_takes_no_part(floor_plan):
+    doubted = Measurement(source="a", x=9.0, y=9.0, accuracy=1.0, confidence=0.0,
+                          frame="venue", timestamp=100.0)
+    trusted = Measurement(source="b", x=1.0, y=1.0, accuracy=1.0, confidence=1.0,
+                          frame="venue", timestamp=200.0)
+    both = PositionService(
+        adapters={"a": _StaticAdapter(doubted), "b": _StaticAdapter(trusted)},
+        floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    fused = (await both.get_position("dev1")).primary.fused
+    assert fused.sources == ["b"] and fused.timestamp == 200.0
+    alone = PositionService(
+        adapters={"a": _StaticAdapter(doubted)}, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+    assert await alone.get_position("dev1") is None

@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: CAMARA private-asset profile - streaming delivery
-  version: 0.1.0
+  version: 0.2.0
   description: |
     The streaming half of the private-asset profile (delivery gap). OpenAPI
     covers the pull request/response surface (see the overlays in this folder);
@@ -92,34 +92,42 @@ components:
         latitude:
           type: number
           format: double
+          x-unit: deg
         longitude:
           type: number
           format: double
+          x-unit: deg
         altitude:
           type: number
           format: double
-          nullable: true
+          x-unit: m
           description: |
-            Height above the WGS84 ellipsoid in metres: the ellipsoidal height
-            of the venue origin plus the measured height of the asset above the
-            venue floor. Null when no source measures height.
+            Height above the WGS84 ellipsoid in metres: the surveyed ellipsoidal
+            height of the venue origin plus the measured height of the asset
+            above the venue floor. Absent when either is unknown.
         verticalAccuracy:
           type: number
           format: double
+          x-unit: m
           description: |
-            1-sigma uncertainty of the measured height in metres, as reported by
-            the source, without the uncertainty of the origin survey. Present
-            only with `altitude`, and only when the sources report it.
+            1-sigma error of the measured height, from the sources or from a
+            source's declared nominal value, fused like the position. It does
+            not include the error of the origin survey. Present only with
+            `altitude`.
         accuracy:
           type: number
           format: double
+          x-unit: m
+          description: Horizontal 1-sigma error radius of the fused position.
         timestamp:
           type: string
           format: date-time
           description: >-
-            The estimate time (lastLocationTime), not the send time. This is the
-            fix time and freezes while a stationary asset keeps reporting the
-            same fix - use it for position age, not for liveness.
+            When the fix was taken; for a fused entry, the earliest fix time
+            among its sources. It stays fixed while a still asset keeps
+            reporting the same fix, so it gives the age of the position, not
+            the liveness of the device. It is not the established time the pull
+            path publishes as `lastLocationTime`.
         observedAt:
           type: string
           format: date-time

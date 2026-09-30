@@ -46,6 +46,7 @@ stage-contracts:
 	@rm -rf services/positioning-engine/contracts
 	@mkdir -p services/positioning-engine/contracts
 	@cp spec/private-profile/accuracy-class-vocabulary.json services/positioning-engine/contracts/accuracy-class-vocabulary.json
+	@cp schema/layout.schema.json services/positioning-engine/contracts/layout.schema.json
 	@echo "  -> staged contracts into camara-gateway/, vendor-adapter/ and positioning-engine/"
 # Bootstrap committed templates into the gitignored runtime files the first
 # time `make demo` runs. Idempotent: only copies when the working file is

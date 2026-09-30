@@ -82,6 +82,21 @@ def _plan_depth(raw: dict[str, Any], fp_id: Any) -> float:
     return max((float(r.get("y_m") or 0) + float(r.get("height_m") or 0) for r in rooms), default=0.0)
 
 
+def _drop_editor_seed(georef: dict[str, Any]) -> None:
+    """Remove what the version 2 editor wrote into a floor plan the operator had
+    not placed yet: an origin at 0,0 with bearing 0, and an extent of 0. They
+    are placeholders, not a place, and an extent of 0 is invalid. An altitude
+    of null says the same as no altitude and is dropped too."""
+    for key in ("width_m", "depth_m"):
+        if georef.get(key) == 0:
+            georef.pop(key)
+    if georef.get("latitude") == 0 and georef.get("longitude") == 0:
+        for key in ("latitude", "longitude", "azimuth_deg"):
+            georef.pop(key, None)
+    if georef.get("altitude_m", 0) is None:
+        georef.pop("altitude_m")
+
+
 def _from_v2(raw: dict[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(raw)
     if not out.get("floor_plans") and isinstance(raw.get("gps_origin"), dict):
@@ -101,6 +116,9 @@ def _from_v2(raw: dict[str, Any]) -> dict[str, Any]:
         georef = fp.get("georef")
         if isinstance(georef, dict):
             _rename(georef, "height_m", "depth_m")
+            _drop_editor_seed(georef)
+            if not georef:
+                fp.pop("georef")
         for ref in fp.get("scale_calibration_refs") or []:
             for key in ("p1", "p2"):
                 point = ref.get(key)

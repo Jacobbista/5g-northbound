@@ -5,12 +5,10 @@ from ..adapters.base import Measurement
 from ..models import FloorPlan
 from .base import FusedPosition
 
-# A reported accuracy of exactly 0.0 is a real value some vendors send (Wittra
-# has been observed to send it, apparently while a fix is still converging),
-# not a defect in this project's own data. Taken literally it drives the
-# weight and the output accuracy to infinity, so floor it here rather than
-# reject the measurement: the fix stays visible with a small (not fabricated
-# perfect) accuracy instead of the request failing outright.
+# A reported accuracy of exactly 0.0 is a value a vendor can send, for example
+# while a fix is still converging. Taken literally it drives the weight and the
+# output accuracy to infinity, so it is floored here: the fix stays visible with
+# a small accuracy instead of the request failing.
 _MIN_ACCURACY_M = 0.01
 
 

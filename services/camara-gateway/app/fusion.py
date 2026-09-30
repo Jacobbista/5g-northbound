@@ -17,9 +17,9 @@ from typing import Any, Optional
 
 def fuse_fixes(fixes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
     """Combine per-capability fixes into one. Each fix is a dict with
-    `latitude`, `longitude`, `accuracy_m`, and optionally `altitude`,
-    `timestamp`, `observed_at`, `sources`. Returns the fused fix, or None when
-    no fix carries a usable position."""
+    `latitude`, `longitude`, `accuracy`, and optionally `altitude`,
+    `verticalAccuracy`, `timestamp`, `observedAt`, `sources`. Returns the fused
+    fix, or None when no fix carries a usable position."""
     usable = [
         f for f in fixes
         if f.get("latitude") is not None

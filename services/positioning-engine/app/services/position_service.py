@@ -199,6 +199,11 @@ class PositionService:
                 continue
             if r is None:
                 continue
+            if r.confidence == 0:
+                # The source gives this fix no confidence: it takes no part in
+                # the position, its sources or its times.
+                log.debug("measurement from '%s' for %s has confidence 0; skipped", r.source, device_id)
+                continue
             placed = self._normalise(r)
             if placed is None:
                 continue

@@ -11,22 +11,24 @@
 
 const M_PER_DEG = 111320;
 
-// Frame of the first room of a version 3 blueprint, or null without a georef.
+// Frame of the first room of a version 3 blueprint, or null without a
+// complete georef (origin and bearing) or a placed room, as the engine judges.
 export function frameFromBlueprint(blueprint) {
   const fp = blueprint?.floor_plans?.[0];
   const g = fp?.georef;
   const room = (blueprint?.rooms || []).find((r) => (r.floor_plan_id ?? fp?.id) === fp?.id);
-  if (!g || g.latitude == null || g.longitude == null || !room) return null;
+  if (!g || [g.latitude, g.longitude, g.azimuth_deg].some((v) => v == null)) return null;
+  if (!room || [room.x_m, room.y_m, room.width_m, room.depth_m].some((v) => v == null)) return null;
   return {
     lat0: Number(g.latitude),
     lon0: Number(g.longitude),
-    az: ((Number(g.azimuth_deg) || 0) * Math.PI) / 180,
+    az: (Number(g.azimuth_deg) * Math.PI) / 180,
     room: {
       id: room.id,
-      x_m: Number(room.x_m) || 0,
-      y_m: Number(room.y_m) || 0,
-      width_m: Number(room.width_m) || 0,
-      depth_m: Number(room.depth_m) || 0,
+      x_m: Number(room.x_m),
+      y_m: Number(room.y_m),
+      width_m: Number(room.width_m),
+      depth_m: Number(room.depth_m),
       rot: ((Number(room.rotation_deg) || 0) * Math.PI) / 180,
     },
   };

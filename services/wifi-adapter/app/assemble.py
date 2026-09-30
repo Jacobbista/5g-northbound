@@ -137,11 +137,14 @@ def assemble_from_blueprint_dict(
                 anchor_id,
             )
             continue
+        if anchor.get("x") is None or anchor.get("y") is None:
+            log.warning("wifi-adapter: anchor %s has no position; skipped", anchor_id)
+            continue
         routers.append(
             Router(
                 id=anchor_id,
-                x=float(anchor.get("x") or 0),
-                y=float(anchor.get("y") or 0),
+                x=float(anchor["x"]),
+                y=float(anchor["y"]),
                 bssids=binding.bssids,
                 tx_power=binding.tx_power,
                 path_loss_n=binding.path_loss_n,

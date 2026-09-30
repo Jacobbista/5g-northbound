@@ -45,7 +45,7 @@
     },
     "georef": {
       "type": "object",
-      "description": "Places the floor plan in the world. latitude/longitude locate its lower-left corner, azimuth_deg is the bearing of +y clockwise from true north.",
+      "description": "Places the floor plan in the world. latitude/longitude locate its lower-left corner, azimuth_deg is the bearing of +y clockwise from true north. The engine uses it only when latitude, longitude and azimuth_deg are all present.",
       "properties": {
         "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
         "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
@@ -70,7 +70,7 @@
         "y_m": { "type": "number", "description": "Lower-left corner along the floor-plan y." },
         "width_m": { "type": "number", "exclusiveMinimum": 0 },
         "depth_m": { "type": "number", "exclusiveMinimum": 0 },
-        "rotation_deg": { "type": "number", "description": "Rotation clockwise on the plan about the room centre." },
+        "rotation_deg": { "type": "number", "default": 0, "description": "Rotation clockwise on the plan about the room centre. Absent means unrotated." },
         "wall_height_m": { "type": "number" },
         "shape": {
           "type": "array",

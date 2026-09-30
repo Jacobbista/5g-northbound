@@ -681,10 +681,12 @@ export function App() {
   // survey instead of per-AP placement on a global map.
   const updateGeo = useCallback(
     (field, value) => {
-      mutateFp((fp) => ({
-        ...fp,
-        georef: { ...(fp.georef || {}), [field]: value },
-      }));
+      mutateFp((fp) => {
+        const georef = { ...(fp.georef || {}), [field]: value };
+        // An emptied field is absent. Only the altitude is null when unknown.
+        if (value == null && field !== "altitude_m") delete georef[field];
+        return { ...fp, georef };
+      });
     },
     [mutateFp]
   );
@@ -717,14 +719,6 @@ export function App() {
       id,
       label: `Floor ${i}`,
       image: null,
-      georef: {
-        latitude: 0,
-        longitude: 0,
-        azimuth_deg: 0,
-        altitude_m: null,
-        width_m: 0,
-        height_m: 0,
-      },
     };
     history.commit((l) => ({ ...l, floor_plans: [...(l.floor_plans || []), newFp] }));
     setSelectedFpId(id);
@@ -838,8 +832,8 @@ export function App() {
             ...fp,
             georef: {
               ...(fp.georef || {}),
-              width_m: (Number(fp.georef?.width_m) || 0) * s,
-              height_m: (Number(fp.georef?.height_m) || 0) * s,
+              ...(fp.georef?.width_m != null ? { width_m: Number(fp.georef.width_m) * s } : {}),
+              ...(fp.georef?.height_m != null ? { height_m: Number(fp.georef.height_m) * s } : {}),
             },
             scale_calibration_refs: scaledRefs,
           };
@@ -2105,8 +2099,10 @@ export function App() {
                 image,
                 georef: {
                   ...(fp.georef || {}),
-                  latitude: centre?.lat ?? fp.georef?.latitude ?? 0,
-                  longitude: centre?.lng ?? fp.georef?.longitude ?? 0,
+                  // The area is created where the map is centred, north-aligned
+                  // as it is drawn: the operator then moves and rotates it.
+                  ...(centre ? { latitude: centre.lat, longitude: centre.lng } : {}),
+                  azimuth_deg: fp.georef?.azimuth_deg ?? 0,
                   width_m: Number(widthM.toFixed(2)),
                   height_m: Number(heightM.toFixed(2)),
                 },
@@ -2119,8 +2115,10 @@ export function App() {
                 image,
                 georef: {
                   ...(fp.georef || {}),
-                  latitude: centre?.lat ?? fp.georef?.latitude ?? 0,
-                  longitude: centre?.lng ?? fp.georef?.longitude ?? 0,
+                  // The area is created where the map is centred, north-aligned
+                  // as it is drawn: the operator then moves and rotates it.
+                  ...(centre ? { latitude: centre.lat, longitude: centre.lng } : {}),
+                  azimuth_deg: fp.georef?.azimuth_deg ?? 0,
                   width_m: 30,
                   height_m: 30,
                 },
@@ -2183,13 +2181,12 @@ export function App() {
           <button
             type="button"
             onClick={() =>
-              mutateFp((fp) => ({
-                ...fp,
-                image: null,
-                georef: { ...(fp.georef || {}), width_m: 0, height_m: 0 },
-              }))
+              mutateFp((fp) => {
+                const { width_m: _w, height_m: _h, ...georef } = fp.georef || {};
+                return { ...fp, image: null, georef };
+              })
             }
-            title="Reset the area definition (drops image + clears dimensions). Lat/lon/azimuth stay."
+            title="Reset the area definition (drops the image and the dimensions). Lat/lon/azimuth stay."
             style={{
               marginTop: 6,
               width: "100%",
@@ -2218,7 +2215,9 @@ export function App() {
         <div style={field}>
           <span style={label}>lat</span>
           <NumberInput
-            value={Number(currentFp?.georef?.latitude ?? 0)}
+            value={currentFp?.georef?.latitude ?? null}
+            nullable
+            placeholder="not placed"
             step="0.000001"
             onCommit={(v) => updateGeo("latitude", v)}
           />
@@ -2226,7 +2225,9 @@ export function App() {
         <div style={field}>
           <span style={label}>lon</span>
           <NumberInput
-            value={Number(currentFp?.georef?.longitude ?? 0)}
+            value={currentFp?.georef?.longitude ?? null}
+            nullable
+            placeholder="not placed"
             step="0.000001"
             onCommit={(v) => updateGeo("longitude", v)}
           />
@@ -2234,7 +2235,9 @@ export function App() {
         <div style={field}>
           <span style={label}>azimuth°</span>
           <NumberInput
-            value={Number(currentFp?.georef?.azimuth_deg ?? 0)}
+            value={currentFp?.georef?.azimuth_deg ?? null}
+            nullable
+            placeholder="not placed"
             step="0.5"
             onCommit={(v) => updateGeo("azimuth_deg", v)}
           />
@@ -2805,6 +2808,7 @@ export function App() {
                     the floor plan in section 1. */}
                 {currentFp?.georef?.latitude != null &&
                   currentFp?.georef?.longitude != null &&
+                  currentFp?.georef?.azimuth_deg != null &&
                   Number(currentFp.georef.width_m) > 0 &&
                   Number(currentFp.georef.height_m) > 0 && (() => {
                     // Use polygon centroid when present (area-weighted, so
@@ -2821,7 +2825,7 @@ export function App() {
                     const w = localToGps(cx, cy, {
                       latitude: Number(currentFp.georef.latitude),
                       longitude: Number(currentFp.georef.longitude),
-                      azimuth_deg: Number(currentFp.georef.azimuth_deg) || 0,
+                      azimuth_deg: Number(currentFp.georef.azimuth_deg),
                     });
                     return (
                       <>
@@ -3415,7 +3419,16 @@ export function App() {
                   ...l,
                   floor_plans: (l.floor_plans || []).map((fp) =>
                     fp.id === fpId
-                      ? { ...fp, georef: { ...(fp.georef || {}), ...patch } }
+                      ? {
+                          ...fp,
+                          // The area is drawn with this bearing, north when
+                          // none is stored, so an edit of it records one.
+                          georef: {
+                            ...(fp.georef || {}),
+                            ...patch,
+                            azimuth_deg: patch.azimuth_deg ?? fp.georef?.azimuth_deg ?? 0,
+                          },
+                        }
                       : fp
                   ),
                 });
@@ -3435,7 +3448,7 @@ export function App() {
                     ...(fp.georef || {}),
                     latitude: lat,
                     longitude: lng,
-                    azimuth_deg: fp.georef?.azimuth_deg || 0,
+                    azimuth_deg: fp.georef?.azimuth_deg ?? 0,
                     width_m: 20,
                     height_m: 20,
                   },
@@ -4637,6 +4650,7 @@ export function App() {
 
                   {currentRoom && currentFp?.georef?.latitude != null &&
                     currentFp?.georef?.longitude != null &&
+                    currentFp?.georef?.azimuth_deg != null &&
                     Number(currentFp.georef.width_m) > 0 &&
                     Number(currentFp.georef.height_m) > 0 && (() => {
                       const rot = (Number(currentRoom.rotation_deg) || 0) * Math.PI / 180;
@@ -4649,7 +4663,7 @@ export function App() {
                       const wp = localToGps(fpx, fpy, {
                         latitude: Number(currentFp.georef.latitude),
                         longitude: Number(currentFp.georef.longitude),
-                        azimuth_deg: Number(currentFp.georef.azimuth_deg) || 0,
+                        azimuth_deg: Number(currentFp.georef.azimuth_deg),
                       });
                       return (
                         <>

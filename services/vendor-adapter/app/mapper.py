@@ -75,12 +75,14 @@ def resolve_field(spec: FieldSpec, payload: Any) -> Any:
     return value
 
 
-def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional[dict[str, Any]]:
+def map_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> tuple[Optional[dict[str, Any]], Optional[str]]:
     """Translate a vendor response payload into the engine's Measurement shape.
 
-    Returns a dict ready to be returned as JSON from GET /measurement/{id}, or
-    None when the payload carries no resolvable position (either horizontal
-    coordinate absent). None is 'no fix', not a (0,0) phantom: the caller 404s,
+    Returns the measurement ready to be returned as JSON from GET
+    /measurement/{id} and no reason, or None and the reason the record is not
+    a fix (`frame`, `position`, `timestamp`, `confidence`): a horizontal coordinate or the fix time
+    does not resolve, or a confidence lies outside 0..1. None is 'no fix', not
+    a (0,0) phantom and not a body the engine would reject: the caller 404s,
     the engine drops the source this cycle, and the gateway surfaces
     UNABLE_TO_LOCATE instead of a bogus location at null island. A field the
     vendor genuinely reports as 0 (a ConstSpec, or a present 0 value) is kept -
@@ -88,22 +90,29 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
     """
     frame = resolve_field(mapping.frame, payload)
     if frame not in FRAME_FIELDS:
-        return None
+        return None, "frame"
     first, second = (getattr(mapping, f) for f in FRAME_FIELDS[frame])
     if first is None or second is None:
-        return None
+        return None, "position"
     first_raw = resolve_field(first, payload)
     second_raw = resolve_field(second, payload)
     if first_raw is None or second_raw is None:
-        return None
+        return None, "position"
     out: dict[str, Any] = {
         "source": vendor_name,
         "frame": frame,
     }
-    # confidence is carried only when the record resolves it.
+    # confidence is carried only when the record resolves it. A value outside
+    # 0..1 is not a confidence: the record is not a usable fix.
     confidence = _resolve_optional(mapping.confidence, payload)
     if confidence is not None:
-        out["confidence"] = float(confidence)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            return None, "confidence"
+        if not 0.0 <= confidence <= 1.0:
+            return None, "confidence"
+        out["confidence"] = confidence
     # accuracy is optional: a vendor with no genuine per-fix radius omits the
     # mapping entirely rather than fabricate one. Present-and-zero (a real
     # reported value, however suspect) is kept, matching the coordinate rule
@@ -126,16 +135,23 @@ def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional
         vertical = _resolve_optional(mapping.verticalAccuracy, payload)
         if vertical is not None:
             out["verticalAccuracy"] = float(vertical)
+    # A fix without its time is not a fix: the engine requires it.
     ts = resolve_field(mapping.timestamp, payload)
-    if ts is not None:
-        out["timestamp"] = float(ts)
+    if ts is None:
+        return None, "timestamp"
+    out["timestamp"] = float(ts)
     # When the device last talked to the vendor, distinct from the fix time
     # (which freezes for a still asset). Carried on the fast path so the engine
     # can broadcast it and consumers derive liveness from it.
     lastSeen = _resolve_optional(mapping.lastSeen, payload)
     if lastSeen is not None:
         out["lastSeen"] = float(lastSeen)
-    return out
+    return out, None
+
+
+def to_measurement(mapping: Mapping, payload: Any, vendor_name: str) -> Optional[dict[str, Any]]:
+    """The measurement of `map_measurement`, or None when the record is not a fix."""
+    return map_measurement(mapping, payload, vendor_name)[0]
 
 
 def _resolve_optional(spec: Optional[FieldSpec], payload: Any) -> Any:

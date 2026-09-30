@@ -81,7 +81,7 @@
             }
           ],
           "default": null,
-          "description": "Nominal horizontal accuracy of the installed source, used for a fix that reports none. Takes precedence over `accuracy_class`, and is required with the open-ended `coarse`.",
+          "description": "Nominal horizontal accuracy of the installed source, used for a fix that reports none. Takes precedence over `accuracy_class`. A `coarse` source whose fixes carry no accuracy needs it, since that class has no upper bound.",
           "title": "Nominalaccuracy",
           "x-unit": "m"
         },

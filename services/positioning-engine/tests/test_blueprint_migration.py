@@ -92,3 +92,23 @@ def test_v1_floor_plan_seed_becomes_a_georeferenced_floor_plan():
 ])
 def test_blueprint_version_reads_every_stored_form(raw, version):
     assert blueprint_version(raw) == version
+
+
+def test_the_v2_editor_seed_of_an_unplaced_floor_plan_is_dropped():
+    from app.blueprint import validate_blueprint
+
+    v2 = {
+        "version": 2,
+        "floor_plans": [
+            {"id": "fp-01", "georef": {"latitude": 59.4042, "longitude": 17.9492, "azimuth_deg": -36.4,
+                                       "width_m": 40, "height_m": 30}},
+            {"id": "fp-02", "georef": {"latitude": 0, "longitude": 0, "azimuth_deg": 0,
+                                       "altitude_m": None, "width_m": 0, "height_m": 0}},
+        ],
+        "rooms": [],
+    }
+    v3 = migrate_blueprint(v2)
+    placed, unplaced = v3["floor_plans"]
+    assert placed["georef"]["latitude"] == 59.4042 and placed["georef"]["depth_m"] == 30
+    assert "georef" not in unplaced
+    validate_blueprint(v3)

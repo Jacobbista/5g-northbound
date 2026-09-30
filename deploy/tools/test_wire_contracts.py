@@ -247,20 +247,18 @@ def test_gateway_reads_the_device_fields_the_engine_reports():
     assert not missing, f"the gateway reads device fields the engine never reports: {sorted(missing)}"
 
 
-# The profile declares `verticalAccuracy`, and the gateway reads it from the
-# engine body, but no engine path produces it yet: the fusion has no vertical
-# error estimate. Listed here so the pin below stays meaningful and the gap
-# stays visible instead of reading as a typo.
-_DECLARED_NOT_YET_PRODUCED = {"vertical_accuracy_m"}
-
-
 def test_gateway_reads_the_position_fields_the_engine_produces():
-    """`GET /position/{id}`: the engine's northbound body, parsed once."""
+    """`GET /position/{id}`: the engine's northbound body, read by the pull
+    path, the established time and the asset details."""
     models = (ROOT / "services/positioning-engine/app/models.py").read_text()
     block = re.search(r"class EnginePosition\(BaseModel\):(.*)", models, re.S).group(1)
     emitted = set(re.findall(r"^    ([a-zA-Z_]+):", block, re.M))
-    body = re.search(r"def _fetch_position\(.*?(?=\n\n\nasync def |\n\n\ndef )",
-                     (ROOT / "services/camara-gateway/app/position.py").read_text(), re.S).group(0)
+    source = (ROOT / "services/camara-gateway/app/position.py").read_text()
+    body = "".join(
+        re.search(rf"def {name}\(.*?(?=\n\n\nasync def |\n\n\ndef |\n\n\n@)", source, re.S).group(0)
+        for name in ("_established", "_fetch_position", "get_position_details")
+    )
     read = set(re.findall(r'd\.get\("([a-zA-Z_]+)"', body)) | set(re.findall(r'd\["([a-zA-Z_]+)"\]', body))
-    missing = read - emitted - _DECLARED_NOT_YET_PRODUCED
+    assert {"establishedAt", "current", "verticalAccuracy"} <= read
+    missing = read - emitted
     assert not missing, f"the gateway reads position fields the engine never produces: {sorted(missing)}"

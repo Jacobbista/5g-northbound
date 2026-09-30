@@ -13,16 +13,13 @@ from .obs import corr_headers
 
 log = logging.getLogger(__name__)
 
-# Radius reported for an engine position whose accuracy is missing or not
-# positive: an unknown accuracy is a coarse one, never a sharp one.
-_UNKNOWN_RADIUS_M = 50.0
-
-
-def _radius_or_default(accuracy) -> float:
-    """A missing or non-positive accuracy is unknown, not infinitely precise."""
-    if isinstance(accuracy, (int, float)) and accuracy > 0:
+def _radius(d: dict) -> float:
+    """The engine's accuracy. The engine contract requires a positive one, so a
+    body without it is malformed, and no radius is substituted."""
+    accuracy = d.get("accuracy")
+    if isinstance(accuracy, (int, float)) and not isinstance(accuracy, bool) and accuracy > 0:
         return float(accuracy)
-    return _UNKNOWN_RADIUS_M
+    raise CamaraError(502, "BAD_GATEWAY", "Position source returned no valid accuracy.")
 
 # Engine call resilience. A 5xx or network error on the engine call gets one
 # retry after a short backoff - most engine restarts and brief blips clear
@@ -233,7 +230,7 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
     return Position(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=_radius_or_default(d.get("accuracy")),
+        radius_m=_radius(d),
         last_location_time=established,
         altitude_m=d.get("altitude"),
         vertical_accuracy_m=d.get("verticalAccuracy") if d.get("altitude") is not None else None,
@@ -282,6 +279,16 @@ async def get_position(
     return pos
 
 
+def _error_rank(exc: CamaraError) -> int:
+    if exc.status == 503:
+        return 0
+    if exc.status >= 500:
+        return 1
+    if exc.code.endswith("UNABLE_TO_FULFILL_MAX_AGE"):
+        return 2
+    return 3
+
+
 async def get_fused_position(capabilities, max_age, error_ns) -> Position:
     """Poll every capability of an asset and reconcile the fixes into one.
 
@@ -292,17 +299,20 @@ async def get_fused_position(capabilities, max_age, error_ns) -> Position:
     from .fusion import fuse_fixes
 
     positions: list[Position] = []
-    last_error: CamaraError | None = None
+    errors: list[CamaraError] = []
     for cap in capabilities:
         try:
             positions.append(
                 await get_position(cap.positioningId, cap.source, max_age, error_ns)
             )
         except CamaraError as exc:
-            last_error = exc  # no-fix / max-age / unreachable: try the next
+            errors.append(exc)  # no-fix / max-age / unreachable: try the next
     if not positions:
-        if last_error is not None:
-            raise last_error
+        if errors:
+            # Independent of capability order: a source that could not be asked
+            # may hold a fix, so unavailability outranks a position too old,
+            # which outranks no position.
+            raise min(errors, key=_error_rank)
         raise CamaraError(
             422, f"{error_ns}.UNABLE_TO_LOCATE",
             "No positioning source has a fix for this asset.",
@@ -347,10 +357,15 @@ async def get_position_details(device_id: str, source: str | None = None) -> Pos
     except Exception as exc:
         log.warning("engine details unreachable (%s)", exc)
         return None
+    try:
+        radius = _radius(d)
+    except CamaraError:
+        log.warning("engine position for %s has no valid accuracy", device_id)
+        return None
     return PositionDetails(
         latitude=d["latitude"],
         longitude=d["longitude"],
-        radius_m=_radius_or_default(d.get("accuracy")),
+        radius_m=radius,
         last_location_time=_established(d)[0],
         strategy=d.get("strategy", "weighted_avg"),
         sources=d.get("sources", []),

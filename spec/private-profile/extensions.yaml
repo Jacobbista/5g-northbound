@@ -272,18 +272,25 @@ components:
       type: object
       required: [latitude, longitude, accuracy, lastLocationTime, strategy, sources]
       properties:
-        latitude: { type: number, format: double }
-        longitude: { type: number, format: double }
-        accuracy: { type: number, format: double }
+        latitude: { type: number, format: double, x-unit: deg }
+        longitude: { type: number, format: double, x-unit: deg }
+        accuracy:
+          type: number
+          format: double
+          x-unit: m
+          description: Horizontal 1-sigma error radius of the fused position.
         altitude:
           type: number
           format: double
           nullable: true
+          x-unit: m
+          description: Height above the WGS84 ellipsoid, null when unknown.
         verticalAccuracy:
           type: number
           format: double
           nullable: true
-          description: 1-sigma uncertainty of the measured height, present only with `altitude`.
+          x-unit: m
+          description: 1-sigma error of the measured height, null without `altitude`.
         lastLocationTime: { type: string, format: date-time }
         strategy: { type: string }
         sources:
@@ -300,8 +307,8 @@ components:
           additionalProperties:
             type: object
             properties:
-              txPowerRef: { type: number }
-              pathLossExponent: { type: number }
+              txPowerRef: { type: number, x-unit: dBm, description: RSSI at 1 m }
+              pathLossExponent: { type: number, description: "log-distance path-loss exponent, without unit" }
               calibrated: { type: boolean }
     Placement:
       type: object

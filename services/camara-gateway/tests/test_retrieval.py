@@ -433,3 +433,16 @@ async def test_retrieve_503_when_the_engine_cannot_serve(client, respx_mock, aut
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 503
     assert resp.json()["code"] == "UNAVAILABLE"
+
+
+async def test_retrieve_502_when_the_engine_sends_no_valid_accuracy(client, respx_mock, auth_headers, monkeypatch):
+    # The engine contract requires a positive accuracy. The gateway does not
+    # substitute a radius for a missing one.
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    body = {**_engine_ok().json(), "accuracy": 0}
+    respx_mock.get("http://engine.test/position/wifi-asset-01").mock(return_value=httpx.Response(200, json=body))
+    resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert resp.status_code == 502

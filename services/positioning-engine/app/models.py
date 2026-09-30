@@ -39,8 +39,8 @@ class FloorPlan(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
     gps_origin: Optional[GpsOrigin] = None
-    width_m: float = 0.0
-    depth_m: float = 0.0
+    width_m: Optional[float] = None
+    depth_m: Optional[float] = None
     rooms: dict[str, RoomPlacement] = {}
 
 

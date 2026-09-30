@@ -257,7 +257,10 @@ function DevicePanel({ token, device, onClose, frame, lastFix, state, diagnosabl
           {t.altitude != null && (
             <div style={statRow}>
               <span style={sLabel}>altitude</span>
-              <span style={sVal}>{t.altitude.toFixed(2)} m</span>
+              <span style={sVal}>
+                {t.altitude.toFixed(2)} m
+                {t.verticalAccuracy != null && ` ±${t.verticalAccuracy.toFixed(2)}`}
+              </span>
             </div>
           )}
           <div style={statRow}>

@@ -115,6 +115,19 @@ def test_assemble_drops_anchors_without_binding(tmp_path):
     assert [r.id for r in cfg.routers] == ["AP01"]
 
 
+def test_assemble_drops_anchors_without_position(tmp_path):
+    blueprint = _write(tmp_path, "layout.json", _blueprint([
+        {"id": "AP07", "technology": "wifi", "x": 5.0, "y": 3.0},
+        {"id": "AP08", "technology": "wifi"},
+    ]))
+    bindings = _write(tmp_path, "wifi-config.json", {"bindings": [
+        {"id": "AP07", "bssids": ["AA:BB:CC:01:01:01"]},
+        {"id": "AP08", "bssids": ["AA:BB:CC:01:01:02"]},
+    ]})
+    cfg = assemble_from_blueprint(blueprint, bindings)
+    assert [r.id for r in cfg.routers] == ["AP07"]
+
+
 def test_load_bindings_accepts_legacy_routers_shape(tmp_path):
     bindings_path = _write(
         tmp_path,

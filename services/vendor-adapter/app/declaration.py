@@ -50,6 +50,9 @@ class Observed:
     unresolved: dict[str, int] = field(default_factory=dict)
     intervalExceeded: int = 0
     movedWithoutFix: int = 0
+    # Records that were not a fix, by reason: frame, position, timestamp,
+    # confidence. Each answered 404 to the engine.
+    noFix: dict[str, int] = field(default_factory=dict)
     _last: dict[str, tuple[Optional[float], Optional[float], tuple]] = field(default_factory=dict)
 
     def record(self, device_id: str, mapping: Mapping, measurement: dict[str, Any], caps: dict) -> None:
@@ -84,10 +87,15 @@ class Observed:
         ):
             self.movedWithoutFix += 1
 
+    def record_no_fix(self, reason: Optional[str]) -> None:
+        key = reason or "position"
+        self.noFix[key] = self.noFix.get(key, 0) + 1
+
     def as_dict(self) -> dict:
         return {
             "measurements": self.measurements,
             "unresolved": dict(sorted(self.unresolved.items())),
             "intervalExceeded": self.intervalExceeded,
             "movedWithoutFix": self.movedWithoutFix,
+            "noFix": dict(sorted(self.noFix.items())),
         }
