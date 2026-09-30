@@ -110,6 +110,9 @@ The adapter also compares the declaration with every payload and reports on
   `reportingInterval`.
 - `movedWithoutFix`: for `on_motion`, a position that changed without a new fix
   time, which contradicts the declaration.
+- `noFix`: records that were not a fix, by reason: `position` (a coordinate
+  does not resolve), `timestamp` (the fix time does not resolve),
+  `confidence` (outside 0..1), `frame` (not `wgs84` or `venue`).
 
 The counters restart when a schema is applied.
 
@@ -208,7 +211,7 @@ curl -s -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
 | no schema loaded | `404` | the engine skips the source |
 | a variable the schema names is unset | `404`, logged | the engine skips the source |
 | the vendor answers `404`, an error, or is unreachable | `404`, logged | the engine skips the source without backing off |
-| the record has no position | `404` | the engine skips the source |
+| the record has no position or no fix time, or a confidence outside 0..1 | `404`, counted under `noFix` | the engine skips the source |
 | a response within `cacheTtl` | the cached measurement | no vendor call |
 
 An asset with no position from any source answers

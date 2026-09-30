@@ -370,7 +370,7 @@ z up, and the origin at the parent's lower-left corner
 | Level | Fields |
 |-------|--------|
 | floor plan in the world | `georef`: `latitude`, `longitude` of the lower-left corner, `azimuth_deg`, `altitude_m`, `width_m`, `depth_m` ([georeferencing](georeferencing.md#the-georef)) |
-| room in the floor plan | `x_m`, `y_m` of its lower-left corner, `width_m`, `depth_m`, `rotation_deg` clockwise about its centre, optional `shape` in room coordinates |
+| room in the floor plan | `x_m`, `y_m` of its lower-left corner, `width_m`, `depth_m`, all required, `rotation_deg` clockwise about its centre (0 when absent), optional `shape` in room coordinates |
 | anchor in the room | `x`, `y`, `z` (mounting height), `technology` (`wifi`, `wittra`, `fiveg`, `gnss`), `coverage_m` |
 | wall in the room | `x1`, `y1`, `x2`, `y2`, `thickness`, `height_m`, `openings` measured along the wall from (`x1`, `y1`) |
 

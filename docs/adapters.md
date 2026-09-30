@@ -79,7 +79,7 @@ it is dropped as malformed.
 | `z` | metres, optional | Height above the venue floor. Sent only when measured for this fix, by a source that declares `z: true`. |
 | `verticalAccuracy` | metres, optional | One-sigma error of `z`. Sent only with `z`, when the source reports it. |
 | `accuracy` | metres, optional | One-sigma horizontal error radius. When absent the engine uses the declared nominal accuracy ([below](#accuracy_class-and-nominal-accuracies)). |
-| `confidence` | 0 to 1, optional | The source's own reliability score, a multiplier on the fusion weight. |
+| `confidence` | 0 to 1, optional | The source's own reliability score, a multiplier on the fusion weight. At 0 the measurement is left out. |
 | `timestamp` | epoch seconds | Required. When the fix was taken. |
 | `lastSeen` | epoch seconds, optional | When the device last communicated with its source. For an `on_motion` source it confirms the last fix. Published as `lastCommunicationTime`. |
 
@@ -237,7 +237,9 @@ characters replaced by `_` (`wittra` becomes `WITTRA`):
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key` | the header carrying it |
 | `ADAPTER_<NAME>_TIMEOUT` | `1.0` | request timeout in seconds |
 
-Adapters inside the cluster need none of them. An adapter reached over an
+They are declared in the engine's environment contract with the placeholder
+`{NAME}`, and the key is sensitive. Adapters inside the cluster need none of
+them. An adapter reached over an
 untrusted network needs TLS and authentication, and one that accepts pushes
 from devices, as `wifi-adapter` does, authenticates or rate-limits them itself.
 

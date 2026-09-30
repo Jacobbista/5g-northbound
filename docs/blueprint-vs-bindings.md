@@ -93,8 +93,8 @@ wifi-adapter reads the bindings from `WIFI_CONFIG_PATH`
 At start the adapter fetches the blueprint from the engine
 (`POSITIONING_ENGINE_URL`), retrying until the engine answers, and falls back to
 `LAYOUT_PATH` when that is set. It takes the `wifi` anchors of the first room
-and joins them to the bindings on `id`. An anchor without BSSIDs and a binding
-without an anchor are logged and skipped. Fixes are in the frame of that room.
+and joins them to the bindings on `id`. An anchor without BSSIDs or without a
+position, and a binding without an anchor, are logged and skipped. Fixes are in the frame of that room.
 An absent or unreadable bindings file counts as empty: the adapter starts with
 no bound anchors. Until the blueprint is loaded the pod is not ready.
 

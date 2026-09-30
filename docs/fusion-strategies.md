@@ -25,6 +25,8 @@ The engine completes each measurement from its source's declarations
   and has no vertical error.
 - a `z` from a source that does not declare `z: true` is removed, with its
   `verticalAccuracy`.
+- a measurement with `confidence` 0 is left out: it takes no part in the
+  position, its sources or its times. Alone, it gives no position.
 
 ## `weighted_avg`
 

@@ -35,6 +35,17 @@ converted into the venue frame with the inverse transform.
 
 The last three fields record provenance. No computation reads them.
 
+The engine uses the georef only when `latitude`, `longitude` and `azimuth_deg`
+are all present: a missing bearing is an unknown orientation, not north.
+Without a usable georef the engine answers `503` on `GET /position` and the
+stream is silent. The placement editor writes no georef until the operator
+creates the area, with an image, a rectangle or a building outline from the
+map. A new area starts at the map centre, north-aligned unless a bearing is
+already stored, and the operator moves and rotates it. An edit of the area
+records the bearing it is drawn with. A version 2 blueprint loses the
+placeholders the old editor wrote into a floor plan that was never placed: an
+origin at 0,0 and an extent of 0.
+
 The engine converts with an equirectangular approximation at 111 320 m per
 degree. At the latitude of Stockholm this differs from the WGS84 ellipsoid by
 0.07 % north-south and 0.25 % east-west, up to 25 cm across 100 m.
