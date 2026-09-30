@@ -11,7 +11,6 @@ pod and drive a setup wizard, instead of needing a separate copy of the
 contract checked out somewhere.
 """
 
-import os
 from pathlib import Path
 
 import yaml
@@ -23,9 +22,8 @@ from ..wifi import ALGORITHMS, DEBUG
 router = APIRouter(tags=["contract"])
 
 # First existing path wins. The image bakes the file at /app/env.contract.yaml;
-# CONTRACT_PATH overrides; the repo-relative path keeps local tests working.
+# The repo-relative path keeps local tests working.
 _CANDIDATES = [
-    os.environ.get("CONTRACT_PATH"),
     "/app/env.contract.yaml",
     str(Path(__file__).resolve().parents[2] / "env.contract.yaml"),
 ]

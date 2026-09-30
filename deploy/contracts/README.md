@@ -36,6 +36,12 @@ optional:
 | `writable` | the service writes to this path at runtime, so it needs a persistent volume |
 | `consumed_by` | the services that read the value, when not only the declaring one |
 
+A name may contain the placeholder `{NAME}`, as `ADAPTER_{NAME}_API_KEY` on the
+positioning-engine: the service reads one such variable for each value of
+`NAME` that the deployment sets, and none is required. The sensitivity
+manifest marks these entries with `template: true`, and `render-k8s` lists
+them as comments, since they have no fixed name.
+
 A variable keeps its name and its sensitivity in every service that declares it.
 
 | Command | Effect |

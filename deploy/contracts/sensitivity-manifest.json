@@ -50,6 +50,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -65,6 +66,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -80,6 +82,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter",
         "vendor-adapter",
@@ -99,6 +102,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "json",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter",
         "vendor-adapter",
@@ -118,13 +122,16 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "positioning-engine",
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ],
       "services": [
         "positioning-engine",
+        "synthetic-adapter",
         "vendor-adapter",
         "wifi-adapter"
       ]
@@ -137,6 +144,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter",
         "vendor-adapter",
@@ -156,6 +164,7 @@
       "set_by": "compose",
       "writable": true,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -171,6 +180,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -186,6 +196,55 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
+      "consumed_by": [
+        "positioning-engine"
+      ],
+      "services": [
+        "positioning-engine"
+      ]
+    },
+    {
+      "name": "ADAPTER_{NAME}_API_KEY",
+      "sensitive": true,
+      "tier": "secret",
+      "routes_to": "Secret",
+      "set_by": "secret",
+      "writable": false,
+      "type": "string",
+      "template": true,
+      "consumed_by": [
+        "positioning-engine"
+      ],
+      "services": [
+        "positioning-engine"
+      ]
+    },
+    {
+      "name": "ADAPTER_{NAME}_API_KEY_HEADER",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "string",
+      "template": true,
+      "consumed_by": [
+        "positioning-engine"
+      ],
+      "services": [
+        "positioning-engine"
+      ]
+    },
+    {
+      "name": "ADAPTER_{NAME}_TIMEOUT",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "template": true,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -201,6 +260,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -216,6 +276,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -231,11 +292,44 @@
       "set_by": "compose",
       "writable": true,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
       "services": [
         "camara-gateway"
+      ]
+    },
+    {
+      "name": "BLUEPRINT_FETCH_ATTEMPTS",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "integer",
+      "template": false,
+      "consumed_by": [
+        "wifi-adapter"
+      ],
+      "services": [
+        "wifi-adapter"
+      ]
+    },
+    {
+      "name": "BLUEPRINT_FETCH_BACKOFF_S",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "number",
+      "template": false,
+      "consumed_by": [
+        "wifi-adapter"
+      ],
+      "services": [
+        "wifi-adapter"
       ]
     },
     {
@@ -246,6 +340,7 @@
       "set_by": "compose",
       "writable": true,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -261,6 +356,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -276,6 +372,7 @@
       "set_by": "secret",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -291,6 +388,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -306,6 +404,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -321,6 +420,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -336,6 +436,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -351,6 +452,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -366,6 +468,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -381,6 +484,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "positioning-engine",
         "synthetic-adapter"
@@ -398,6 +502,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -413,6 +518,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -428,6 +534,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -443,6 +550,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -458,6 +566,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -473,6 +582,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -488,6 +598,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter",
         "wifi-adapter"
@@ -505,6 +616,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -520,6 +632,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "camara-gateway",
         "placement-editor",
@@ -543,6 +656,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -558,6 +672,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "integer",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -573,6 +688,7 @@
       "set_by": "compose",
       "writable": true,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "vendor-adapter"
       ],
@@ -588,6 +704,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "boolean",
+      "template": false,
       "consumed_by": [
         "camara-gateway"
       ],
@@ -603,6 +720,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -618,6 +736,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -633,6 +752,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "boolean",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -648,6 +768,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -663,6 +784,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "boolean",
+      "template": false,
       "consumed_by": [
         "vendor-adapter"
       ],
@@ -678,6 +800,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "placement-editor"
       ],
@@ -693,6 +816,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -708,6 +832,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -723,6 +848,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -738,6 +864,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -753,6 +880,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -768,6 +896,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "string",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -783,6 +912,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "location-app"
       ],
@@ -798,6 +928,23 @@
       "set_by": "operator",
       "writable": false,
       "type": "string",
+      "template": false,
+      "consumed_by": [
+        "placement-editor"
+      ],
+      "services": [
+        "placement-editor"
+      ]
+    },
+    {
+      "name": "VITE_MAP_TILE_URL",
+      "sensitive": false,
+      "tier": "configmap",
+      "routes_to": "ConfigMap",
+      "set_by": "compose",
+      "writable": false,
+      "type": "url",
+      "template": false,
       "consumed_by": [
         "placement-editor"
       ],
@@ -813,6 +960,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "integer",
+      "template": false,
       "consumed_by": [
         "positioning-engine"
       ],
@@ -828,6 +976,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "number",
+      "template": false,
       "consumed_by": [
         "synthetic-adapter"
       ],
@@ -843,6 +992,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "url",
+      "template": false,
       "consumed_by": [
         "camara-gateway",
         "placement-editor"
@@ -860,6 +1010,7 @@
       "set_by": "compose",
       "writable": true,
       "type": "path",
+      "template": false,
       "consumed_by": [
         "wifi-adapter"
       ],
@@ -875,6 +1026,7 @@
       "set_by": "compose",
       "writable": false,
       "type": "boolean",
+      "template": false,
       "consumed_by": [
         "wifi-adapter"
       ],

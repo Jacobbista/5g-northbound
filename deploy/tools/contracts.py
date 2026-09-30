@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -31,6 +32,9 @@ COMPOSE_FILE = REPO_ROOT / "deploy" / "compose" / "docker-compose.yml"
 
 # Value shape, for form rendering and validation. Orthogonal to `sensitive`:
 # a secret is a string that routes to a Secret rather than a ConfigMap.
+# An upper-case name, optionally with {NAME} placeholders.
+_NAME = re.compile(r"[A-Z][A-Z0-9_]*(\{NAME\}[A-Z0-9_]*)*")
+
 ALLOWED_TYPES = {"string", "url", "integer", "number", "boolean", "path", "json"}
 
 # Where each service expects its env to be edited, in dev. The deploy portal
@@ -64,6 +68,12 @@ class Var:
     consumed_by: list | None = None
     writable: bool = False         # path the service WRITES at runtime -> needs a PVC, not a read-only mount
     type: str = "string"           # value shape; see ALLOWED_TYPES
+
+    @property
+    def template(self) -> bool:
+        """A name with a placeholder, such as ADAPTER_{NAME}_API_KEY: one
+        variable per value of the placeholder, set only where needed."""
+        return "{" in self.name
 
 
 @dataclass
@@ -203,7 +213,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if not relevant and not args.verbose:
                 continue
             # Where does the var come from?
-            if v.runtime_layer == "window.__ENV__":
+            if v.template:
+                marker = "◇"
+                where = "per name"
+                value = "set for each adapter that needs it"
+            elif v.runtime_layer == "window.__ENV__":
                 marker = "◦"
                 where = "env-config.js"
                 value = "(set in env-config.js)"
@@ -265,7 +279,11 @@ def cmd_render_k8s(args: argparse.Namespace) -> int:
     [c] = contracts  # filter_services exits if zero, single-service arg gives one
     cm_data: dict[str, str] = {}
     secret_data: dict[str, str] = {}
+    templates = []
     for v in c.vars:
+        if v.template:
+            templates.append(v)
+            continue
         if v.sensitive:
             secret_data[v.name] = "<FILL>"
         else:
@@ -273,6 +291,9 @@ def cmd_render_k8s(args: argparse.Namespace) -> int:
     ns = args.namespace
     print(f"# Generated from {c.path.relative_to(REPO_ROOT)}")
     print(f"# Replace every <FILL> sentinel with a real value before apply.")
+    for v in templates:
+        where = "Secret" if v.sensitive else "ConfigMap"
+        print(f"# Per value of the placeholder, when needed: {v.name} ({where})")
     print("---")
     print(yaml.safe_dump({
         "apiVersion": "v1",
@@ -307,6 +328,8 @@ def cmd_lint(args: argparse.Namespace) -> int:
       ERROR  sensitive var carries a real (non-placeholder) default
       ERROR  var declares a `type` outside ALLOWED_TYPES
       ERROR  var is `writable` but its `type` is not `path`
+      ERROR  var name is not upper case, or has a placeholder other than {NAME}
+      ERROR  var name with a placeholder is required
       WARN   api/ui service without external_origin (KELT can't route it)
       WARN   var without set_by (dashboard wizard hides/derives from it)
     """
@@ -329,6 +352,10 @@ def cmd_lint(args: argparse.Namespace) -> int:
                 errors.append(
                     f"{c.service}.{v.name}: type '{v.type}' is not one of {sorted(ALLOWED_TYPES)}"
                 )
+            if not _NAME.fullmatch(v.name):
+                errors.append(f"{c.service}.{v.name}: not an upper-case name, or a placeholder other than {{NAME}}")
+            if v.template and v.required:
+                errors.append(f"{c.service}.{v.name}: a name with a placeholder cannot be required")
             # `writable` names a path the service writes at runtime, which needs
             # a persistent volume. Any other value is not a place to write.
             if v.writable and v.type != "path":
@@ -367,6 +394,7 @@ def cmd_sensitivity_manifest(args: argparse.Namespace) -> int:
                 "set_by": v.set_by or "compose",
                 "writable": v.writable,
                 "type": v.type,
+                "template": v.template,
                 "consumed_by": set(),
                 "services": set(),
             })

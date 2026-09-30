@@ -6,7 +6,6 @@ runtime values. No auth, and no dependency on the blueprint, so a deploy
 dashboard reads it from any running pod.
 """
 
-import os
 from pathlib import Path
 
 import yaml
@@ -15,9 +14,8 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter(tags=["contract"])
 
 # First existing path wins. The image bakes the file at /app/env.contract.yaml;
-# CONTRACT_PATH overrides; the repo-relative path keeps local tests working.
+# The repo-relative path keeps local tests working.
 _CANDIDATES = [
-    os.environ.get("CONTRACT_PATH"),
     "/app/env.contract.yaml",
     str(Path(__file__).resolve().parents[2] / "env.contract.yaml"),
 ]

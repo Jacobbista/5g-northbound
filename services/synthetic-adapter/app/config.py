@@ -27,9 +27,6 @@ class Settings(BaseSettings):
     width_m: float = 20.0
     depth_m: float = 30.0
     height_m: float = 3.0
-    # Legacy random-walk step per poll (metres). Kept so old tests / configs
-    # still parse cleanly; the waypoint walker does not use it.
-    step_m: float = 0.3
     # Walking speed for the waypoint walker (metres per second). 1.0 m/s
     # matches a person ambling through a room - slower than purposeful
     # walking (~1.4 m/s) so the demo reads as "indoor mobility".

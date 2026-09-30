@@ -7,7 +7,6 @@ no token. Access is enforced by the gate in front of it.
 """
 
 import logging
-import os
 from pathlib import Path
 
 import httpx
@@ -35,10 +34,9 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-# Baked env contract. First existing path wins: CONTRACT_PATH override, the
+# Baked env contract. First existing path wins: the
 # image's /app/env.contract.yaml, then the repo-relative file for local runs.
 _CONTRACT_CANDIDATES = [
-    os.environ.get("CONTRACT_PATH"),
     "/app/env.contract.yaml",
     str(Path(__file__).resolve().parent.parent / "env.contract.yaml"),
 ]
@@ -140,7 +138,7 @@ async def proxy_calibration(path: str, request: Request) -> Response:
 #
 # GET/PUT the whole per-venue bindings file (BSSIDs + RF + samples) so an
 # operator can calibrate on one cluster, export, and import on another. This
-# is the operator plane (behind placement-admin); BSSIDs never leave here for
+# is the operator plane (behind the operator's access gate); BSSIDs never leave here for
 # the demo/gateway. PUT replaces wholesale + hot-reloads wifi-adapter.
 @app.api_route(
     "/api/wifi/bindings",

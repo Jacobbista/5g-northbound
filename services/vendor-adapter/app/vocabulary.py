@@ -12,7 +12,6 @@ it. Hence the artifact, not this module, is authoritative.
 """
 
 import json
-import os
 from pathlib import Path
 
 _ARTIFACT_NAME = "diagnostics-vocabulary.json"
@@ -21,7 +20,7 @@ _ARTIFACT_NAME = "diagnostics-vocabulary.json"
 def _candidate_paths(module_file: str, override: str | None, baked_dir: Path) -> list[Path]:
     """Where the artifact might live, first existing wins:
 
-    - ``override``: an explicit CONTRACTS_DIR, holding the file flat.
+    - ``override``: an explicit directory holding the file flat.
     - ``baked_dir``: the copy `make stage-contracts` bakes into the image.
     - any ancestor of this module carrying `spec/private-profile/<artifact>`,
       for dev and tests running from the repo tree.
@@ -41,7 +40,7 @@ def _candidate_paths(module_file: str, override: str | None, baked_dir: Path) ->
 
 def _load() -> dict:
     candidates = _candidate_paths(
-        __file__, os.environ.get("CONTRACTS_DIR"), Path("/app/contracts")
+        __file__, None, Path("/app/contracts")
     )
     for path in candidates:
         if path.is_file():

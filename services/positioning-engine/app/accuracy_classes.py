@@ -9,7 +9,6 @@ per-fix accuracy of its own.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +17,7 @@ _ARTIFACT_NAME = "accuracy-class-vocabulary.json"
 
 def _candidate_paths(module_file: str, override: Optional[str], baked_dir: Path) -> list[Path]:
     """Where the artifact might live, first existing wins. Mirrors the
-    vendor-adapter's vocabulary loader: an explicit CONTRACTS_DIR, the copy
+    vendor-adapter's vocabulary loader: an explicit directory, the copy
     baked into the image, then any ancestor carrying the repo layout (dev and
     tests). Walks `.parents` rather than indexing a fixed depth, because the
     image flattens the tree the repo nests."""
@@ -33,12 +32,12 @@ def _candidate_paths(module_file: str, override: Optional[str], baked_dir: Path)
 
 def _load() -> dict:
     for path in _candidate_paths(
-        __file__, os.environ.get("CONTRACTS_DIR"), Path("/app/contracts")
+        __file__, None, Path("/app/contracts")
     ):
         if path.is_file():
             return json.loads(path.read_text())
     raise RuntimeError(
-        f"accuracy-class vocabulary not found; tried {[str(p) for p in _candidate_paths(__file__, os.environ.get('CONTRACTS_DIR'), Path('/app/contracts'))]}"
+        f"accuracy-class vocabulary not found; tried {[str(p) for p in _candidate_paths(__file__, None, Path('/app/contracts'))]}"
     )
 
 

@@ -13,7 +13,6 @@ still answer. Files resolve from a baked directory in the image, falling back to
 the repo tree for local dev and tests.
 """
 
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
@@ -65,10 +64,9 @@ _MANIFEST: list[dict] = [
      "description": "Per-hop latency log line"},
 ]
 
-# First existing base wins: env override, the baked image dir, then the repo tree
+# First existing base wins: the baked image dir, then the repo tree
 # (parents[4] is the repo root from app/routers/contracts.py) for dev and tests.
 _BASES = [
-    os.environ.get("CONTRACTS_DIR"),
     "/app/contracts",
     str(Path(__file__).resolve().parents[4]),
 ]
