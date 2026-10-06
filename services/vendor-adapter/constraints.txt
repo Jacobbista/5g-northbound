@@ -1,0 +1,23 @@
+# Every package the image installs, pinned. `make lock` regenerates it.
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+click==8.5.0
+fastapi==0.115.0
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.27.2
+idna==3.20
+pydantic==2.7.4
+pydantic-settings==2.4.0
+pydantic_core==2.18.4
+python-dotenv==1.2.3
+PyYAML==6.0.1
+sniffio==1.3.1
+starlette==0.38.6
+typing_extensions==4.16.0
+uvicorn==0.30.6
+uvloop==0.22.1
+watchfiles==1.3.0
+websockets==17.1

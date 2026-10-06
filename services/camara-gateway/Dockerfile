@@ -1,11 +1,12 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce AS builder
 WORKDIR /build
-COPY pyproject.toml .
+COPY pyproject.toml constraints.txt ./
 COPY app/ app/
-# Build + install the app and its runtime deps (no dev extras) into an isolated prefix.
-RUN pip install --prefix=/install .
+# Build + install the app and its runtime deps (no dev extras) into an isolated
+# prefix, every package at the version constraints.txt pins.
+RUN pip install --prefix=/install -c constraints.txt .
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
 RUN useradd -r -u 1001 app
 COPY --from=builder /install /usr/local
 # Bake the env contract so GET /contract can serve it at runtime.

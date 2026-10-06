@@ -108,7 +108,12 @@ test:
 
 # --- Occasional helpers ---
 
-.PHONY: logs clean smoke token env-check
+.PHONY: logs clean smoke token env-check lock
+# Pin the base images by digest and every package each Python image adds, in
+# constraints.txt. Run on purpose to update, then `make test`.
+lock:
+	@bash deploy/tools/lock.sh
+
 # Validate the running compose stack against each service's env.contract.yaml.
 # Prints one row per declared variable + flags any required var the compose
 # file forgets to set. Read-only - does not touch containers.

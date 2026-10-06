@@ -22,6 +22,14 @@ A published image is `ghcr.io/jacobbista/5g-northbound/<image>:<version>`. The
 Python images run as the non-root user `app`, uid 1001. `location-app` is an
 nginx image serving the built bundle.
 
+Everything in an image has a fixed version. Each `FROM` names its base image
+by digest. A Python image installs with `services/<image>/constraints.txt`,
+which pins every package it adds to the base, and the tests in CI install with
+the same file. The JavaScript bundles install from `package-lock.json` with
+`npm ci`. `make lock` moves the base images to the digests their tags point at
+now and regenerates the constraints. It is run on purpose, after a dependency
+changes or to take upstream fixes, and followed by `make test`.
+
 An adapter that carries vendor SDKs or material under NDA is built in a private
 repository and implements the same adapter contract. The cluster runs it like
 a published adapter, with an `imagePullSecret`.
