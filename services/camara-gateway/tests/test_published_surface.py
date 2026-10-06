@@ -6,13 +6,21 @@ declaration fails here.
 """
 
 import copy
+import importlib
 import json
+import pkgutil
 import re
 from pathlib import Path
 
+import pytest
 import yaml
+from fastapi import APIRouter
 from jsonschema import Draft7Validator
+from starlette.routing import Mount, WebSocketRoute
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
+import app as app_package
 from app.assets import Asset
 from app.main import app
 from app.routers.positions_stream import _enrich
@@ -51,13 +59,38 @@ def _published() -> set[tuple[str, str]]:
 
 
 def _served() -> set[tuple[str, str]]:
-    ops = set()
-    for r in app.routes:
-        if not getattr(r, "include_in_schema", True):
-            continue
-        methods = getattr(r, "methods", None) or {"WS"}
-        ops |= {(m, _norm(r.path)) for m in methods if m != "HEAD"}
+    """HTTP operations from the app's own OpenAPI document. WebSocket routes
+    from every router the gateway's modules define, and from the app itself:
+    a router's own `routes` hold its declarations with the prefix applied,
+    while `app.routes` wraps included routers differently across FastAPI
+    versions. A router that is defined but never included counts as served,
+    so an unpublished declaration fails here even before it is mounted."""
+    ops = {(m.upper(), _norm(p))
+           for p, item in app.openapi()["paths"].items() for m in item if m in _METHODS}
+    routers = [app.router]
+    for info in pkgutil.walk_packages(app_package.__path__, app_package.__name__ + "."):
+        module = importlib.import_module(info.name)
+        routers += [v for v in vars(module).values() if isinstance(v, APIRouter)]
+    for router in routers:
+        ops |= {("WS", _norm(r.path)) for r in router.routes if isinstance(r, WebSocketRoute)}
     return ops
+
+
+def test_the_published_stream_rejects_a_connection_without_a_token(settings_env):
+    """The declaration found above is live: the stream answers, and without
+    a token closes with the profile's authentication code."""
+    stream = yaml.safe_load((PROFILE / "asyncapi-stream.yaml").read_text())
+    for channel in stream["channels"].values():
+        with TestClient(app) as client, pytest.raises(WebSocketDisconnect) as closed:
+            with client.websocket_connect(channel["address"]) as ws:
+                ws.receive_text()
+        assert closed.value.code == 4401, channel["address"]
+
+
+def test_the_gateway_mounts_no_sub_application():
+    """A mounted application serves routes that neither the OpenAPI document
+    nor the routers above list, so the surface check could not see them."""
+    assert not [r for r in app.routes if isinstance(r, Mount)]
 
 
 def test_every_gateway_route_is_published():
