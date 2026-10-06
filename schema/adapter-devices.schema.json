@@ -80,6 +80,7 @@
         "position": {
           "anyOf": [
             {
+              "additionalProperties": true,
               "type": "object"
             },
             {

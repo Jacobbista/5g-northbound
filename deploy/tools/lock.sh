@@ -4,10 +4,10 @@
 #
 # 1. Pin every base image (`FROM name:tag`) of services/ and mocks/ to the
 #    digest the tag points at now.
-# 2. Regenerate services/<service>/constraints.txt for every Python image:
-#    install the declared dependencies in the pinned python base into a
-#    separate prefix, as the Dockerfile does, and pin every package installed
-#    there. Packages of the base image itself come with its digest.
+# 2. Regenerate <service>/constraints.txt for every Python image, the mocks
+#    included: install the declared dependencies in the pinned python base
+#    into a separate prefix, as the Dockerfile does, and pin every package
+#    installed there. Packages of the base image itself come with its digest.
 set -euo pipefail
 cd "$(dirname "$0")/../.."  # repo root
 
@@ -30,7 +30,7 @@ for ref in "${!digests[@]}"; do
 done
 
 python=$(sed -nE 's/^FROM (python:[^ ]+).*/\1/p' services/camara-gateway/Dockerfile | head -1)
-for dir in services/*/; do
+for dir in services/*/ mocks/*/; do
   dir=${dir%/}
   grep -q "pip install" "$dir/Dockerfile" 2>/dev/null || continue
   service=$(basename "$dir")

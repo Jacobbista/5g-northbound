@@ -5,7 +5,9 @@ description = "CAMARA Device Location gateway (Retrieval v0.5, Verification v3)"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.142.2",
-    "uvicorn[standard]==0.54.0",
+    "uvicorn==0.54.0",
+    "uvloop==0.22.1",
+    "httptools==0.8.0",
     "httpx==0.28.1",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
