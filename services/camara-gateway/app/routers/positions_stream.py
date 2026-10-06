@@ -143,21 +143,21 @@ async def positions_stream(websocket: WebSocket):
     token, accept_proto = _ws_token(websocket.headers.get("sec-websocket-protocol", ""))
     claims = await validate_token(token)
     org = consumer_org(claims)
+    engine_url = _engine_ws_url()
+
+    # The handshake completes before any refusal: a close sent before accept
+    # reaches the client as an HTTP 403, and the close code is lost. The
+    # offered token scheme is echoed, since a browser fails a handshake whose
+    # answer selects none of the subprotocols it offered.
+    await websocket.accept(subprotocol=accept_proto)
     if claims is None:
-        # 4401 is a custom application-layer close code (4000-4999 range
-        # is reserved for app use by the WS spec). Browser EventSource-
-        # style clients see this as a clean close, not a network error.
+        # 4401: application-layer close code (4000-4999 are reserved for
+        # applications by RFC 6455).
         await websocket.close(code=4401, reason="unauthenticated")
         return
-
-    engine_url = _engine_ws_url()
     if not engine_url:
         await websocket.close(code=1011, reason="positioning_engine_url not configured")
         return
-
-    # Echo the offered subprotocol so a browser handshake using the token carrier
-    # completes; None (query-param path) accepts with no subprotocol.
-    await websocket.accept(subprotocol=accept_proto)
     log.info("positions_stream: client connected, upstream=%s", engine_url)
 
     try:

@@ -15,15 +15,19 @@ import { CAMARA_API_BASE } from "../config";
 //   {
 //     byDeviceId: { <positioningId>: { latitude, longitude, accuracy, timestamp, sources, strategy } },
 //     connected: bool,
+//     refused: bool, the gateway refused the token (close code 4401)
 //   }
 //
 // Connection lifecycle:
 //   - Opens on mount once a token is available.
 //   - Reconnects with exponential backoff capped at 8 s when the upstream
-//     closes (engine restart, network blip).
+//     closes (engine restart, network blip). The backoff resets on the first
+//     message, since the gateway completes the handshake before it refuses.
+//   - Stops on close code 4401 (the token was refused) until the token changes.
 //   - `paused` closes the socket and keeps the last payload visible.
 const RECONNECT_INITIAL_MS = 500;
 const RECONNECT_MAX_MS = 8000;
+const CLOSE_UNAUTHENTICATED = 4401;
 
 // The token carrier: a scheme marker the gateway echoes to accept the handshake.
 const WS_TOKEN_SCHEME = "bearer.jwt";
@@ -42,6 +46,7 @@ function buildWsUrl() {
 export function usePositionsStream(token, { paused = false } = {}) {
   const [byDeviceId, setByDeviceId] = useState({});
   const [connected, setConnected] = useState(false);
+  const [refused, setRefused] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const backoffRef = useRef(RECONNECT_INITIAL_MS);
@@ -57,6 +62,7 @@ export function usePositionsStream(token, { paused = false } = {}) {
     }
 
     let cancelled = false;
+    setRefused(false);
 
     const connect = () => {
       if (cancelled) return;
@@ -65,12 +71,12 @@ export function usePositionsStream(token, { paused = false } = {}) {
 
       ws.onopen = () => {
         if (cancelled) return;
-        backoffRef.current = RECONNECT_INITIAL_MS;
         setConnected(true);
       };
 
       ws.onmessage = (event) => {
         if (cancelled) return;
+        backoffRef.current = RECONNECT_INITIAL_MS;
         try {
           const payload = JSON.parse(event.data);
           if (!Array.isArray(payload)) return;
@@ -87,10 +93,14 @@ export function usePositionsStream(token, { paused = false } = {}) {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (cancelled) return;
         setConnected(false);
         wsRef.current = null;
+        if (event.code === CLOSE_UNAUTHENTICATED) {
+          setRefused(true);
+          return;
+        }
         const delay = backoffRef.current;
         backoffRef.current = Math.min(delay * 2, RECONNECT_MAX_MS);
         reconnectTimerRef.current = setTimeout(connect, delay);
@@ -130,5 +140,5 @@ export function usePositionsStream(token, { paused = false } = {}) {
     });
   }, []);
 
-  return { byDeviceId, connected, forget };
+  return { byDeviceId, connected, refused, forget };
 }

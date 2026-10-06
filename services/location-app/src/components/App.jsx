@@ -977,7 +977,7 @@ export function App() {
       setPlacementError(err.message);
     }
   };
-  const { byDeviceId, connected, forget } = usePositionsStream(token, { paused });
+  const { byDeviceId, connected, refused, forget } = usePositionsStream(token, { paused });
 
   // Index every registered asset against the live stream by its internal
   // positioningId (the WS payload key). Assets without a stream entry get
@@ -1133,7 +1133,11 @@ export function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
             style={dot(connected ? "#5dffb0" : "#7a8aab", connected)}
-            title={connected ? "Live position feed connected" : "Position feed disconnected - reconnecting"}
+            title={
+              connected ? "Live position feed connected"
+                : refused ? "Position feed refused: the token is not authorised for the stream"
+                : "Position feed disconnected - reconnecting"
+            }
           />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
             <h2 style={title}>Asset Location</h2>

@@ -77,13 +77,15 @@ def _served() -> set[tuple[str, str]]:
 
 
 def test_the_published_stream_rejects_a_connection_without_a_token(settings_env):
-    """The declaration found above is live: the stream answers, and without
-    a token closes with the profile's authentication code."""
+    """The declaration found above is live: the stream completes the handshake
+    and then closes with the profile's authentication code. A close before
+    the handshake would reach a real client as an HTTP 403 instead."""
     stream = yaml.safe_load((PROFILE / "asyncapi-stream.yaml").read_text())
     for channel in stream["channels"].values():
-        with TestClient(app) as client, pytest.raises(WebSocketDisconnect) as closed:
+        with TestClient(app) as client:
             with client.websocket_connect(channel["address"]) as ws:
-                ws.receive_text()
+                with pytest.raises(WebSocketDisconnect) as closed:
+                    ws.receive_text()
         assert closed.value.code == 4401, channel["address"]
 
 

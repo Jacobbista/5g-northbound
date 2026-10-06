@@ -30,7 +30,8 @@ third-party cookie gets a full-page redirect instead.
 The access token lives about five minutes. The application calls
 `updateToken(60)` periodically, which renews the token when less than 60 s
 remain, reloads the data and reconnects the stream with the new token. A failed
-renewal sends the user back to the login.
+renewal sends the user back to the login. A stream closed with `4401` is not
+reopened until the token changes.
 
 ## placement-editor
 
