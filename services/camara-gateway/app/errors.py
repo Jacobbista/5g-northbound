@@ -4,6 +4,8 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from .obs import correlator_var
+
 log = logging.getLogger(__name__)
 
 
@@ -17,10 +19,14 @@ class CamaraError(Exception):
 
 
 def _envelope(status: int, code: str, message: str, request: Request) -> JSONResponse:
-    # x-correlator is set uniformly (success and error) by the app middleware.
+    # The correlator rides every error too. The hop middleware sets it on the
+    # responses that return through it; an unhandled error is answered outside
+    # it, so the header is set here.
+    cid = correlator_var.get()
     return JSONResponse(
         status_code=status,
         content={"status": status, "code": code, "message": message},
+        headers={"x-correlator": cid} if cid else None,
     )
 
 

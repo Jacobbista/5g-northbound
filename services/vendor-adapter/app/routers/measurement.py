@@ -29,8 +29,10 @@ async def get_measurement(device_id: str, request: Request):
 
     cached = state.cache_get(device_id)
     if cached is not None:
+        request.state.cache = "hit"
         return cached
 
+    request.state.cache = "miss"
     payload = await vendor_client.fetch(schema, device_id)
     if payload is None:
         raise HTTPException(404, detail="no measurement")

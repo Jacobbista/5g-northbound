@@ -155,6 +155,42 @@ async def test_measurement_cached_within_ttl(
     assert route.call_count == 1
 
 
+@respx.mock
+async def test_the_hop_line_says_whether_the_vendor_was_called(
+    client, fresh_state, wittra_schema, wittra_sample_payload, monkeypatch, caplog
+):
+    """The vendor writes no hop line, so the adapter's line names a cache hit:
+    otherwise a hit and a vendor call differ only by their span."""
+    import json
+    import logging
+    from pathlib import Path
+
+    import jsonschema
+
+    hop_schema = json.loads(
+        (Path(__file__).resolve().parents[3] / "schema" / "hop-log.schema.json").read_text()
+    )
+    monkeypatch.setenv("WITTRA_ORG_ID", "orgA")
+    monkeypatch.setenv("WITTRA_API_KEY", "k")
+    monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
+    monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-vendor")
+    fresh_state.schema = wittra_schema
+    respx.get(
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
+    ).mock(return_value=httpx.Response(200, json=wittra_sample_payload))
+
+    with caplog.at_level(logging.INFO, logger="hop"):
+        for cid in ("c-1", "c-2"):
+            await client.get("/measurement/D001", headers={"x-correlator": cid})
+        await client.get("/health", headers={"x-correlator": "c-3"})
+    lines = {h["correlator"]: h for h in (json.loads(r.getMessage()) for r in caplog.records if r.name == "hop")}
+    for line in lines.values():
+        jsonschema.validate(line, hop_schema)
+    assert lines["c-1"]["cache"] == "miss"
+    assert lines["c-2"]["cache"] == "hit"
+    assert "cache" not in lines["c-3"]
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_measurement_404_when_vendor_has_no_fix(
@@ -224,3 +260,33 @@ async def test_a_record_without_its_fix_time_is_no_fix_and_is_counted(
     r = await client.get("/measurement/D001")
     assert r.status_code == 404
     assert fresh_state.observed.as_dict()["noFix"] == {"timestamp": 1}
+
+
+@respx.mock
+async def test_a_request_that_raises_still_leaves_its_hop_line(
+    fresh_state, wittra_schema, wittra_sample_payload, monkeypatch, caplog
+):
+    """A crash is answered 500 and logged, with the cache outcome it reached."""
+    import json
+    import logging
+
+    monkeypatch.setenv("WITTRA_ORG_ID", "orgA")
+    monkeypatch.setenv("WITTRA_API_KEY", "k")
+    monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
+    monkeypatch.setenv("WITTRA_BASE_URL", "http://mock-vendor")
+    fresh_state.schema = wittra_schema
+    respx.get(
+        "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
+    ).mock(return_value=httpx.Response(200, json=wittra_sample_payload))
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("mapper bug")
+
+    monkeypatch.setattr("app.routers.measurement.map_measurement", broken)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    with caplog.at_level(logging.INFO, logger="hop"):
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            r = await c.get("/measurement/D001", headers={"x-correlator": "c-500"})
+    assert r.status_code == 500
+    lines = [json.loads(rec.getMessage()) for rec in caplog.records if rec.name == "hop"]
+    assert [(h["correlator"], h["status"], h["cache"]) for h in lines] == [("c-500", 500, "miss")]

@@ -23,7 +23,9 @@ camara-gateway, positioning-engine, wifi-adapter, vendor-adapter and
 synthetic-adapter each write one line per request, at `INFO` on the `hop`
 logger, as one JSON object. The schema is
 [`schema/hop-log.schema.json`](https://github.com/Jacobbista/5g-northbound/blob/main/schema/hop-log.schema.json),
-also served by the gateway at `GET /contracts/hop-log.schema.json`.
+also served by the gateway at `GET /contracts/hop-log.schema.json`. A request
+that fails with an unhandled error, or is aborted before it answers, still
+writes its line, with status `500`.
 
 ```json
 {
@@ -47,6 +49,7 @@ also served by the gateway at `GET /contracts/hop-log.schema.json`.
 | `status` | the HTTP status returned |
 | `t_receive`, `t_emit` | epoch seconds when the request arrived and when the response left |
 | `span_ms` | `t_emit - t_receive` in milliseconds, including the time spent waiting on downstream hops |
+| `cache` | on the vendor-adapter's `GET /measurement/{id}` only: `hit` when it answered from its cache, `miss` when it called the vendor |
 
 ## Aggregation
 
@@ -56,10 +59,14 @@ Group the lines by `correlator` and order them by `t_receive`:
 - **Own time of a hop**: its `span_ms` minus the `span_ms` of the hops it
   called.
 - **Vendor cloud**: the vendor writes no line, so its time is inside the
-  vendor-adapter's own time. A comparison without the network to the vendor
-  uses `make demo`, where the vendor-adapter calls the local `mock-vendor`.
+  vendor-adapter's own time on a line with `cache: miss`. A comparison without
+  the network to the vendor uses `make demo`, where the vendor-adapter calls
+  the local `mock-vendor`.
 - **Caches**: the gateway reuses a position fetched less than
   `LOCATION_CACHE_TTL_S` ago, and the vendor-adapter a vendor response younger
-  than the schema's `cacheTtl`. A hit makes no downstream call and has a short
-  span. A request with `maxAge: 0` always reaches the engine, which is the case
-  to measure for the latency of the whole path.
+  than the schema's `cacheTtl`. A gateway hit leaves no engine line for its
+  correlator. A vendor-adapter hit carries `cache: hit`. A request with
+  `maxAge: 0` always reaches the engine. It reaches the vendor only when the
+  vendor-adapter's cache holds no response for the device, so other consumers
+  that poll the same device (the stream, the location-app detail panel) keep
+  it warm.

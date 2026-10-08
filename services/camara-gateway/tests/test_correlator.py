@@ -76,3 +76,17 @@ async def test_hop_line_matches_schema(client, auth_headers, caplog):
     for line in hops:
         jsonschema.validate(line, _HOP_SCHEMA)  # emitted line honours the published contract
     assert any(h["correlator"] == "corr-schema" for h in hops)
+
+
+async def test_an_unhandled_error_carries_the_correlator(app, respx_mock, auth_headers, monkeypatch):
+    """The client can join a 500 to its hop lines, including a minted correlator."""
+    async def broken(*args, **kwargs):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr("app.routers.retrieval.get_fused_position", broken)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        sent = await c.post(RETRIEVE, json={"device": ASSET}, headers={**auth_headers, "x-correlator": "c-err"})
+        minted = await c.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert (sent.status_code, sent.headers.get("x-correlator")) == (500, "c-err")
+    assert minted.status_code == 500 and minted.headers.get("x-correlator")
