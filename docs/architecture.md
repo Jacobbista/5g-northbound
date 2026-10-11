@@ -53,7 +53,7 @@ registered adapter and fuses the answers. An adapter answers `404` for a device
 it does not serve. See [adapter registry](adapter-registry.md).
 
 **Fusion at two levels.** The engine fuses the measurements of one positioning
-id, weighting each by `confidence / accuracy`. The gateway fuses the positions
+id, weighting each by `confidence / accuracy²`. The gateway fuses the positions
 of an asset's capabilities by inverse variance. A capability without a position
 is skipped, so an asset stays located while one of its sources answers. See
 [fusion strategies](fusion-strategies.md).

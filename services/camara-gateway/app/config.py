@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     keycloak_realm: str = "5g-testbed"
     # Gateway's own confidential-client secret. MVP does not call Keycloak itself; never log it.
     camara_client_secret: str = "changeme"
-    # Empty -> resolve position with the built-in mock
+    # Empty -> every position request answers 503 UNAVAILABLE
     positioning_engine_url: str = ""
     # Optional: the wifi-adapter adapter, proxied for the demo's anchor
     # panel to read real calibration params (tx_power ref + path-loss n). Empty

@@ -84,7 +84,7 @@ class _State:
     # they move together: an obstructed or badly-conditioned fix is both less
     # precise AND less trusted. Drawing them independently would emit pairs no
     # real source produces, and the fusion weight is literally
-    # `confidence / accuracy`, so the pair is exactly what matters.
+    # `confidence / accuracy²`, so the pair is exactly what matters.
     quality: float = 1.0
     degraded_until: float = 0.0
     # Stays put until this time. Set on placement so the device is still where
