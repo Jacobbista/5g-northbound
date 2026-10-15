@@ -56,12 +56,10 @@ def install_hop_logging(
                     "t_emit": round(t_emit, 6),
                     "span_ms": round((t_emit - t_receive) * 1000, 3),
                 }
-                # Set by a route that answers from a cache or from the source
-                # behind it (`hit` or `miss`), so a hit is told apart without a
-                # downstream line to join on.
-                cache = getattr(request.state, "cache", None)
-                if cache is not None:
-                    line["cache"] = cache
+                # Set by a route whose source writes no line of its own: whether
+                # it answered from its cache, and how its call to the source went
+                # (`cache`, `connection`, `upstream_ms` in hop-log.schema.json).
+                line.update(getattr(request.state, "hop", None) or {})
                 _hop_log.info(json.dumps(line))
         if entry:
             response.headers["x-correlator"] = cid

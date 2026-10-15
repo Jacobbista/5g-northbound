@@ -31,6 +31,12 @@ log = logging.getLogger(__name__)
 # removes only itself.
 INSTANCE = uuid.uuid4().hex
 
+# Capabilities the running adapter derives from its own configuration, such as
+# a vendor adapter's responseTimeout from its schema. They sit between the
+# baked contract and the ADAPTER_CAPABILITIES override, and every heartbeat
+# announces their current value.
+derived: dict = {}
+
 # Baked declarative source of truth. First existing path wins (image vs repo).
 _CONTRACT_PATHS = (
     "/app/adapter.contract.yaml",
@@ -75,6 +81,7 @@ def _caps() -> dict:
     ADAPTER_CAPABILITIES (JSON) overrides/extends it. `make positioning-check`
     validates the two agree."""
     caps = _contract_caps()
+    caps.update(derived)
     try:
         override = json.loads(os.environ.get("ADAPTER_CAPABILITIES") or "{}")
     except ValueError:
@@ -109,13 +116,13 @@ async def heartbeat_loop() -> None:
             "(POSITIONING_ENGINE_URL / ADAPTER_NAME / ADAPTER_BASE_URL not all set)"
         )
         return
-    payload = {
-        "name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"],
-        "instance": INSTANCE, "capabilities": c["capabilities"],
-    }
     url = f"{c['engine_url']}/adapters"
     first = True
     while True:
+        payload = {
+            "name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"],
+            "instance": INSTANCE, "capabilities": _caps(),
+        }
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 await client.post(url, json=payload)

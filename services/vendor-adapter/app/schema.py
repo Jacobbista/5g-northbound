@@ -389,7 +389,10 @@ class Schema(BaseModel):
     pathVars: dict[str, EnvRef] = Field(default_factory=dict)
     auth: Auth
     cacheTtl: float = Field(default=5.0, json_schema_extra={"x-unit": "s"})
-    requestTimeout: float = Field(default=5.0, json_schema_extra={"x-unit": "s"})
+    # Budget for one vendor call. The adapter announces it, plus its own time,
+    # as responseTimeout, which the engine waits; it stays below the gateway's
+    # 5 s wait for the engine.
+    requestTimeout: float = Field(default=2.5, gt=0, le=4.0, json_schema_extra={"x-unit": "s"})
     mapping: Mapping
     discover: Optional[DiscoverBlock] = None
     diagnostics: Optional[DiagnosticsBlock] = None

@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from ..config import get_settings
 from ..declaration import Observed, check
+from .. import register
 from ..register import declared_capabilities
 from ..schema import Schema
 from ..store import save_schema
@@ -59,6 +60,7 @@ async def put_schema(payload: dict, request: Request):
     store = request.app.state.store
     store.schema = schema
     store.schema_source = "runtime"
+    register.derive_from_schema(schema)
     store.declaration_errors = []
     store.observed = Observed()
     store.cache_clear()

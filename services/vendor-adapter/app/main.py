@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     elif loaded:
         app.state.store.schema = loaded
         app.state.store.schema_source = "mounted"
+        register.derive_from_schema(loaded)
         log.info("loaded schema for vendor=%s from %s", loaded.vendor, settings.schema_file)
     if not loaded:
         log.warning(

@@ -209,7 +209,8 @@ request or generated.
 | 422 | `LOCATION_{RETRIEVAL,VERIFICATION}.UNABLE_TO_FULFILL_MAX_AGE` | no position recent enough for `maxAge` |
 | 422 | `LOCATION_RETRIEVAL.UNABLE_TO_FULFILL_MAX_SURFACE` | the circle is larger than `maxSurface` |
 | 502 | `BAD_GATEWAY` | the engine answered with an error, or with a position without a valid accuracy |
-| 503 | `UNAVAILABLE` | the engine is unreachable or not configured, the venue has no georeference, or the asset's source has no registered adapter, as while that adapter restarts |
+| 503 | `UNAVAILABLE` | the engine is unreachable or not configured, the venue has no georeference, the asset's source has no registered adapter, as while that adapter restarts, or its adapter failed |
+| 504 | `TIMEOUT` | the asset's source did not answer within its declared budget |
 
 `400 INVALID_ARGUMENT` covers out-of-range values too. `OUT_OF_RANGE` is not
 used.

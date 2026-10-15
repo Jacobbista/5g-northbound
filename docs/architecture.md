@@ -61,16 +61,24 @@ of an asset's capabilities by inverse variance. A capability without a position
 is skipped, so an asset stays located while one of its sources answers. See
 [fusion strategies](fusion-strategies.md).
 
-**Failures.** The gateway retries the engine once after 200 ms on a `5xx` or a
-network error. An engine `404` becomes `422 UNABLE_TO_LOCATE`, a persistent
-`5xx` becomes `502`, an unreachable engine `503`. Positions are cached per
+**Failures.** Each hop waits less than its caller: the vendor-adapter waits its
+schema's `requestTimeout` for the vendor, the engine waits the adapter's
+declared `responseTimeout`, and the gateway waits 5 s for the engine. The
+engine answers `404` only when the source answered without a fix. An adapter
+that does not answer within its budget gives `504`, and one that fails
+otherwise gives `503`. The gateway retries the engine once after 200 ms on a
+`5xx` other than `504`, or on a network error. An engine `404` becomes
+`422 UNABLE_TO_LOCATE`, `504` becomes `504 TIMEOUT`, `503` and an unreachable
+engine become `503 UNAVAILABLE`, any other persistent `5xx` becomes `502`. Positions are cached per
 positioning id for `LOCATION_CACHE_TTL_S` (5 s by default).
 
 ## The position stream
 
 The engine broadcasts the positions it knows every `WEBSOCKET_INTERVAL_MS`
 (500 ms by default) on `/ws/positions`, keyed by positioning id. It learns the
-ids to broadcast from the adapters that serve `GET /devices`. The gateway
+ids to broadcast from the adapters that serve `GET /devices`. A tick waits at
+most one interval: a device whose source is slower joins the frame of the tick
+in which its answer arrives, without holding back the others. The gateway
 accepts clients on `/positions/stream`, opens one engine connection per client,
 and turns each batch into asset events: it groups the ids by asset, fuses
 multi-capability assets, drops ids with no asset and assets outside the

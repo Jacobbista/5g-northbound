@@ -6,7 +6,7 @@ import httpx
 
 from pydantic import ValidationError
 
-from .base import Adapter, Measurement
+from .base import Adapter, AdapterTimeout, AdapterUnavailable, Measurement
 from ..wire import DevicesBody, MeasurementBody
 from ..obs import corr_headers
 
@@ -42,6 +42,9 @@ class HttpAdapter(Adapter):
     ):
         self.name = name
         self.base_url = base_url.rstrip("/")
+        # The budget for one measurement request. The registry sets it from the
+        # adapter's declared responseTimeout and refreshes it on heartbeats.
+        self.timeout = timeout
         self._client = httpx.AsyncClient(timeout=timeout, headers=headers or {})
         self._clock = clock or time.monotonic
         self._fail_count = 0
@@ -86,13 +89,19 @@ class HttpAdapter(Adapter):
 
     async def get_measurement(self, device_id: str) -> Optional[Measurement]:
         if self._in_cooldown():
-            return None
+            raise AdapterUnavailable(f"adapter {self.name} is in cooldown")
         try:
-            r = await self._client.get(f"{self.base_url}/measurement/{device_id}", headers=corr_headers())
+            r = await self._client.get(
+                f"{self.base_url}/measurement/{device_id}", headers=corr_headers(), timeout=self.timeout,
+            )
+        except httpx.TimeoutException as exc:
+            log.warning("adapter %s did not answer within %.1fs", self.base_url, self.timeout)
+            self._record_failure()
+            raise AdapterTimeout(f"adapter {self.name} did not answer within {self.timeout:g}s") from exc
         except httpx.HTTPError as exc:
             log.warning("adapter %s unreachable: %s", self.base_url, exc)
             self._record_failure()
-            return None
+            raise AdapterUnavailable(f"adapter {self.name} is unreachable") from exc
         if r.status_code == 404:
             # 404 = adapter is healthy but has no fix yet; do not penalise.
             return None
@@ -100,13 +109,16 @@ class HttpAdapter(Adapter):
             log.warning("adapter %s -> %d", self.base_url, r.status_code)
             if r.status_code >= 500:
                 self._record_failure()
-            return None
+            if r.status_code == 504:
+                # The adapter's own source did not answer within its budget.
+                raise AdapterTimeout(f"the source behind adapter {self.name} did not answer in time")
+            raise AdapterUnavailable(f"adapter {self.name} answered {r.status_code}")
         try:
             body = MeasurementBody.model_validate(r.json())
         except (ValueError, ValidationError) as exc:
             log.warning("adapter %s returned malformed body: %s", self.name, exc)
             self._record_failure()
-            return None
+            raise AdapterUnavailable(f"adapter {self.name} answered a malformed measurement") from exc
         measurement = Measurement(
             source=body.source or self.name,
             accuracy=body.accuracy,
@@ -137,7 +149,7 @@ class HttpAdapter(Adapter):
         if self._in_cooldown():
             return None
         try:
-            r = await self._client.get(f"{self.base_url}/devices", headers=corr_headers())
+            r = await self._client.get(f"{self.base_url}/devices", headers=corr_headers(), timeout=self.timeout)
         except httpx.HTTPError as exc:
             log.warning("adapter %s /devices unreachable: %s", self.base_url, exc)
             return None

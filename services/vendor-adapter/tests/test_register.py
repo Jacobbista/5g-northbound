@@ -32,3 +32,14 @@ async def test_announcement_and_deregistration_name_this_instance(monkeypatch):
 
     assert json.loads(post.calls.last.request.content)["instance"] == register.INSTANCE
     assert delete.calls.last.request.url.params["instance"] == register.INSTANCE
+
+
+def test_the_announced_budget_covers_the_vendor_call(wittra_schema, monkeypatch):
+    """The engine waits as long as the adapter may wait for the vendor."""
+    monkeypatch.delenv("ADAPTER_CAPABILITIES", raising=False)
+    register.derive_from_schema(wittra_schema)
+    try:
+        assert register._caps()["responseTimeout"] == wittra_schema.requestTimeout + 0.5
+    finally:
+        register.derive_from_schema(None)
+    assert "responseTimeout" not in register._caps()

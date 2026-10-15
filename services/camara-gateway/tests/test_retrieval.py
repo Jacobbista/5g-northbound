@@ -446,3 +446,21 @@ async def test_retrieve_502_when_the_engine_sends_no_valid_accuracy(client, resp
     respx_mock.get("http://engine.test/position/wifi-asset-01").mock(return_value=httpx.Response(200, json=body))
     resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
     assert resp.status_code == 502
+
+
+async def test_a_source_that_does_not_answer_in_time_is_a_timeout_not_an_unlocatable_asset(
+    client, respx_mock, auth_headers, monkeypatch
+):
+    """The engine waited the source's whole budget. The gateway answers 504
+    TIMEOUT once, without a second wait."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    route = respx_mock.get("http://engine.test/position/wifi-asset-01").mock(
+        return_value=httpx.Response(504, json={"detail": "adapter wifi did not answer within 1s"})
+    )
+    resp = await client.post(RETRIEVE, json={"device": ASSET}, headers=auth_headers)
+    assert resp.status_code == 504
+    assert resp.json()["code"] == "TIMEOUT"
+    assert route.call_count == 1

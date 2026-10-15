@@ -49,7 +49,19 @@ class Measurement:
     diagnostics: dict = field(default_factory=dict)
 
 
+class AdapterUnavailable(Exception):
+    """The adapter gave no usable answer: unreachable, an error status, a
+    malformed body, or in cooldown after repeated failures. Not a missing fix:
+    nothing is known about the device."""
+
+
+class AdapterTimeout(AdapterUnavailable):
+    """The adapter did not answer within its budget."""
+
+
 class Adapter(ABC):
     @abstractmethod
     async def get_measurement(self, device_id: str) -> Optional[Measurement]:
-        """Return latest measurement or None if adapter unavailable."""
+        """The latest measurement, or None when the source has no fix for the
+        device. Raises AdapterUnavailable when the adapter gives no usable
+        answer."""

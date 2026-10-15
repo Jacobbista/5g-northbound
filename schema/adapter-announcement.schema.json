@@ -100,6 +100,21 @@
           "title": "Nominalverticalaccuracy",
           "x-unit": "m"
         },
+        "responseTimeout": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest time the adapter takes to answer a measurement request, its own call to its source included. The engine waits this long, unless ADAPTER_<NAME>_TIMEOUT overrides it, and answers 504 when the adapter takes longer.",
+          "title": "Responsetimeout",
+          "x-unit": "s"
+        },
         "calibration": {
           "default": false,
           "description": "Serves the calibration tool.",

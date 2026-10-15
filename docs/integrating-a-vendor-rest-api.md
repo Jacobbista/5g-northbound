@@ -31,7 +31,7 @@ worked example is the Wittra UWB cloud,
 | `pathVars` | each name taken from an environment variable |
 | `auth` | `none`, `basic`, `bearer` or `header`, with credentials named by environment variable |
 | `cacheTtl` | seconds a vendor response is reused, since the engine polls about once a second |
-| `requestTimeout` | seconds before a vendor call is abandoned |
+| `requestTimeout` | seconds before a vendor call is abandoned: `2.5` by default, at most `4`. The adapter announces it plus 0.5 s as its `responseTimeout`, so the engine waits for the vendor call and the gateway's 5 s wait for the engine covers both |
 | `mapping` | where each measurement field is in the vendor's response |
 | `discover` | optional: the vendor's device list |
 | `diagnostics` | optional: extra device telemetry, see [profile extensions](profile-extensions.md) |
@@ -206,15 +206,17 @@ curl -s -X POST http://localhost:8087/location-retrieval/v0.5/retrieve \
 
 ## Failure behaviour
 
-| Situation | `GET /measurement` | Effect |
-|-----------|--------------------|--------|
-| no schema loaded | `404` | the engine skips the source |
-| a variable the schema names is unset | `404`, logged | the engine skips the source |
-| the vendor answers `404`, an error, or is unreachable | `404`, logged | the engine skips the source without backing off |
-| the record has no position or no fix time, or a confidence outside 0..1 | `404`, counted under `noFix` | the engine skips the source |
+| Situation | `GET /measurement` | CAMARA answer, with no other source |
+|-----------|--------------------|-------------------------------------|
+| the vendor answers `404`: it has no record of the device | `404` | `422 UNABLE_TO_LOCATE` |
+| the record has no position or no fix time, or a confidence outside 0..1 | `404`, counted under `noFix` | `422 UNABLE_TO_LOCATE` |
+| the vendor does not answer within `requestTimeout` | `504`, logged | `504 TIMEOUT` |
+| the vendor answers an error status, or a body that is not JSON | `502`, logged | `503 UNAVAILABLE` |
+| the vendor is unreachable, a variable the schema names is unset, or no schema is loaded | `503`, logged | `503 UNAVAILABLE` |
 | a response within `cacheTtl` | the cached measurement | no vendor call |
 
-An asset with no position from any source answers
-`422 LOCATION_RETRIEVAL.UNABLE_TO_LOCATE`. `GET /discover` answers `404` when
+A `5xx` counts toward the engine's cooldown of the adapter, a `404` does not.
+`422 UNABLE_TO_LOCATE` therefore means the source answered and has no
+position for the asset. `GET /discover` answers `404` when
 the schema has no `discover` block and `503` when the vendor list cannot be
 read.

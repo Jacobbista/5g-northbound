@@ -65,7 +65,7 @@ async def test_fetch_404_returns_none(wittra_schema, monkeypatch):
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_non_200_returns_none(wittra_schema, monkeypatch):
+async def test_a_vendor_error_is_not_a_missing_fix(wittra_schema, monkeypatch):
     monkeypatch.setenv("WITTRA_ORG_ID", "orgA")
     monkeypatch.setenv("WITTRA_API_KEY", "k")
     monkeypatch.setenv("WITTRA_PROJECT_ID", "prj1")
@@ -74,13 +74,64 @@ async def test_fetch_non_200_returns_none(wittra_schema, monkeypatch):
     respx.get(
         "http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001"
     ).mock(return_value=httpx.Response(500, text="boom"))
-    assert await fetch(wittra_schema, "D001") is None
+    from app.client import VendorError
+
+    with pytest.raises(VendorError):
+        await fetch(wittra_schema, "D001")
 
 
 @pytest.mark.asyncio
-async def test_fetch_missing_env_returns_none_without_request(wittra_schema, monkeypatch):
+async def test_fetch_missing_env_is_unavailable_without_request(wittra_schema, monkeypatch):
     monkeypatch.delenv("WITTRA_ORG_ID", raising=False)
     monkeypatch.delenv("WITTRA_API_KEY", raising=False)
     monkeypatch.delenv("WITTRA_PROJECT_ID", raising=False)
     # No respx mock - if any HTTP call is attempted httpx will raise.
-    assert await fetch(wittra_schema, "D001") is None
+    from app.client import VendorUnavailable
+
+    with pytest.raises(VendorUnavailable):
+        await fetch(wittra_schema, "D001")
+
+
+async def test_the_trace_records_a_new_connection_and_the_vendors_time():
+    from app.client import _tracer
+
+    record: dict = {}
+    trace = _tracer(record)
+    for name in ("connection.connect_tcp.started", "connection.connect_tcp.complete",
+                 "http11.send_request_headers.started", "http11.receive_response_headers.complete"):
+        await trace(name, {})
+    assert record["connection"] == "new" and record["upstream_ms"] >= 0
+
+
+async def test_the_trace_records_a_reused_connection():
+    from app.client import _tracer
+
+    record: dict = {}
+    trace = _tracer(record)
+    await trace("http11.send_request_headers.started", {})
+    await trace("http11.receive_response_headers.complete", {})
+    assert record["connection"] == "reused"
+
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_vendor_slower_than_its_budget_is_a_timeout(wittra_schema, monkeypatch):
+    """The whole call is bounded, so the adapter answers before the engine's
+    budget, which is the requestTimeout plus the adapter's own time."""
+    import asyncio
+
+    from app.client import VendorTimeout
+
+    for var, val in (("WITTRA_ORG_ID", "orgA"), ("WITTRA_API_KEY", "k"),
+                     ("WITTRA_PROJECT_ID", "prj1"), ("WITTRA_BASE_URL", "http://mock-vendor")):
+        monkeypatch.setenv(var, val)
+
+    async def slow(request):
+        await asyncio.sleep(1.0)
+        return httpx.Response(200, json={})
+
+    respx.get("http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001").mock(side_effect=slow)
+    quick = wittra_schema.model_copy(update={"requestTimeout": 0.1})
+    with pytest.raises(VendorTimeout):
+        await fetch(quick, "D001")

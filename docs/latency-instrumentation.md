@@ -52,6 +52,8 @@ writes its line, with status `500`.
 | `t_receive`, `t_emit` | epoch seconds when the request arrived and when the response left |
 | `span_ms` | `t_emit - t_receive` in milliseconds, including the time spent waiting on downstream hops |
 | `cache` | on the vendor-adapter's `GET /measurement/{id}` only: `hit` when it answered from its cache, `miss` when it called the vendor |
+| `connection` | with `cache: miss`: `new` when the call opened a connection (TCP and TLS setup inside the span), `reused` when it used a kept one |
+| `upstream_ms` | with `cache: miss`: milliseconds from the request sent to the vendor until its response headers arrived, the vendor's own time plus the round trip |
 
 ## Aggregation
 

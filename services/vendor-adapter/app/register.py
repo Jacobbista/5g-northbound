@@ -31,6 +31,12 @@ log = logging.getLogger(__name__)
 # removes only itself.
 INSTANCE = uuid.uuid4().hex
 
+# Capabilities the running adapter derives from its own configuration, such as
+# a vendor adapter's responseTimeout from its schema. They sit between the
+# baked contract and the ADAPTER_CAPABILITIES override, and every heartbeat
+# announces their current value.
+derived: dict = {}
+
 # Baked declarative source of truth. First existing path wins (image vs repo).
 _CONTRACT_PATHS = (
     "/app/adapter.contract.yaml",
@@ -76,6 +82,7 @@ def _caps() -> dict:
     deployment that tweaks without a rebuild. `make positioning-check`
     validates the two agree."""
     caps = _contract_caps()
+    caps.update(derived)
     try:
         override = json.loads(os.environ.get("ADAPTER_CAPABILITIES") or "{}")
     except ValueError:
@@ -83,6 +90,21 @@ def _caps() -> dict:
     if isinstance(override, dict):
         caps.update(override)
     return caps
+
+
+# Time the adapter spends on a measurement beyond the vendor call: the cache,
+# the mapping, the response.
+_OWN_TIME_S = 0.5
+
+
+def derive_from_schema(schema) -> None:
+    """Announce the budget the engine should give this adapter: the schema's
+    vendor timeout plus the adapter's own time. With it, the engine waits as
+    long as the adapter may wait for the vendor, and no longer."""
+    if schema is None:
+        derived.pop("responseTimeout", None)
+    else:
+        derived["responseTimeout"] = round(schema.requestTimeout + _OWN_TIME_S, 3)
 
 
 def declared_capabilities() -> dict:
@@ -115,13 +137,13 @@ async def heartbeat_loop() -> None:
             "(POSITIONING_ENGINE_URL / ADAPTER_NAME / ADAPTER_BASE_URL not all set)"
         )
         return
-    payload = {
-        "name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"],
-        "instance": INSTANCE, "capabilities": c["capabilities"],
-    }
     url = f"{c['engine_url']}/adapters"
     first = True
     while True:
+        payload = {
+            "name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"],
+            "instance": INSTANCE, "capabilities": _caps(),
+        }
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 await client.post(url, json=payload)

@@ -139,7 +139,10 @@ async def _engine_get(path: str, *, timeout: float = _ENGINE_REQUEST_TIMEOUT_S) 
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as exc:
-            if 500 <= exc.response.status_code < 600 and attempt + 1 < _RETRY_ATTEMPTS:
+            # A 504 is not retried: the engine already waited the source's whole
+            # budget, and a second wait would double it.
+            status = exc.response.status_code
+            if 500 <= status < 600 and status != 504 and attempt + 1 < _RETRY_ATTEMPTS:
                 last_exc = exc
                 log.info(
                     "engine %s -> %d, retrying once after %.2fs",
@@ -219,8 +222,12 @@ async def _fetch_position(device_id: str, source: str | None, error_ns: str) -> 
             ) from exc
         if exc.response.status_code == 503:
             # The engine is up and says it cannot serve, for example a venue
-            # without a georeference.
+            # without a georeference, or a source that is not registered or
+            # failed.
             raise CamaraError(503, "UNAVAILABLE", "Position source unavailable.") from exc
+        if exc.response.status_code == 504:
+            # The source did not answer within its budget.
+            raise CamaraError(504, "TIMEOUT", "The position source did not answer in time.") from exc
         log.warning("engine HTTP error %s for %s", exc.response.status_code, device_id)
         raise CamaraError(502, "BAD_GATEWAY", "Position source returned an error.") from exc
     except httpx.HTTPError as exc:

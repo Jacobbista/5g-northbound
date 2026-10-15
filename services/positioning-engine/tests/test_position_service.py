@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.adapters.base import Adapter, Measurement
+from app.adapters.base import Adapter, AdapterTimeout, AdapterUnavailable, Measurement
 from app.fusion.registry import get_strategy
-from app.services.position_service import PositionService, SourceNotRegistered
+from app.services.position_service import PositionService, SourceNotRegistered, SourceTimeout, SourceUnavailable
 
 
 class _StaticAdapter(Adapter):
@@ -339,3 +339,37 @@ async def test_a_fix_with_zero_confidence_takes_no_part(floor_plan):
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
     assert await alone.get_position("dev1") is None
+
+
+class _Failing(Adapter):
+    def __init__(self, error: Exception):
+        self._error = error
+
+    async def get_measurement(self, device_id: str):
+        raise self._error
+
+
+def _service(adapters, floor_plan):
+    return PositionService(
+        adapters=adapters, floor_plan=floor_plan, device_map={},
+        primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error, raised", [
+    (AdapterTimeout("slow"), SourceTimeout),
+    (AdapterUnavailable("down"), SourceUnavailable),
+])
+async def test_a_source_that_fails_leaves_the_position_unknown_not_absent(floor_plan, error, raised):
+    svc = _service({"a": _Failing(error)}, floor_plan)
+    with pytest.raises(raised):
+        await svc.get_position("dev1", source="a")
+
+
+@pytest.mark.asyncio
+async def test_a_failing_source_does_not_hide_another_sources_fix(floor_plan):
+    ok = _StaticAdapter(Measurement(source="b", x=2.0, y=2.0, accuracy=1.0, confidence=1.0, frame="venue"))
+    svc = _service({"a": _Failing(AdapterTimeout("slow")), "b": ok}, floor_plan)
+    result = await svc.get_position("dev1")
+    assert result.primary.fused.sources == ["b"]

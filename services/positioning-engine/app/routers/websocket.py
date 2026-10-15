@@ -87,41 +87,75 @@ async def broadcast_loop(app):
     # /devices polling must not run at the broadcast rate.
     targets: dict[str, Optional[str]] = {}
     last_discovery = -discovery_interval  # force discovery on the first tick
+    # One position request in flight per device. A tick waits at most one
+    # interval, sends what has arrived, and leaves a slow request running: a
+    # source that takes its whole budget delays only its own devices, which
+    # join the frame of the tick in which their answer arrives.
+    inflight: dict[str, asyncio.Task] = {}
+    discovery: Optional[asyncio.Task] = None
 
-    while True:
-        await asyncio.sleep(interval)
-        if not manager.connections:
-            continue
+    def _finished(did: str) -> Optional[object]:
+        """Collect a finished request, retrieving its outcome."""
+        task = inflight.pop(did)
+        if task.cancelled() or task.exception() is not None:
+            return None
+        return task.result()
 
-        now = time.monotonic()
-        if now - last_discovery >= discovery_interval:
-            discovered = await resolve_broadcast_targets(app.state.registry)
-            targets = discovered or {sid: None for sid in seed_ids}
-            last_discovery = now
+    loop = asyncio.get_running_loop()
+    next_tick = loop.time()
+    try:
+        while True:
+            # Ticks keep one interval apart, however long the previous one
+            # waited for answers.
+            next_tick = max(next_tick + interval, loop.time())
+            await asyncio.sleep(next_tick - loop.time())
+            if not manager.connections:
+                # Nobody listens: an answer that arrives now would be stale by
+                # the time a client connects.
+                for did in [d for d, t in inflight.items() if t.done()]:
+                    _finished(did)
+                continue
 
-        svc = app.state.position_service
-        origin = app.state.floor_plan.gps_origin
-        if origin is None:
-            # No georeference, no WGS84 position to broadcast.
-            continue
-        ids = list(targets)
-        results = await asyncio.gather(
-            *[svc.get_position(did, targets[did]) for did in ids],
-            return_exceptions=True,
-        )
+            # Discovery asks every adapter's /devices, which a vendor adapter
+            # answers by calling its cloud. It runs beside the ticks, and the
+            # ticks use the targets it last found.
+            now = time.monotonic()
+            if discovery is not None and discovery.done():
+                if not discovery.cancelled() and discovery.exception() is None:
+                    targets = discovery.result() or {sid: None for sid in seed_ids}
+                discovery = None
+            if discovery is None and now - last_discovery >= discovery_interval:
+                discovery = asyncio.create_task(resolve_broadcast_targets(app.state.registry))
+                last_discovery = now
 
-        payload_items = [
-            build_payload_item(did, res, origin)
-            for did, res in zip(ids, results)
-            if not isinstance(res, Exception) and res is not None
-        ]
-        payload = json.dumps(payload_items)
+            svc = app.state.position_service
+            origin = app.state.floor_plan.gps_origin
+            if origin is None:
+                # No georeference, no WGS84 position to broadcast.
+                continue
+            for did, source in targets.items():
+                if did not in inflight:
+                    inflight[did] = asyncio.create_task(svc.get_position(did, source))
+            if inflight:
+                # Wait for answers until the next tick is due, not longer.
+                await asyncio.wait(list(inflight.values()), timeout=max(0.0, next_tick + interval - loop.time()))
 
-        dead: set[WebSocket] = set()
-        for ws in list(manager.connections):
-            try:
-                await ws.send_text(payload)
-            except Exception:
-                dead.add(ws)
-        for ws in dead:
-            manager.disconnect(ws)
+            payload_items = []
+            for did in [d for d, t in inflight.items() if t.done()]:
+                res = _finished(did)
+                if res is not None and did in targets:
+                    payload_items.append(build_payload_item(did, res, origin))
+            payload = json.dumps(payload_items)
+
+            dead: set[WebSocket] = set()
+            for ws in list(manager.connections):
+                try:
+                    await ws.send_text(payload)
+                except Exception:
+                    dead.add(ws)
+            for ws in dead:
+                manager.disconnect(ws)
+    finally:
+        for task in [*inflight.values(), *([discovery] if discovery is not None else [])]:
+            task.cancel()
+

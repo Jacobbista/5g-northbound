@@ -8,7 +8,7 @@ from typing import Callable, Optional
 from fastapi import Request
 
 from ..accuracy_classes import nominal_for_class
-from ..adapters.base import Adapter, Measurement
+from ..adapters.base import Adapter, AdapterTimeout, AdapterUnavailable, Measurement
 from ..fusion.base import FusedPosition, FusionStrategy
 from ..models import FloorPlan
 from .geo import gps_to_local, room_to_venue
@@ -44,7 +44,16 @@ def is_current(established: Optional[float], caps: dict, now: float) -> bool:
     return False
 
 
-class SourceNotRegistered(Exception):
+class SourceUnavailable(Exception):
+    """No position, and the reason is the source, not the device: an adapter
+    that should have answered gave no usable answer."""
+
+
+class SourceTimeout(SourceUnavailable):
+    """An adapter that should have answered did not answer within its budget."""
+
+
+class SourceNotRegistered(SourceUnavailable):
     """The requested source has no registered adapter, for example while its
     adapter restarts."""
 
@@ -206,9 +215,14 @@ class PositionService:
             return_exceptions=True,
         )
         measurements: list[Measurement] = []
+        failures: list[AdapterUnavailable] = []
         for r in results:
+            if isinstance(r, AdapterUnavailable):
+                failures.append(r)
+                continue
             if isinstance(r, Exception):
                 log.warning("adapter error for %s: %s", device_id, r)
+                failures.append(AdapterUnavailable(str(r)))
                 continue
             if r is None:
                 continue
@@ -225,6 +239,12 @@ class PositionService:
                 measurements.append(filled)
 
         if not measurements:
+            # Without a fix, a source that failed means the device's position
+            # is unknown, not absent.
+            if any(isinstance(f, AdapterTimeout) for f in failures):
+                raise SourceTimeout("; ".join(str(f) for f in failures))
+            if failures:
+                raise SourceUnavailable("; ".join(str(f) for f in failures))
             return None
 
         primary = self._primary.fuse(device_id, measurements, self._floor_plan)

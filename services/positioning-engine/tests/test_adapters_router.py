@@ -201,3 +201,12 @@ async def test_an_anonymous_deregistration_of_a_live_adapter_reports_it_kept(tmp
     async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as c:
         r = await c.delete("/adapters/wifi")
     assert r.json() == {"status": "kept", "name": "wifi", "registered": True}
+
+
+async def test_the_engine_waits_as_long_as_the_adapter_declares(tmp_path, monkeypatch):
+    monkeypatch.delenv("ADAPTER_WITTRA_TIMEOUT", raising=False)
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    reg.upsert("wittra", "http://wittra:8080", "vendor", "self", {"responseTimeout": 3.0}, instance="a")
+    assert reg.adapters["wittra"].timeout == 3.0
+    reg.upsert("wittra", "http://wittra:8080", "vendor", "self", {"responseTimeout": 2.0}, instance="a")
+    assert reg.adapters["wittra"].timeout == 2.0

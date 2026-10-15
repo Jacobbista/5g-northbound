@@ -2,8 +2,17 @@ import pytest
 import respx
 from httpx import Response
 
+from app.adapters.base import AdapterTimeout, AdapterUnavailable
 from app.adapters.http import HttpAdapter
 from app.obs import correlator_var
+
+
+async def _unavailable(adapter, device_id) -> bool:
+    """The adapter gave no usable answer: it raises, it does not report a
+    missing fix."""
+    with pytest.raises(AdapterUnavailable):
+        await adapter.get_measurement(device_id)
+    return True
 
 
 @pytest.mark.asyncio
@@ -86,11 +95,11 @@ async def test_http_adapter_404_returns_none():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_http_adapter_network_error_returns_none():
+async def test_http_adapter_network_error_is_unavailable():
     import httpx as _httpx
     respx.get("http://down/measurement/dev").mock(side_effect=_httpx.ConnectError("down"))
     a = HttpAdapter("down", "http://down")
-    assert await a.get_measurement("dev") is None
+    assert await _unavailable(a, "dev")
     await a.aclose()
 
 
@@ -129,13 +138,13 @@ async def test_http_adapter_cooldown_after_consecutive_failures():
 
     # 3 failures trip the cooldown.
     for _ in range(3):
-        assert await a.get_measurement("dev") is None
+        assert await _unavailable(a, "dev")
     assert a.fail_count == 3
     calls_after_trip = route.call_count
 
     # Next call within the cooldown window must not hit the network.
     fake_now[0] += 0.5
-    assert await a.get_measurement("dev") is None
+    assert await _unavailable(a, "dev")
     assert route.call_count == calls_after_trip
 
     await a.aclose()
@@ -157,12 +166,12 @@ async def test_http_adapter_cooldown_expires_then_retries():
     a = HttpAdapter("flaky", "http://flaky", clock=clock)
 
     for _ in range(3):
-        await a.get_measurement("dev")
+        await _unavailable(a, "dev")
     calls = route.call_count
 
     # Jump past the cooldown window (>2s).
     fake_now[0] += 5.0
-    await a.get_measurement("dev")
+    await _unavailable(a, "dev")
     assert route.call_count == calls + 1
     await a.aclose()
 
@@ -183,8 +192,8 @@ async def test_http_adapter_success_resets_failure_counter():
         ]
     )
     a = HttpAdapter("x", "http://x")
-    await a.get_measurement("dev")
-    await a.get_measurement("dev")
+    await _unavailable(a, "dev")
+    await _unavailable(a, "dev")
     assert a.fail_count == 2
     m = await a.get_measurement("dev")
     assert m is not None
@@ -209,7 +218,7 @@ async def test_http_adapter_5xx_counts_as_failure():
     respx.get("http://x/measurement/dev").mock(return_value=Response(503))
     a = HttpAdapter("x", "http://x")
     for _ in range(3):
-        await a.get_measurement("dev")
+        await _unavailable(a, "dev")
     assert a.fail_count == 3
 
 
@@ -222,7 +231,7 @@ async def test_http_adapter_4xx_other_than_404_does_not_trip_cooldown():
     respx.get("http://x/measurement/dev").mock(return_value=Response(401))
     a = HttpAdapter("x", "http://x")
     for _ in range(5):
-        await a.get_measurement("dev")
+        await _unavailable(a, "dev")
     assert a.fail_count == 0
 
 
@@ -233,8 +242,7 @@ async def test_http_adapter_malformed_body_counts_as_failure():
         return_value=Response(200, json={"source": "x"})  # missing accuracy, confidence
     )
     a = HttpAdapter("x", "http://x")
-    m = await a.get_measurement("dev")
-    assert m is None
+    assert await _unavailable(a, "dev")
     assert a.fail_count == 1
 
 
@@ -346,7 +354,7 @@ async def test_http_adapter_rejects_an_unknown_frame():
         "accuracy": 1.0, "confidence": 0.5,
     }))
     a = HttpAdapter("a", "http://a")
-    assert await a.get_measurement("d") is None
+    assert await _unavailable(a, "d")
     await a.aclose()
 
 
@@ -363,7 +371,7 @@ async def test_http_adapter_rejects_a_measurement_without_its_coordinates(body):
         "source": "a", "accuracy": 1.0, "timestamp": 1700000000.0, **body,
     }))
     a = HttpAdapter("a", "http://a")
-    assert await a.get_measurement("d") is None
+    assert await _unavailable(a, "d")
     await a.aclose()
 
 
@@ -388,5 +396,27 @@ async def test_http_adapter_rejects_a_measurement_without_fix_time():
         "source": "a", "x": 1.0, "y": 2.0, "accuracy": 1.0,
     }))
     a = HttpAdapter("a", "http://a")
-    assert await a.get_measurement("d") is None
+    assert await _unavailable(a, "d")
+    await a.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_an_adapter_that_does_not_answer_within_its_budget_times_out():
+    import httpx as _httpx
+    respx.get("http://slow/measurement/dev").mock(side_effect=_httpx.ReadTimeout("slow"))
+    a = HttpAdapter("slow", "http://slow", timeout=0.5)
+    with pytest.raises(AdapterTimeout):
+        await a.get_measurement("dev")
+    assert a.fail_count == 1
+    await a.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_an_adapter_whose_source_timed_out_is_a_timeout():
+    respx.get("http://wittra/measurement/dev").mock(return_value=Response(504))
+    a = HttpAdapter("wittra", "http://wittra")
+    with pytest.raises(AdapterTimeout):
+        await a.get_measurement("dev")
     await a.aclose()

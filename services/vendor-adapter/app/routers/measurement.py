@@ -22,18 +22,29 @@ async def get_measurement(device_id: str, request: Request):
     state = request.app.state.store
     schema = state.schema
     if schema is None:
-        # Adapter is not configured yet - looks like 'no fix' to the engine,
-        # which is the right semantic: the engine simply skips this source on
-        # this cycle without entering cooldown.
-        raise HTTPException(404, detail="no schema loaded")
+        # Not configured: nothing is known about the device. Unavailable, not
+        # a missing fix; /ready says why.
+        raise HTTPException(503, detail="no schema loaded")
 
     cached = state.cache_get(device_id)
     if cached is not None:
-        request.state.cache = "hit"
+        request.state.hop = {"cache": "hit"}
         return cached
 
-    request.state.cache = "miss"
-    payload = await vendor_client.fetch(schema, device_id)
+    # Filled by the call as it happens, so the line carries it even if the
+    # call fails.
+    request.state.hop = {"cache": "miss"}
+    # A vendor that does not answer in time is a timeout, one that answers an
+    # error is a bad gateway, and one that cannot be reached is unavailable.
+    # Only a vendor without a record of the device is "no fix".
+    try:
+        payload = await vendor_client.fetch(schema, device_id, trace=request.state.hop)
+    except vendor_client.VendorTimeout as exc:
+        raise HTTPException(504, detail=str(exc)) from exc
+    except vendor_client.VendorError as exc:
+        raise HTTPException(502, detail=str(exc)) from exc
+    except vendor_client.VendorUnavailable as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
     if payload is None:
         raise HTTPException(404, detail="no measurement")
 

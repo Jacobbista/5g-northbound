@@ -143,6 +143,14 @@ class AdapterCapabilities(BaseModel):
             "carries `z` without `verticalAccuracy`. Requires `z: true`."
         ),
     )
+    responseTimeout: Optional[float] = Field(
+        default=None, gt=0, json_schema_extra={"x-unit": "s"},
+        description=(
+            "Longest time the adapter takes to answer a measurement request, its own call to its "
+            "source included. The engine waits this long, unless ADAPTER_<NAME>_TIMEOUT overrides "
+            "it, and answers 504 when the adapter takes longer."
+        ),
+    )
     calibration: bool = Field(default=False, description="Serves the calibration tool.")
     devices: bool = Field(default=False, description="Serves GET /devices for onboarding.")
     discover: bool = Field(default=False, description="Serves GET /discover, the vendor device list.")

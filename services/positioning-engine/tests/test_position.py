@@ -54,6 +54,27 @@ async def test_a_source_without_a_registered_adapter_is_unavailable(client):
     assert "nonesuch" in resp.json()["detail"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error, status", [("timeout", 504), ("down", 503)])
+async def test_a_source_that_does_not_answer_is_not_an_unlocatable_device(app, client, error, status):
+    from app.adapters.base import AdapterTimeout, AdapterUnavailable
+
+    class _Failing(Adapter):
+        async def get_measurement(self, device_id):
+            raise AdapterTimeout("slow") if error == "timeout" else AdapterUnavailable("down")
+
+    svc = app.state.position_service
+    saved = dict(svc._adapters)
+    svc._adapters.clear()
+    svc._adapters["src"] = _Failing()
+    try:
+        resp = await client.get("/position/tag", params={"source": "src"})
+    finally:
+        svc._adapters.clear()
+        svc._adapters.update(saved)
+    assert resp.status_code == status
+
+
 class _Static(Adapter):
     def __init__(self, m: Measurement):
         self._m = m

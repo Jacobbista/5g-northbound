@@ -153,6 +153,7 @@ agree.
 | `nominalAccuracy` | metres, for a fix that reports no `accuracy` |
 | `nominalVerticalAccuracy` | metres, for a fix that carries `z` without `verticalAccuracy`. Requires `z: true` |
 | `reporting`, `reportingInterval` | how the source produces fixes |
+| `responseTimeout` | seconds the adapter may take to answer a measurement request, its own call to its source included. The engine waits this long and answers `504` past it. The vendor-adapter derives it from its schema's `requestTimeout` |
 | `streaming` | the adapter pushes instead of being polled (none does today) |
 | `devices`, `discover`, `diagnostics`, `calibration`, `placement` | the optional endpoints it serves |
 
@@ -241,7 +242,7 @@ characters replaced by `_` (`wittra` becomes `WITTRA`):
 |----------|---------|---------|
 | `ADAPTER_<NAME>_API_KEY` | unset | a token the engine sends on every request to this adapter |
 | `ADAPTER_<NAME>_API_KEY_HEADER` | `X-API-Key` | the header carrying it |
-| `ADAPTER_<NAME>_TIMEOUT` | `1.0` | request timeout in seconds |
+| `ADAPTER_<NAME>_TIMEOUT` | the adapter's declared `responseTimeout`, else `1.0` | seconds the engine waits for the adapter's answer |
 
 They are declared in the engine's environment contract with the placeholder
 `{NAME}`, and the key is sensitive. Adapters inside the cluster need none of

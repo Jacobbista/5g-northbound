@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .adapters.http import HttpAdapter
-from .config import adapter_options
+from .config import adapter_budget, adapter_options
 
 log = logging.getLogger(__name__)
 
@@ -103,11 +103,14 @@ class AdapterRegistry:
             existing.last_seen = now
             if capabilities:
                 existing.capabilities = capabilities
+                existing.adapter.timeout = adapter_budget(name, capabilities)
             if existing.registered_via == SELF and via in _PERSISTED_VIA:
                 existing.registered_via = via
             return None
         orphan = existing.adapter if existing is not None else None
-        adapter = HttpAdapter(name=name, base_url=base_url, **adapter_options(name))
+        options = adapter_options(name)
+        options["timeout"] = adapter_budget(name, capabilities)
+        adapter = HttpAdapter(name=name, base_url=base_url, **options)
         entry = _Entry(name, base_url, kind, via, now, adapter, capabilities)
         if existing is not None:
             # A new endpoint for the same adapter: the instances that announced

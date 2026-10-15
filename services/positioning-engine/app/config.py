@@ -17,9 +17,11 @@ def adapter_options(name: str) -> dict:
     Recognised variables:
       ADAPTER_<NAME>_API_KEY         -- token value; mount from a K8s Secret
       ADAPTER_<NAME>_API_KEY_HEADER  -- header name, default X-API-Key
-      ADAPTER_<NAME>_TIMEOUT         -- httpx timeout in seconds (float)
+      ADAPTER_<NAME>_TIMEOUT         -- request budget in seconds (float)
 
-    Returns kwargs suitable for HttpAdapter(...).
+    Returns kwargs suitable for HttpAdapter(...). `timeout` is None unless
+    ADAPTER_<NAME>_TIMEOUT is set: the budget then comes from the adapter's
+    declared responseTimeout (see adapter_budget).
     """
     key = "".join(c if c.isalnum() else "_" for c in name).upper()
     headers: dict[str, str] = {}
@@ -28,13 +30,27 @@ def adapter_options(name: str) -> dict:
         header_name = os.environ.get(f"ADAPTER_{key}_API_KEY_HEADER", DEFAULT_API_KEY_HEADER)
         headers[header_name] = api_key
     timeout_raw = os.environ.get(f"ADAPTER_{key}_TIMEOUT")
-    timeout = DEFAULT_ADAPTER_TIMEOUT_S
+    timeout = None
     if timeout_raw:
         try:
             timeout = float(timeout_raw)
         except ValueError:
             pass
     return {"timeout": timeout, "headers": headers or None}
+
+
+def adapter_budget(name: str, capabilities: dict | None) -> float:
+    """How long the engine waits for the adapter's answer: ADAPTER_<NAME>_TIMEOUT
+    when set, else the responseTimeout the adapter declares, else 1 s. An
+    adapter that calls a remote source declares a budget that covers that call,
+    so the engine never gives up while the adapter is still waiting."""
+    configured = adapter_options(name)["timeout"]
+    if configured is not None:
+        return configured
+    declared = (capabilities or {}).get("responseTimeout")
+    if isinstance(declared, (int, float)) and declared > 0:
+        return float(declared)
+    return DEFAULT_ADAPTER_TIMEOUT_S
 
 
 class Settings(BaseSettings):

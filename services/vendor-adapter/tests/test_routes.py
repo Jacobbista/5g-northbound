@@ -105,9 +105,9 @@ async def test_put_schema_400_on_invalid_payload(client, monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_measurement_404_when_no_schema(client):
+async def test_an_adapter_without_a_schema_is_unavailable(client):
     r = await client.get("/measurement/anything")
-    assert r.status_code == 404
+    assert r.status_code == 503
 
 
 @pytest.mark.asyncio
@@ -290,3 +290,26 @@ async def test_a_request_that_raises_still_leaves_its_hop_line(
     assert r.status_code == 500
     lines = [json.loads(rec.getMessage()) for rec in caplog.records if rec.name == "hop"]
     assert [(h["correlator"], h["status"], h["cache"]) for h in lines] == [("c-500", 500, "miss")]
+
+
+
+@respx.mock
+@pytest.mark.parametrize("vendor, status", [
+    (httpx.Response(500, text="boom"), 502),
+    (httpx.ConnectError("down"), 503),
+    (httpx.ReadTimeout("slow"), 504),
+    (httpx.Response(404), 404),
+])
+async def test_a_vendor_failure_is_reported_as_what_it_is(
+    client, fresh_state, wittra_schema, monkeypatch, vendor, status
+):
+    for var, val in (("WITTRA_ORG_ID", "orgA"), ("WITTRA_API_KEY", "k"),
+                     ("WITTRA_PROJECT_ID", "prj1"), ("WITTRA_BASE_URL", "http://mock-vendor")):
+        monkeypatch.setenv(var, val)
+    fresh_state.schema = wittra_schema
+    route = respx.get("http://mock-vendor/v4/organizations/orgA/projects/prj1/devices/D001")
+    if isinstance(vendor, Exception):
+        route.mock(side_effect=vendor)
+    else:
+        route.mock(return_value=vendor)
+    assert (await client.get("/measurement/D001")).status_code == status

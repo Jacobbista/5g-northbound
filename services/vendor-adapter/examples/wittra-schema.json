@@ -23,7 +23,7 @@
     }
   },
   "cacheTtl": 5.0,
-  "requestTimeout": 5.0,
+  "requestTimeout": 2.5,
   "mapping": {
     "frame": {
       "const": "wgs84"

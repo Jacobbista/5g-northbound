@@ -1,7 +1,9 @@
 """Outbound HTTP client: builds auth, substitutes path vars, calls vendor."""
 
+import asyncio
 import logging
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -97,45 +99,83 @@ def build_auth_headers(schema: Schema) -> Optional[dict[str, str]]:
 IMPLEMENTED_TRANSPORTS = ("rest",)
 
 
-async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
+def _tracer(record: dict):
+    """An httpx trace hook that records how the call to the vendor went: on a
+    new or a reused connection, and how long the vendor took from the request
+    being sent to its response headers arriving."""
+    sent: list[float] = []
+
+    async def trace(name: str, info: dict) -> None:
+        now = time.perf_counter()
+        if name.endswith("connect_tcp.started"):
+            record["connection"] = "new"
+        elif name.endswith("send_request_headers.started"):
+            sent.append(now)
+            record.setdefault("connection", "reused")
+        elif name.endswith("receive_response_headers.complete") and sent:
+            record["upstream_ms"] = round((now - sent[-1]) * 1000, 3)
+
+    return trace
+
+
+class VendorUnavailable(Exception):
+    """No usable answer from the vendor: unreachable, misconfigured here, or
+    an answer that is not a device record. Not a missing fix."""
+
+
+class VendorTimeout(VendorUnavailable):
+    """The vendor did not answer within the schema's requestTimeout."""
+
+
+class VendorError(VendorUnavailable):
+    """The vendor answered with an error status."""
+
+
+async def fetch(schema: Schema, device_id: str, trace: Optional[dict] = None) -> Optional[dict]:
     """One GET against the vendor for one device.
 
-    Returns the parsed JSON body on 200, or None on 404 / 401 / 5xx / network
-    error / misconfiguration. Logs noisily for non-404 failures so the
-    operator sees what went wrong without a debugger.
+    Returns the parsed JSON body on 200, or None when the vendor answers 404:
+    it has no record of the device. Every other outcome raises a
+    VendorUnavailable, so a failure is never reported as a missing fix. The
+    whole call, a retried connection included, is bounded by the schema's
+    requestTimeout. With `trace`, records the connection used and the vendor's
+    own time into it.
     """
     if schema.transport not in IMPLEMENTED_TRANSPORTS:
         log.warning(
             "vendor %s uses transport '%s'; this image implements %s",
             schema.vendor, schema.transport, ", ".join(IMPLEMENTED_TRANSPORTS),
         )
-        return None
+        raise VendorUnavailable(f"transport '{schema.transport}' is not implemented")
     path = _substitute_path_vars(schema, device_id)
-    if path is None:
-        return None
     headers = build_auth_headers(schema)
-    if headers is None:
-        return None
     root = base_url(schema)
-    if root is None:
-        return None
+    if path is None or headers is None or root is None:
+        raise VendorUnavailable("the vendor's address or credentials are not configured")
     headers.update(corr_headers())
     url = f"{root}{path}"
     try:
-        resp = await outbound.client().get(url, headers=headers, timeout=schema.requestTimeout)
+        async with asyncio.timeout(schema.requestTimeout):
+            resp = await outbound.client().get(
+                url, headers=headers, timeout=schema.requestTimeout,
+                extensions={"trace": _tracer(trace)} if trace is not None else None,
+            )
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        log.warning("vendor %s did not answer within %.1fs", schema.vendor, schema.requestTimeout)
+        raise VendorTimeout(f"vendor {schema.vendor} did not answer within {schema.requestTimeout:g}s") from exc
     except httpx.HTTPError as exc:
         log.warning("vendor %s unreachable: %s", schema.vendor, exc)
-        return None
+        raise VendorUnavailable(f"vendor {schema.vendor} is unreachable") from exc
     if resp.status_code == 404:
         return None
     if resp.status_code != 200:
         log.warning("vendor %s -> %d (%s)", schema.vendor, resp.status_code, resp.text[:200])
-        return None
+        raise VendorError(f"vendor {schema.vendor} answered {resp.status_code}")
     try:
         return resp.json()
     except ValueError as exc:
         log.warning("vendor %s returned non-JSON: %s", schema.vendor, exc)
-        return None
+        raise VendorError(f"vendor {schema.vendor} answered a body that is not JSON") from exc
 
 
 async def fetch_path(schema: Schema, device_id: str, override_path: str, pathVars: dict) -> Optional[dict]:
