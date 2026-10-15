@@ -9,8 +9,10 @@ writes the lines, and KELT collects and aggregates them.
 
 The CAMARA `x-correlator` header ties the hops together:
 
-- The gateway takes the correlator from the request, or generates one, and
-  returns it on the response.
+- Where a request enters the stack from outside, the correlator is taken from
+  the request, or generated, and returned on the response: at the gateway, and
+  at the wifi-adapter's `POST /ingest/wifi-scan`, where scans arrive from the
+  edge. Every ingest therefore writes a line, accepted or refused.
 - Every internal call forwards it: gateway to engine, engine to adapter,
   vendor-adapter to the vendor cloud.
 

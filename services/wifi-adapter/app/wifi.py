@@ -178,6 +178,10 @@ class WifiAdapter:
         self._superseded_ingest: dict[str, str] = {}
         self._trackers: dict = {}
         self._last_ts: dict[str, float] = {}
+        # When each device last sent a scan, located or not. A device whose
+        # scans hear no bound access point is still observed: the site's
+        # bindings, not the device, are what is missing.
+        self._last_scan: dict[str, float] = {}
         # Optional ingest hook. The calibration router installs one here
         # so an active capture session can pull raw scans in real time.
         # `(device_id, scan, ts)`; should not raise.
@@ -211,17 +215,21 @@ class WifiAdapter:
         return first
 
     def ingest(self, device_id: str, scan: Scan, ts: Optional[float] = None) -> bool:
+        """Take one scan. Returns whether it located the device. A scan that
+        hears no bound access point is still recorded: the device is observed,
+        without a position."""
+        ts = ts if ts is not None else time.time()
         if self.on_ingest is not None:
             try:
-                self.on_ingest(device_id, scan, ts if ts is not None else time.time())
+                self.on_ingest(device_id, scan, ts)
             except Exception as exc:
                 log.warning("calibration hook raised: %s", exc)
+        self._last_scan[device_id] = max(ts, self._last_scan.get(device_id, ts))
         result = compute_position(scan, self.cfg)
         if result is None:
             return False
         x, y, confidence, accuracy_m = result
 
-        ts = ts if ts is not None else time.time()
         if self.cfg.smoothing:
             tracker = self._trackers.get(device_id)
             if tracker is None:
@@ -252,27 +260,27 @@ class WifiAdapter:
         return self._cache.get(device_id)
 
     def observed_devices(self) -> list[dict]:
-        """Device ids this adapter has produced a fix for, newest activity
+        """Device ids this adapter has received a scan from, newest activity
         first. Powers GET /devices for onboarding discovery. This is an
         `observed` list, not a registry: an id appears once a scan tagged with
         it is ingested, so the operator claims + names it (unlike a vendor's
-        pre-named inventory). `last_seen` is epoch seconds (as Measurement.timestamp)."""
-        out = [
-            {
-                "id": device_id,
+        pre-named inventory). `lastSeen` is the last scan, epoch seconds. A
+        device none of whose scans located it has no `position`."""
+        out = []
+        for device_id in sorted(set(self._last_scan) | set(self._cache)):
+            m = self._cache.get(device_id)
+            entry = {
                 # A device seen on the air is a tracked asset (paper vocab), not
                 # infrastructure; the wifi anchors (APs) live in the bindings.
+                "id": device_id,
                 "role": "asset",
                 "sourceClass": "wifi",
-                "lastSeen": m.timestamp,
-                "position": {"frame": m.frame, "room": m.room, "x": m.x, "y": m.y},
-                **(
-                    {"supersededIngestField": self._superseded_ingest[device_id]}
-                    if device_id in self._superseded_ingest
-                    else {}
-                ),
+                "lastSeen": self._last_scan.get(device_id, m.timestamp if m else None),
             }
-            for device_id, m in self._cache.items()
-        ]
+            if m is not None:
+                entry["position"] = {"frame": m.frame, "room": m.room, "x": m.x, "y": m.y}
+            if device_id in self._superseded_ingest:
+                entry["supersededIngestField"] = self._superseded_ingest[device_id]
+            out.append(entry)
         out.sort(key=lambda d: d["lastSeen"] or 0, reverse=True)
         return out

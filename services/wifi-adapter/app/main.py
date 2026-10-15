@@ -163,7 +163,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="WiFi Positioning Adapter", lifespan=lifespan)
-install_hop_logging(app, "wifi-adapter")
+# Scans enter the stack here, from the edge: each ingest is a traced request.
+install_hop_logging(app, "wifi-adapter", entry_paths=("/ingest/wifi-scan",))
 app.include_router(health.router)
 app.include_router(contract.router)
 app.include_router(ingest.router)

@@ -44,5 +44,6 @@
       "path_loss_n": null
     }
   ],
-  "calibration_samples": []
+  "calibration_samples": [],
+  "samples_frame": "room"
 }

@@ -76,7 +76,7 @@ Routes beyond the contract:
 
 | Adapter | Route | Content |
 |---------|-------|---------|
-| wifi-adapter | `POST /ingest/wifi-scan` | a scan from an edge scanner |
+| wifi-adapter | `POST /ingest/wifi-scan` | a scan from an edge scanner. Answers `{"ok": true, "located": …}`: a scan that hears no bound access point is accepted with `located: false`, and the device is listed on `/devices` without a position. `422` only for a malformed body |
 | wifi-adapter | `GET`, `PUT /bindings` | the bindings, BSSIDs included |
 | wifi-adapter | `POST /calibration/capture`, `GET`/`DELETE /calibration/capture/{id}`, `GET /calibration/state`, `DELETE /calibration/samples`, `DELETE /calibration/samples/{id}`, `POST /calibration/derive`, `POST /calibration/apply` | the calibration survey ([calibration](blueprint-vs-bindings.md#calibration)) |
 | wifi-adapter | `GET /calibration/params` | fitted parameters per anchor, without BSSIDs |

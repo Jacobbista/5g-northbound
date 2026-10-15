@@ -52,9 +52,11 @@ def test_adapter_caches_last_fix_with_timestamp(cfg):
     assert adapter.get_measurement("dev1") is not None
 
 
-def test_adapter_rejects_scan_without_known_ap(cfg):
+def test_a_scan_without_known_ap_locates_nothing_but_observes_the_device(cfg):
     adapter = WifiAdapter(cfg)
-    assert adapter.ingest("dev1", {"FF:FF:FF:FF:FF:FF": -40}) is False
+    assert adapter.ingest("dev1", {"FF:FF:FF:FF:FF:FF": -40}, ts=5.0) is False
+    assert adapter.get_measurement("dev1") is None
+    assert [(d["id"], d["lastSeen"], "position" in d) for d in adapter.observed_devices()] == [("dev1", 5.0, False)]
 
 
 def test_no_match_logs_a_debug_line_with_no_bssids(cfg, monkeypatch, caplog):
@@ -76,3 +78,4 @@ def test_no_match_logs_nothing_with_debug_off(cfg, caplog):
     with caplog.at_level("INFO", logger="app.wifi"):
         assert compute_position({"FF:FF:FF:FF:FF:FF": -40}, cfg) is None
     assert not caplog.records
+

@@ -74,8 +74,8 @@ def contract(request: Request) -> dict:
         "debug": DEBUG,
         # How many anchors this adapter can actually range against right now:
         # a blueprint anchor needs both a position (blueprint) and a BSSID
-        # (bindings) to count. 0 means every scan is silently unlocatable,
-        # which without this looks identical to "not receiving scans at all".
+        # (bindings) to count. 0 means no scan can be located: every ingest
+        # answers `located: false`.
         "routers_bound": len(cfg.routers) if cfg is not None else None,
         "env": {
             "required": _sanitize(raw.get("required")),

@@ -49,12 +49,19 @@ class WifiScanIngest(BaseModel):
 
 @router.post("/wifi-scan")
 async def ingest_wifi_scan(body: WifiScanIngest, request: Request):
-    adapter = request.app.state.adapter
+    """Take a scan. A scan that hears no bound access point is a valid report
+    the site cannot place, not a malformed request: it is accepted with
+    `located: false`, and the device is listed on /devices without a position,
+    so an operator sees the scanner and the bindings it lacks."""
+    adapter = getattr(request.app.state, "adapter", None)
+    if adapter is None:
+        # Degraded boot: the blueprint is still loading, so no anchor has a
+        # position yet. The scan is not taken; the scanner buffers and resends.
+        raise HTTPException(503, detail="the blueprint is not loaded yet")
     device = body.identifier
-    if not adapter.ingest(device, body.scan, body.timestamp):
-        raise HTTPException(422, detail="no known access points in scan")
+    located = adapter.ingest(device, body.scan, body.timestamp)
 
-    response: dict = {"ok": True}
+    response: dict = {"ok": True, "located": located}
     if body.used_superseded_name:
         response["warning"] = _DEPRECATION
         # The adapter carries the fact per device, so GET /devices reports which
