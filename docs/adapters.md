@@ -223,8 +223,14 @@ A synthetic source can be told where a device starts. `PUT
 /devices/{id}/placement` takes `{x, y}` in the frame of the room the source
 walks and clamps the point into it. `DELETE` removes the device, which then
 has no position. With `SPAWN_REQUIRED` set, a device reports nothing until
-placed. The gateway offers this per asset at `/assets/{assetId}/placement` and
-refuses a source that does not declare `placement` with `422 NOT_PLACEABLE`.
+placed. Placing an id that `DEVICE_IDS` does not declare creates that device:
+it walks, reports and is listed on `/devices` with `placed: true` until it is
+removed. An id neither declared nor placed answers `404`, so the source never
+answers for another source's device. Anchor ids are not placeable. The
+placements live in the adapter's memory: a restarted adapter has none, so the
+synthetic adapter runs as one replica. The gateway offers this per asset at
+`/assets/{assetId}/placement` and refuses a source that does not declare
+`placement` with `422 NOT_PLACEABLE`.
 
 ## Engine options per adapter
 

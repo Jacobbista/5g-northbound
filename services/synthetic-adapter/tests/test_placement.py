@@ -125,3 +125,32 @@ async def test_a_freshly_placed_device_reports_the_drop_point_not_a_step_away(sp
     first = (await spawn_client.get("/measurement/synthetic-demo-01")).json()
     second = (await spawn_client.get("/measurement/synthetic-demo-01")).json()
     assert (first["x"], first["y"]) == (second["x"], second["y"])
+
+
+async def test_placing_an_undeclared_id_creates_the_device_until_it_is_removed(spawn_client):
+    """A simulated device exists once it is put somewhere: a campaign adds
+    devices at runtime, without changing DEVICE_IDS or restarting."""
+    def _assets(body):
+        return {d["id"]: d.get("placed") for d in body["devices"] if d["role"] == "asset"}
+
+    assert (await spawn_client.get("/measurement/sim-17")).status_code == 404
+    put = await spawn_client.put("/devices/sim-17/placement", json={"x": 4.0, "y": 9.0})
+    assert put.status_code == 200 and put.json()["placed"] is True
+    assert (await spawn_client.get("/measurement/sim-17")).status_code == 200
+    assert _assets((await spawn_client.get("/devices")).json()) == {"synthetic-demo-01": False, "sim-17": True}
+
+    removed = await spawn_client.delete("/devices/sim-17/placement")
+    assert removed.status_code == 200 and removed.json()["placed"] is False
+    assert (await spawn_client.get("/measurement/sim-17")).status_code == 404
+    assert _assets((await spawn_client.get("/devices")).json()) == {"synthetic-demo-01": False}
+
+
+async def test_an_anchor_cannot_be_placed(spawn_client):
+    r = await spawn_client.put("/devices/synthetic-anchor-01/placement", json={"x": 1.0, "y": 1.0})
+    assert r.status_code == 422
+
+
+async def test_an_id_neither_declared_nor_placed_is_unknown(client):
+    # Without this the walker would answer for any id, including another
+    # source's device when the engine asks every adapter.
+    assert (await client.get("/measurement/another-sources-tag")).status_code == 404

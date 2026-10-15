@@ -471,6 +471,19 @@ class WaypointWalker:
     # the blueprint stores: origin at the room's lower-left corner, x along the
     # width, y along the depth.
 
+    def declared(self) -> set[str]:
+        """The inventory: the ids DEVICE_IDS declares from boot."""
+        return {d.strip() for d in self._cfg.device_ids.split(",") if d.strip()}
+
+    def knows(self, device_id: str) -> bool:
+        """A device of this source: declared, or placed and not removed."""
+        return device_id in self.declared() or device_id in self._state
+
+    def placed_undeclared(self) -> list[str]:
+        """Devices that exist only because they were placed."""
+        declared = self.declared()
+        return sorted(d for d in self._state if d not in declared)
+
     def is_active(self, device_id: str) -> bool:
         """Whether this device currently reports a position.
 

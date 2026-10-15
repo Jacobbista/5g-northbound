@@ -10,11 +10,11 @@ class Settings(BaseSettings):
     # RTLS substitute is typically UWB. Surfaced as `source_class` on /devices so
     # onboarding classification sees the same shape a real source declares.
     source_class: str = "uwb"
-    # Device ids this mock serves (CSV). The walker can synthesise a position
-    # for ANY id, so without this it would answer for every device and pollute
-    # fusion when the engine fans out (no DEVICE_MAP). Empty = serve all (legacy
-    # / standalone). Set it so the mock 404s for devices it does not own, making
-    # capability-style fan-out routing safe.
+    # Devices this source declares from boot (CSV): its inventory, listed on
+    # /devices for onboarding before anything is placed. A device also comes
+    # into existence when it is placed, and leaves when it is removed. An id
+    # neither declared nor placed is unknown: /measurement answers 404, so
+    # the walker never answers for another source's device.
     device_ids: str = ""
     # Fixed infrastructure ids (CSV): the anchors/relays a real on-premise RTLS
     # exposes alongside its tracked tags. Surfaced on /devices with

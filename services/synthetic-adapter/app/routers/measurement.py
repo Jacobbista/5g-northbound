@@ -6,22 +6,16 @@ from ..models import Measurement
 router = APIRouter(tags=["measurement"])
 
 
-def _served_ids() -> set[str]:
-    return {d.strip() for d in settings.device_ids.split(",") if d.strip()}
-
-
 @router.get("/measurement/{device_id}", response_model=Measurement)
 async def get_measurement(device_id: str, request: Request):
-    # Honest capability boundary: 404 for devices this mock does not own, so the
-    # engine can fan out to every adapter (no DEVICE_MAP) without the walker
-    # answering for - and polluting - other adapters' devices. Empty set = serve
-    # all (standalone / legacy).
-    served = _served_ids()
-    if served and device_id not in served:
-        raise HTTPException(404, detail=f"{device_id} not served by this mock")
+    # A device this source neither declares nor has placed is unknown: 404, so
+    # an engine that asks every adapter never receives an invented position
+    # for another source's device.
     walker = request.app.state.walker
+    if not walker.knows(device_id):
+        raise HTTPException(404, detail=f"{device_id} is not a device of this source")
     if not walker.is_active(device_id):
-        # Configured but not placed: no fix, the same answer an adapter gives
+        # Declared but not placed: no fix, the same answer an adapter gives
         # for a device it cannot currently locate. The engine skips this source
         # for this cycle without entering cooldown, and the asset simply has no
         # position until it is placed.

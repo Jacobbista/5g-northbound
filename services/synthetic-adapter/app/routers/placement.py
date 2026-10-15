@@ -38,23 +38,24 @@ class PlacementResult(BaseModel):
     placed: bool
 
 
-def _served(device_id: str) -> bool:
-    """Same scoping the measurement endpoint applies: an empty DEVICE_IDS
-    serves everything, otherwise only the configured ids."""
-    served = {d.strip() for d in settings.device_ids.split(",") if d.strip()}
-    return not served or device_id in served
+def _anchors() -> set[str]:
+    return {d.strip() for d in settings.anchor_ids.split(",") if d.strip()}
 
 
 @router.put("/devices/{device_id}/placement", response_model=PlacementResult)
 async def place(device_id: str, body: Placement, request: Request):
     """Put the device at a point and start it walking from there.
 
+    Placing an id the inventory does not declare creates the device: for a
+    simulated source, a device exists once it is put somewhere. It walks and
+    reports like a declared one until it is removed.
+
     Idempotent: placing an already-placed device moves it, which is what
     dropping it somewhere else means. The response carries where it actually
     landed, since the point is clamped into the room.
     """
-    if not _served(device_id):
-        raise HTTPException(404, detail=f"{device_id} not served by this adapter")
+    if device_id in _anchors():
+        raise HTTPException(422, detail=f"{device_id} is fixed infrastructure and cannot be placed")
     x, y = request.app.state.walker.place(device_id, body.x, body.y)
     log.info("placed %s at room (%.2f, %.2f)", device_id, x, y)
     return PlacementResult(id=device_id, room=request.app.state.walker.room_id, x=x, y=y, placed=True)
@@ -65,11 +66,11 @@ async def remove(device_id: str, request: Request):
     """Stop the device reporting. It disappears from every consumer the same
     way any source that stops reporting does, with no special case downstream.
 
+    A device that exists only because it was placed ceases to exist.
+
     Idempotent: removing a device that is not placed is not an error, the
     caller wanted it gone and it is gone.
     """
-    if not _served(device_id):
-        raise HTTPException(404, detail=f"{device_id} not served by this adapter")
     existed = request.app.state.walker.remove(device_id)
     if existed:
         log.info("removed %s", device_id)

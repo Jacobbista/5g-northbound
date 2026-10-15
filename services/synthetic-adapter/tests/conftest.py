@@ -6,8 +6,10 @@ from app.walker import RandomWalker
 
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     from app.main import app as _app
+    # The devices the tests ask for are declared, as a deployment declares them.
+    monkeypatch.setattr(settings, "device_ids", "dev-1,dev-a,dev-b,never-placed")
     # ASGITransport does not trigger lifespan; populate state manually.
     walker = RandomWalker(settings)
     # The room the blueprint would name; no engine runs in the tests.
