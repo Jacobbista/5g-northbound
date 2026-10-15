@@ -7,10 +7,24 @@ node over the data network.
 ## Registration
 
 An adapter sends `POST /adapters` to the engine at start with
-`{name, baseUrl, kind, capabilities}` and repeats it every
+`{name, baseUrl, kind, instance, capabilities}` and repeats it every
 `ADAPTER_HEARTBEAT_S` (15 s by default). The request is idempotent. On a clean
-shutdown the adapter sends `DELETE /adapters/{name}`. The engine removes an
-adapter that has not announced itself for `ADAPTER_TTL_S` (45 s by default).
+shutdown the adapter sends `DELETE /adapters/{name}?instance=<instance>`. The
+engine removes an adapter that has not announced itself for `ADAPTER_TTL_S`
+(45 s by default).
+
+`instance` identifies the running process. Several instances can serve one
+name: the old and the new pod of a rolling update, or replicas. The engine
+keeps the name registered while any of its instances announces itself, and a
+deregistration removes only the instance that sends it. In a rolling update
+the new pod registers before the old one stops, so the source stays
+registered throughout, provided every instance announces the same `baseUrl`,
+the Service they share. A deregistration without an instance, from an adapter
+older than 0.19.3, does not remove a name that live instances still announce,
+and answers `status: kept`. The engine does not store self-registered entries:
+after an engine restart each adapter is missing until its next heartbeat.
+`GET /adapters` on the engine reports the number of live `instances` per
+adapter.
 
 `name` is the adapter's `ADAPTER_NAME`. `kind` is the image family (`wifi`,
 `vendor`, `synthetic`), read from the image's own `adapter.contract.yaml`.

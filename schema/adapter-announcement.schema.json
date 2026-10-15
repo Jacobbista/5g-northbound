@@ -179,6 +179,19 @@
       "title": "Baseurl",
       "type": "string"
     },
+    "instance": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identifies the running instance that announces, unique per process. Several instances may serve one name: a deregistration names its instance and removes only that one.",
+      "title": "Instance"
+    },
     "kind": {
       "default": "adapter",
       "title": "Kind",

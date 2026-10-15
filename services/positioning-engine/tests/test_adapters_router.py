@@ -129,3 +129,75 @@ async def test_nominal_vertical_accuracy_is_declared_only_with_height(tmp_path, 
         r = await c.post("/adapters", json={"name": "uwb", "baseUrl": "http://uwb:8080",
                                             "capabilities": capabilities})
     assert r.status_code == status
+
+
+async def test_a_stopping_instance_does_not_deregister_its_replacement(tmp_path):
+    """Rolling update: the new pod registers, then the old one stops and
+    deregisters. The adapter stays registered."""
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    _app.state.registry = reg
+    announce = {"name": "wittra", "baseUrl": "http://wittra:8080", "kind": "vendor"}
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as c:
+        await c.post("/adapters", json={**announce, "instance": "old"})
+        await c.post("/adapters", json={**announce, "instance": "new"})
+        gone = await c.delete("/adapters/wittra", params={"instance": "old"})
+        assert gone.json() == {"status": "ok", "name": "wittra", "registered": True}
+        assert "wittra" in reg.adapters
+        last = await c.delete("/adapters/wittra", params={"instance": "new"})
+        assert last.json() == {"status": "ok", "name": "wittra", "registered": False}
+    assert "wittra" not in reg.adapters
+
+
+async def test_an_unknown_instance_removes_nothing(tmp_path):
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    reg.upsert("synthetic", "http://synthetic:8080", "synthetic", "self", instance="a")
+    assert reg.remove("synthetic", "b") == (False, None)
+    assert "synthetic" in reg.adapters
+
+
+async def test_an_instance_that_stopped_silently_ages_out_alone(tmp_path):
+    """A replica that crashed without deregistering does not keep the entry
+    alive, and the live replica's deregistration is final."""
+    fake_now = [0.0]
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0,
+                          persist_path=str(tmp_path / "a.json"), clock=lambda: fake_now[0])
+    reg.upsert("wifi", "http://wifi:8080", "wifi", "self", instance="crashed")
+    fake_now[0] = 30.0
+    reg.upsert("wifi", "http://wifi:8080", "wifi", "self", instance="live")
+    fake_now[0] = 60.0
+    assert reg.evict_expired() == []
+    assert reg.status_list()[0]["instances"] == 1
+    removed, orphan = reg.remove("wifi", "live")
+    assert removed and orphan is not None
+    assert reg.is_empty()
+
+
+async def test_an_older_adapter_without_an_instance_does_not_deregister_its_replacement(tmp_path):
+    """The first rollout onto adapters that announce an instance: the old pod
+    deregisters without one, after the new pod registered with one."""
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    reg.upsert("wittra", "http://wittra:8080", "vendor", "self")
+    reg.upsert("wittra", "http://wittra:8080", "vendor", "self", instance="new")
+    assert reg.remove("wittra") == (False, None)
+    assert "wittra" in reg.adapters
+
+
+async def test_a_new_endpoint_keeps_the_instances_of_the_adapter(tmp_path):
+    """Instances announcing different addresses for one adapter: the entry
+    follows the latest address, and an instance leaving keeps the others."""
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    reg.upsert("wifi", "http://10.0.0.1:8080", "wifi", "self", instance="old")
+    reg.upsert("wifi", "http://10.0.0.2:8080", "wifi", "self", instance="new")
+    reg.upsert("wifi", "http://10.0.0.1:8080", "wifi", "self", instance="old")
+    removed, orphan = reg.remove("wifi", "old")
+    assert removed and orphan is None
+    assert "wifi" in reg.adapters
+
+
+async def test_an_anonymous_deregistration_of_a_live_adapter_reports_it_kept(tmp_path):
+    reg = AdapterRegistry(ttl_s=45.0, heartbeat_s=15.0, persist_path=str(tmp_path / "a.json"))
+    reg.upsert("wifi", "http://wifi:8080", "wifi", "self", instance="live")
+    _app.state.registry = reg
+    async with AsyncClient(transport=ASGITransport(app=_app), base_url="http://test") as c:
+        r = await c.delete("/adapters/wifi")
+    assert r.json() == {"status": "kept", "name": "wifi", "registered": True}

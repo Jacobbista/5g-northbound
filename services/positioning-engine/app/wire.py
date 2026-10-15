@@ -185,6 +185,14 @@ class Announcement(BaseModel):
 
     name: str
     baseUrl: str = Field(description="Where the engine reaches the adapter.")
+    instance: Optional[str] = Field(
+        default=None,
+        description=(
+            "Identifies the running instance that announces, unique per process. Several "
+            "instances may serve one name: a deregistration names its instance and removes only "
+            "that one."
+        ),
+    )
     kind: str = "adapter"
     capabilities: AdapterCapabilities = Field(default_factory=AdapterCapabilities)
 

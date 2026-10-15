@@ -44,6 +44,15 @@ def is_current(established: Optional[float], caps: dict, now: float) -> bool:
     return False
 
 
+class SourceNotRegistered(Exception):
+    """The requested source has no registered adapter, for example while its
+    adapter restarts."""
+
+    def __init__(self, source: str):
+        super().__init__(f"source '{source}' has no registered adapter")
+        self.source = source
+
+
 @dataclass
 class StrategyResult:
     name: str
@@ -95,16 +104,20 @@ class PositionService:
         """Pick which adapters to poll for a device. Priority:
           1. `source` hint (the gateway knows the asset's source/adapter) -
              route straight to that adapter. Capability-style routing, no
-             manual map.
+             manual map. A source with no registered adapter raises
+             SourceNotRegistered: the source is unavailable, not the device
+             unlocatable.
           2. legacy DEVICE_MAP entry, if configured.
           3. fan out to all adapters - safe because each adapter 404s for
              devices it does not serve.
         """
         if source:
             adapter = self._adapters.get(source)
-            if adapter is not None:
-                return [adapter]
-            log.warning("source '%s' has no registered adapter; falling back", source)
+            if adapter is None:
+                # The device belongs to this source. Any other adapter's
+                # answer would be about another device, or none.
+                raise SourceNotRegistered(source)
+            return [adapter]
         target = self._device_map.get(device_id)
         if target is not None:
             adapter = self._adapters.get(target)

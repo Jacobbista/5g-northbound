@@ -7,6 +7,12 @@ classes, with different lifecycles:
 
   - ``self``        : maintained by heartbeat, TTL-evicted, NOT persisted
                       (repopulates on the next adapter boot within one interval)
+
+A name can be served by several running instances of one adapter: replicas,
+or the old and the new pod of a rolling update. Each announces its own
+`instance` id. The entry lives while any instance does: a deregistration
+removes only the instance that sends it, and the TTL counts from the most
+recent announcement of any instance.
   - ``seed``/``manual`` : declared intentionally, persisted, NEVER TTL-evicted;
                       liveness comes from polling (cooldown), not heartbeat
 
@@ -40,7 +46,8 @@ _PERSISTED_VIA = {SEED, MANUAL}
 
 
 class _Entry:
-    __slots__ = ("name", "base_url", "kind", "registered_via", "last_seen", "adapter", "capabilities")
+    __slots__ = ("name", "base_url", "kind", "registered_via", "last_seen", "adapter", "capabilities",
+                 "instances")
 
     def __init__(self, name, base_url, kind, registered_via, last_seen, adapter, capabilities=None):
         self.name = name
@@ -53,6 +60,10 @@ class _Entry:
         # class, kinds). Drives the gateway's GET /capabilities so the profile
         # surface reflects what the live deployment can actually do.
         self.capabilities = capabilities or {}
+        # Running instances that announced this name: instance id -> when it
+        # last announced. Empty for a seeded entry or an adapter that
+        # announces no instance.
+        self.instances: dict[str, float] = {}
 
 
 class AdapterRegistry:
@@ -77,12 +88,15 @@ class AdapterRegistry:
     #     await ever lands mid read-modify-write) -----------------------------
 
     def upsert(self, name: str, base_url: str, kind: str, via: str,
-               capabilities: Optional[dict] = None) -> Optional[HttpAdapter]:
+               capabilities: Optional[dict] = None,
+               instance: Optional[str] = None) -> Optional[HttpAdapter]:
         """Register or heartbeat. Returns an orphaned HttpAdapter to close when
         an existing entry's endpoint changed, else None."""
         now = self._clock()
         existing = self._entries.get(name)
         if existing is not None and existing.base_url == base_url:
+            if instance:
+                existing.instances[instance] = now
             # Same endpoint: a heartbeat. Keep the HttpAdapter (and its cooldown
             # state); refresh lastSeen + capabilities. Allow self -> seed/manual
             # promotion, never demote a declared entry back to self.
@@ -94,17 +108,42 @@ class AdapterRegistry:
             return None
         orphan = existing.adapter if existing is not None else None
         adapter = HttpAdapter(name=name, base_url=base_url, **adapter_options(name))
-        self._entries[name] = _Entry(name, base_url, kind, via, now, adapter, capabilities)
+        entry = _Entry(name, base_url, kind, via, now, adapter, capabilities)
+        if existing is not None:
+            # A new endpoint for the same adapter: the instances that announced
+            # the old one are still instances of this adapter.
+            entry.instances = {i: t for i, t in existing.instances.items() if now - t <= self._ttl}
+        if instance:
+            entry.instances[instance] = now
+        self._entries[name] = entry
         self.adapters[name] = adapter
         return orphan
 
-    def remove(self, name: str) -> Optional[HttpAdapter]:
-        """Deregister. Returns the orphaned HttpAdapter to close, or None."""
-        entry = self._entries.pop(name, None)
+    def remove(self, name: str, instance: Optional[str] = None) -> tuple[bool, Optional[HttpAdapter]]:
+        """Deregister. With `instance`, only that instance leaves, and the
+        entry goes with it only when no other live instance remains. Without
+        it, the entry goes, unless instances that identified themselves are
+        still live: the sender is none of them, for example an older adapter
+        stopping after its replacement registered. Returns whether anything
+        was removed, and the orphaned HttpAdapter to close when the entry
+        went."""
+        entry = self._entries.get(name)
         if entry is None:
-            return None
+            return False, None
+        now = self._clock()
+        if not instance and any(now - t <= self._ttl for t in entry.instances.values()):
+            return False, None
+        if instance and entry.instances:
+            if entry.instances.pop(instance, None) is None:
+                return False, None
+            live = {i: t for i, t in entry.instances.items() if now - t <= self._ttl}
+            entry.instances = live
+            if live:
+                entry.last_seen = max(live.values())
+                return True, None
+        del self._entries[name]
         self.adapters.pop(name, None)
-        return entry.adapter
+        return True, entry.adapter
 
     def evict_expired(self) -> list[HttpAdapter]:
         """Drop self-registered entries past TTL (seed/manual are immune).
@@ -112,6 +151,8 @@ class AdapterRegistry:
         now = self._clock()
         orphans, names = [], []
         for name, e in list(self._entries.items()):
+            # An instance that stopped without deregistering ages out alone.
+            e.instances = {i: t for i, t in e.instances.items() if now - t <= self._ttl}
             if e.registered_via == SELF and (now - e.last_seen) > self._ttl:
                 self._entries.pop(name, None)
                 self.adapters.pop(name, None)
@@ -201,6 +242,7 @@ class AdapterRegistry:
             st.update(
                 kind=e.kind,
                 registeredVia=e.registered_via,
+                instances=len(e.instances),
                 lastSeenSAgo=round(now - e.last_seen, 1),
                 state=self._state(e, now),
                 capabilities=e.capabilities,

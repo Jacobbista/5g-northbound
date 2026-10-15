@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from pathlib import Path
 
 import httpx
@@ -24,6 +25,11 @@ except Exception:  # pragma: no cover - yaml is a dependency, guard anyway
     yaml = None
 
 log = logging.getLogger(__name__)
+
+# This process among the instances that may serve the same adapter name: the
+# old and the new pod of a rolling update, or replicas. Its deregistration
+# removes only itself.
+INSTANCE = uuid.uuid4().hex
 
 # Baked declarative source of truth. First existing path wins (image vs repo).
 _CONTRACT_PATHS = (
@@ -109,7 +115,10 @@ async def heartbeat_loop() -> None:
             "(POSITIONING_ENGINE_URL / ADAPTER_NAME / ADAPTER_BASE_URL not all set)"
         )
         return
-    payload = {"name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"], "capabilities": c["capabilities"]}
+    payload = {
+        "name": c["name"], "baseUrl": c["base_url"], "kind": c["kind"],
+        "instance": INSTANCE, "capabilities": c["capabilities"],
+    }
     url = f"{c['engine_url']}/adapters"
     first = True
     while True:
@@ -130,7 +139,7 @@ async def deregister() -> None:
         return
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.delete(f"{c['engine_url']}/adapters/{c['name']}")
+            await client.delete(f"{c['engine_url']}/adapters/{c['name']}", params={"instance": INSTANCE})
         log.info("deregistered '%s' from engine", c["name"])
     except Exception:
         pass  # best-effort; the engine TTL-evicts us anyway

@@ -58,7 +58,9 @@ async def _placeable_adapter(source: str) -> str:
         base = a.get("baseUrl")
         if base:
             return base
-    raise CamaraError(404, "IDENTIFIER_NOT_FOUND", f"no adapter serves source '{source}'.")
+    # The asset exists. Its source is absent from the registry, for example
+    # while its adapter restarts: unavailable, not unknown.
+    raise CamaraError(503, "UNAVAILABLE", f"Source '{source}' is not registered.")
 
 
 async def _proxy(method: str, asset_id: str, claims: dict, json: dict | None = None) -> dict:

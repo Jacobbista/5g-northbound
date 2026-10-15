@@ -81,3 +81,18 @@ async def test_an_unreachable_fabric_is_reported_as_unavailable(client, auth_hea
     respx_mock.get("http://engine.test/adapters").mock(side_effect=httpx.ConnectError("down"))
     r = await client.put(SYNTHETIC, json={"x": 1.0, "y": 1.0}, headers=auth_headers)
     assert r.status_code == 503
+
+
+async def test_a_source_absent_from_the_registry_is_unavailable(client, auth_headers, respx_mock, monkeypatch):
+    """While the synthetic adapter restarts, its asset still exists: the source
+    is unavailable, not the asset unknown."""
+    monkeypatch.setenv("POSITIONING_ENGINE_URL", "http://engine.test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    respx_mock.get("http://engine.test/adapters").mock(
+        return_value=httpx.Response(200, json={"adapters": []})
+    )
+    r = await client.put(SYNTHETIC, json={"x": 1.0, "y": 1.0}, headers=auth_headers)
+    assert r.status_code == 503
+    assert r.json()["code"] == "UNAVAILABLE"

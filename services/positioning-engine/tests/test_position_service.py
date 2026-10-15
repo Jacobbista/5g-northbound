@@ -4,14 +4,16 @@ import pytest
 
 from app.adapters.base import Adapter, Measurement
 from app.fusion.registry import get_strategy
-from app.services.position_service import PositionService
+from app.services.position_service import PositionService, SourceNotRegistered
 
 
 class _StaticAdapter(Adapter):
     def __init__(self, m: Measurement):
         self._m = m
+        self.calls = 0
 
     async def get_measurement(self, device_id: str):
+        self.calls += 1
         return self._m
 
 
@@ -50,15 +52,17 @@ async def test_source_hint_routes_to_matching_adapter(floor_plan):
 
 
 @pytest.mark.asyncio
-async def test_unknown_source_falls_back_to_fan_out(floor_plan):
+async def test_an_unregistered_source_is_unavailable_and_asks_no_other_adapter(floor_plan):
+    """The device belongs to the named source: another adapter's answer would
+    be about another device."""
     a = _StaticAdapter(Measurement(source="a", x=2.0, y=2.0, accuracy=1.0, confidence=1.0, frame="venue"))
     svc = PositionService(
         adapters={"a": a}, floor_plan=floor_plan, device_map={},
         primary_strategy=get_strategy("weighted_avg"), compare_strategies=[],
     )
-    result = await svc.get_position("dev1", source="nonesuch")
-    assert result is not None
-    assert result.primary.fused.sources == ["a"]
+    with pytest.raises(SourceNotRegistered):
+        await svc.get_position("dev1", source="nonesuch")
+    assert a.calls == 0
 
 
 @pytest.mark.asyncio

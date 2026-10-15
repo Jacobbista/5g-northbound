@@ -6,6 +6,7 @@ from ..models import EnginePosition, FusionOutput
 from ..services.geo import local_to_gps, venue_altitude
 from ..services.position_service import (
     PositionService,
+    SourceNotRegistered,
     get_position_service,
     ts_to_iso,
 )
@@ -70,6 +71,8 @@ async def get_position(
             ),
             current=primary.current,
         )
+    except SourceNotRegistered as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:

@@ -2,7 +2,8 @@
 
 GET    /adapters        - health + membership snapshot (cooldown x heartbeat).
 POST   /adapters        - self-registration / heartbeat (idempotent upsert).
-DELETE /adapters/{name} - best-effort deregister on adapter shutdown.
+DELETE /adapters/{name} - best-effort deregister on adapter shutdown; with
+                          ?instance=, only that instance leaves.
 
 No auth: the engine is ClusterIP and never externally exposed, consistent with
 its existing internal-trust model. See docs/adapter-registry.md.
@@ -32,7 +33,9 @@ async def register_adapter(req: Announcement, request: Request):
     name+baseUrl just refreshes lastSeen."""
     registry = request.app.state.registry
     # Stored as declared: an omitted trait stays omitted.
-    orphan = registry.upsert(req.name, req.baseUrl, req.kind, SELF, req.capabilities.model_dump(exclude_unset=True))
+    orphan = registry.upsert(
+        req.name, req.baseUrl, req.kind, SELF, req.capabilities.model_dump(exclude_unset=True), req.instance,
+    )
     registry.persist()
     if orphan is not None:
         await _safe_aclose(orphan)
@@ -40,11 +43,15 @@ async def register_adapter(req: Announcement, request: Request):
 
 
 @router.delete("/adapters/{name}")
-async def deregister_adapter(name: str, request: Request):
-    """Deregister on adapter shutdown. 404 when the name is unknown."""
+async def deregister_adapter(name: str, request: Request, instance: str | None = None):
+    """Deregister on adapter shutdown. An instance removes only itself: the
+    adapter stays registered while another of its instances runs, as in a
+    rolling update where the new pod registers before the old one stops."""
     registry = request.app.state.registry
-    orphan = registry.remove(name)
+    removed, orphan = registry.remove(name, instance)
     registry.persist()
     if orphan is not None:
         await _safe_aclose(orphan)
-    return {"status": "ok" if orphan is not None else "absent", "name": name}
+    registered = name in registry.adapters
+    status = "ok" if removed else ("kept" if registered else "absent")
+    return {"status": status, "name": name, "registered": registered}

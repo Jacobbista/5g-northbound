@@ -47,10 +47,13 @@ sequenceDiagram
 ```
 
 **Routing in the engine.** The gateway passes the capability's `source`, and
-the engine asks the adapter registered under that name. Without a matching
-source it consults the optional `DEVICE_MAP` pins, and otherwise asks every
-registered adapter and fuses the answers. An adapter answers `404` for a device
-it does not serve. See [adapter registry](adapter-registry.md).
+the engine asks the adapter registered under that name. When no adapter is
+registered under it, for example while that adapter restarts, the engine
+answers `503`: the source is unavailable, and no other adapter is asked about
+its device. A request without a source consults the optional `DEVICE_MAP` pins,
+and otherwise asks every registered adapter and fuses the answers. An adapter
+answers `404` for a device it does not serve. See
+[adapter registry](adapter-registry.md).
 
 **Fusion at two levels.** The engine fuses the measurements of one positioning
 id, weighting each by `confidence / accuracy²`. The gateway fuses the positions

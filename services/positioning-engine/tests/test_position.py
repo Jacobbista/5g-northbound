@@ -45,6 +45,15 @@ async def test_position_without_georeference_is_unavailable(app, client):
     assert resp.status_code == 503
 
 
+@pytest.mark.asyncio
+async def test_a_source_without_a_registered_adapter_is_unavailable(client):
+    """While a source's adapter is absent, for example during its restart, its
+    devices are not unlocatable: the source is unavailable."""
+    resp = await client.get("/position/uwb-tag-001", params={"source": "nonesuch"})
+    assert resp.status_code == 503
+    assert "nonesuch" in resp.json()["detail"]
+
+
 class _Static(Adapter):
     def __init__(self, m: Measurement):
         self._m = m

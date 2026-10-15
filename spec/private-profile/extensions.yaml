@@ -137,13 +137,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/PlacementResult"
         "404":
-          description: No such asset for this tenant, or no adapter serves its source.
+          description: No such asset for this tenant.
         "422":
           description: The source reports a measured position and cannot be placed.
         "502":
           description: The source rejected the placement.
         "503":
-          description: The positioning fabric or the source is unreachable.
+          description: The positioning fabric or the source is unreachable, or the source is not registered.
     delete:
       summary: Stop a synthetic asset reporting.
       description: The asset then has no position. Removing an asset that is not placed is not an error.
@@ -156,7 +156,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/PlacementResult"
         "404":
-          description: No such asset for this tenant, or no adapter serves its source.
+          description: No such asset for this tenant.
+        "503":
+          description: The positioning fabric or the source is unreachable, or the source is not registered.
   /capabilities:
     get:
       summary: What this deployment can do now.
