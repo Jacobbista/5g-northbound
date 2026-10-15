@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from . import register
+from . import outbound, register
 from .config import settings
 from .declaration import check
 from .obs import install_hop_logging
@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
     yield
     reg_task.cancel()
     await register.deregister()
+    await outbound.aclose()
 
 
 app = FastAPI(

@@ -1,9 +1,11 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import outbound
 from .obs import install_hop_logging
 from .errors import (
     CamaraError,
@@ -30,10 +32,17 @@ from .routers import (
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await outbound.aclose()
+
+
 app = FastAPI(
     title="Device Location Gateway",
     description="CAMARA Device Location - Retrieval (v0.5) and Verification (v3).",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

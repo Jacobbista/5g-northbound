@@ -6,6 +6,7 @@ from typing import Optional
 
 import httpx
 
+from . import outbound
 from .obs import corr_headers
 from .schema import AuthBasic, AuthBearer, AuthHeader, AuthNone, Schema
 
@@ -121,8 +122,7 @@ async def fetch(schema: Schema, device_id: str) -> Optional[dict]:
     headers.update(corr_headers())
     url = f"{root}{path}"
     try:
-        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
-            resp = await client.get(url, headers=headers)
+        resp = await outbound.client().get(url, headers=headers, timeout=schema.requestTimeout)
     except httpx.HTTPError as exc:
         log.warning("vendor %s unreachable: %s", schema.vendor, exc)
         return None
@@ -163,8 +163,7 @@ async def fetch_path(schema: Schema, device_id: str, override_path: str, pathVar
     headers.update(corr_headers())
     url = f"{root}{rendered}"
     try:
-        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
-            resp = await client.get(url, headers=headers)
+        resp = await outbound.client().get(url, headers=headers, timeout=schema.requestTimeout)
     except httpx.HTTPError as exc:
         log.warning("vendor %s diagnostics unreachable: %s", schema.vendor, exc)
         return None
@@ -232,8 +231,9 @@ async def fetch_discover_page(
     if debug:
         log.info("discover: GET %s params=%s", url, params)
     try:
-        async with httpx.AsyncClient(timeout=schema.requestTimeout) as client:
-            resp = await client.get(url, headers=headers, params=params or None)
+        resp = await outbound.client().get(
+            url, headers=headers, params=params or None, timeout=schema.requestTimeout,
+        )
     except httpx.HTTPError as exc:
         log.warning("vendor %s discover unreachable: %s", schema.vendor, exc)
         return None

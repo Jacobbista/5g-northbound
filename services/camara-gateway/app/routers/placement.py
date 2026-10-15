@@ -18,6 +18,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
+from .. import outbound
 from ..assets import asset_by_id
 from ..auth import require_location_role
 from ..errors import CamaraError
@@ -72,8 +73,7 @@ async def _proxy(method: str, asset_id: str, claims: dict, json: dict | None = N
     base = await _placeable_adapter(cap.source)
     url = f"{base.rstrip('/')}/devices/{cap.positioningId}/placement"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_S) as c:
-            r = await c.request(method, url, json=json, headers=corr_headers())
+        r = await outbound.client().request(method, url, json=json, headers=corr_headers(), timeout=_TIMEOUT_S)
     except httpx.HTTPError as exc:
         log.warning("placement %s %s unreachable: %s", method, url, exc)
         raise CamaraError(503, "UNAVAILABLE", "The source is unreachable.") from exc

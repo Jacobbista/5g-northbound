@@ -8,6 +8,7 @@ path); org scoping matches retrieve."""
 import httpx
 from fastapi import APIRouter, Depends
 
+from .. import outbound
 from ..assets import asset_by_id
 from ..auth import consumer_org, require_location_role
 from ..config import get_settings
@@ -28,8 +29,9 @@ async def device_diagnostics(asset_id: str, claims: dict = Depends(require_locat
     if not base:
         raise CamaraError(404, "NOT_FOUND", "The asset's source exposes no diagnostics.")
     try:
-        async with httpx.AsyncClient(timeout=5.0) as c:
-            r = await c.get(f"{base.rstrip('/')}/diagnostics/{asset.positioning_id}", headers=corr_headers())
+        r = await outbound.client().get(
+            f"{base.rstrip('/')}/diagnostics/{asset.positioning_id}", headers=corr_headers(), timeout=5.0,
+        )
     except httpx.HTTPError as exc:
         raise CamaraError(503, "UNAVAILABLE", "The source is unreachable.") from exc
     if r.status_code == 404:

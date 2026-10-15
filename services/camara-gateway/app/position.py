@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from . import outbound
 from .assets import Asset, asset_by_id
 from .config import get_settings
 from .errors import CamaraError
@@ -134,10 +135,9 @@ async def _engine_get(path: str, *, timeout: float = _ENGINE_REQUEST_TIMEOUT_S) 
     last_exc: Exception | None = None
     for attempt in range(_RETRY_ATTEMPTS):
         try:
-            async with httpx.AsyncClient(base_url=base) as client:
-                resp = await client.get(path, timeout=timeout, headers=corr_headers())
-                resp.raise_for_status()
-                return resp.json()
+            resp = await outbound.client().get(f"{base}{path}", timeout=timeout, headers=corr_headers())
+            resp.raise_for_status()
+            return resp.json()
         except httpx.HTTPStatusError as exc:
             if 500 <= exc.response.status_code < 600 and attempt + 1 < _RETRY_ATTEMPTS:
                 last_exc = exc
@@ -490,10 +490,11 @@ async def get_wifi_calibration() -> dict | None:
     if not url:
         return None
     try:
-        async with httpx.AsyncClient(base_url=url) as client:
-            resp = await client.get("/calibration/params", timeout=_ADAPTERS_REQUEST_TIMEOUT_S, headers=corr_headers())
-            resp.raise_for_status()
-            return resp.json().get("params", {})
+        resp = await outbound.client().get(
+            f"{url}/calibration/params", timeout=_ADAPTERS_REQUEST_TIMEOUT_S, headers=corr_headers(),
+        )
+        resp.raise_for_status()
+        return resp.json().get("params", {})
     except Exception as exc:
         log.warning("wifi calibration unreachable (%s)", exc)
         return None

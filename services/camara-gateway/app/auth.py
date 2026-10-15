@@ -1,9 +1,9 @@
 import logging
 
-import httpx
 from fastapi import Depends, Request
 from jose import JWTError, jwt
 
+from . import outbound
 from .config import get_settings
 from .errors import CamaraError
 
@@ -24,10 +24,9 @@ def _certs_url() -> str:
 
 
 async def _fetch_jwks() -> dict:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(_certs_url(), timeout=5.0)
-        resp.raise_for_status()
-        return resp.json()
+    resp = await outbound.client().get(_certs_url(), timeout=5.0)
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def _get_jwks() -> dict:
