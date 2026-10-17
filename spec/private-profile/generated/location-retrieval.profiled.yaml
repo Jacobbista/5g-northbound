@@ -157,13 +157,6 @@ paths:
                     assetId: pkg-4471
                   maxAge: 120
                   maxSurface: 100
-              INPUT_NAI_ALIAS:
-                summary: Asset alias in networkAccessIdentifier
-                description: Retrieve the location of an asset through the alias form
-                  of the NAI
-                value:
-                  device:
-                    networkAccessIdentifier: pkg-4471@acme.assets
       responses:
         '200':
           description: Location retrieval result
@@ -237,11 +230,9 @@ components:
       description: 'Private-asset profile: the tracked entity is an ASSET, identified
         by
 
-        `assetId`. `networkAccessIdentifier` is accepted only as the asset alias
+        `assetId`, unique in the gateway''s asset map. Public-network identifiers
 
-        `<asset_id>@<org>.assets`. Public-network identifiers (phoneNumber, IP)
-
-        are not part of this profile.
+        (phoneNumber, networkAccessIdentifier, IP) are not part of this profile.
 
         '
       type: object

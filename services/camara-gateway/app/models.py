@@ -8,11 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class Device(BaseModel):
     """The tracked entity is an ASSET, not a cellular subscriber.
 
-    Private-asset profile: `assetId` is the first-class identifier.
-    `networkAccessIdentifier` is accepted only as an optional alias carrier
-    using the asset scheme `<asset_id>@<org>.assets`, for consumers that must
-    stay on a stock CAMARA field. The public-network identifiers below are
-    parsed only so the profile can reject them explicitly with
+    Private-asset profile: `assetId` is the only identifier. The
+    public-network identifiers below, the network access identifier among
+    them, are parsed only so the profile can reject them explicitly with
     UNSUPPORTED_IDENTIFIER (see position.resolve_asset); they carry no meaning
     for an asset.
     """
@@ -25,7 +23,7 @@ class Device(BaseModel):
     ipv6Address: Optional[str] = None
 
     def has_public_identifier(self) -> bool:
-        return any((self.phoneNumber, self.ipv4Address, self.ipv6Address))
+        return any((self.phoneNumber, self.networkAccessIdentifier, self.ipv4Address, self.ipv6Address))
 
 
 # --- Geometry ---

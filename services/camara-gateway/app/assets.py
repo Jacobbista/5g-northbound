@@ -20,6 +20,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from .config import get_settings
+from .errors import CamaraError
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,8 @@ def load_asset_map() -> AssetMap:
     seed_path = Path(get_settings().asset_seed_file)
     seed = _read(seed_path) if seed_path.exists() else None
     if seed is not None:
+        if (repeat := _repeated_asset_id(seed)) is not None:
+            log.warning("asset map: seed %s lists assetId '%s' twice, requests resolve the first", seed_path, repeat[0])
         log.info("asset map: seeding store %s from %s (%d assets)", store, seed_path, len(seed.assets))
         save_asset_map(seed)
         return seed
@@ -116,6 +119,51 @@ def save_asset_map(amap: AssetMap) -> None:
 
 def list_assets() -> list[Asset]:
     return load_asset_map().assets
+
+
+def _repeated_asset_id(amap: AssetMap) -> tuple[str, str, str] | None:
+    """The first `assetId` the map lists twice, with the organisations of both
+    entries. A request names an asset by `assetId` alone, so an id must
+    resolve to one asset across every organisation."""
+    seen: dict[str, str] = {}
+    for asset in amap.assets:
+        if asset.assetId in seen:
+            return asset.assetId, seen[asset.assetId], asset.org
+        seen[asset.assetId] = asset.org
+    return None
+
+
+def validate_for_write(amap: AssetMap) -> None:
+    """The structural rules of a map written over PUT /assets. The store is not
+    validated again on read, so this is the only gate."""
+    repeat = _repeated_asset_id(amap)
+    if repeat is not None:
+        asset_id, first_org, second_org = repeat
+        where = (
+            f"in organisation '{first_org}'" if first_org == second_org
+            else f"in organisations '{first_org}' and '{second_org}'"
+        )
+        raise CamaraError(422, "DUPLICATE_ASSET_ID", f"assetId '{asset_id}' appears twice, {where}.")
+    _reject_duplicate_positioning_ids(amap)
+
+
+def _reject_duplicate_positioning_ids(amap: AssetMap) -> None:
+    """The engine routes a `positioningId` to exactly one adapter-learned
+    source (docs/asset-registry.md); two assets claiming the same one starve
+    one of them on the stream (an internal lookup keyed by positioningId can
+    resolve to only one asset) and would blend one asset's telemetry into the
+    other's fusion."""
+    seen: dict[str, str] = {}
+    for asset in amap.assets:
+        for cap in asset.capabilities:
+            prior = seen.get(cap.positioningId)
+            if prior is not None:
+                raise CamaraError(
+                    422, "DUPLICATE_POSITIONING_ID",
+                    f"positioningId '{cap.positioningId}' is claimed by both "
+                    f"'{prior}' and '{asset.assetId}'.",
+                )
+            seen[cap.positioningId] = asset.assetId
 
 
 def asset_by_id(asset_id: str) -> Asset | None:

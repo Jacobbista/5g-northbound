@@ -63,12 +63,15 @@ async def test_retrieve_returns_spec_shaped_circle(
     profiled_location_validator.validate(body)
 
 
-async def test_retrieve_via_nai_asset_alias(client, auth_headers, location_validator):
-    """networkAccessIdentifier as the `<asset_id>@<org>.assets` alias resolves."""
-    body = {"device": {"networkAccessIdentifier": "tool-880@acme.assets"}}
-    resp = await client.post(RETRIEVE, json=body, headers=auth_headers)
-    assert resp.status_code == 200
-    location_validator.validate(resp.json())
+async def test_retrieve_network_access_identifier_422(client, auth_headers):
+    """A network access identifier is a public-network identifier, even beside an assetId."""
+    for device in (
+        {"networkAccessIdentifier": "tool-880@acme.assets"},
+        {"assetId": "tool-880", "networkAccessIdentifier": "tool-880@acme.assets"},
+    ):
+        resp = await client.post(RETRIEVE, json={"device": device}, headers=auth_headers)
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "UNSUPPORTED_IDENTIFIER"
 
 
 async def test_retrieve_missing_identifier_422(client, auth_headers):

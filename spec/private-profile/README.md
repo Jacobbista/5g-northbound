@@ -68,11 +68,11 @@ The `device` object carries an `assetId`:
 { "device": { "assetId": "pkg-4471" } }
 ```
 
-- `networkAccessIdentifier` is accepted as an alias in the form
-  `<assetId>@<org>.assets`, such as `pkg-4471@acme.assets`, for a client
-  limited to the stock fields. Any other NAI identifies nothing.
-- `phoneNumber`, `ipv4Address` or `ipv6Address` in the request answers
-  `422 UNSUPPORTED_IDENTIFIER`.
+- `assetId` is unique in the gateway's asset map, across organisations.
+- `phoneNumber`, `networkAccessIdentifier`, `ipv4Address` or `ipv6Address` in
+  the request answers `422 UNSUPPORTED_IDENTIFIER`, also beside an `assetId`.
+  CAMARA defines the network access identifier as a mobile subscription and
+  does not yet allow its use.
 
 The gateway resolves the `assetId` in the asset map to its capabilities, each a
 `source` and a `positioningId`, and to its organisation
@@ -135,7 +135,9 @@ rules.
 
 **Granularity.** The scope is the organisation. Restricting a consumer to a
 subset of an organisation's assets, such as a service provider that maintains
-only the tools, is not part of the profile. Isolation between organisations is
+only the tools, is not part of the profile. Nor is an asset identity qualified
+by its organisation, for organisations that name their assets independently or
+several sites behind one consumer. Isolation between organisations is
 implemented at the functional level and has not been assessed for security.
 
 ## Conformance with the base contract

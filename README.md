@@ -25,7 +25,7 @@ reasoning are in [`spec/private-profile/README.md`](spec/private-profile/README.
 
 | Point | Change |
 |-------|--------|
-| Identity | `assetId` identifies the device. A phone number or IP address is refused with `422 UNSUPPORTED_IDENTIFIER`. |
+| Identity | `assetId` identifies the device. A phone number, network access identifier or IP address is refused with `422 UNSUPPORTED_IDENTIFIER`. |
 | Delivery | A position stream (`/positions/stream`) beside `retrieve`. |
 | Authorisation | Two-legged tokens scoped by organisation: the venue owns the network, the assets and the applications, so there is no end-user consent. |
 | Dimension | `altitude` and `verticalAccuracy` when a source measures height, and `horizontalAccuracy` below CAMARA's 1 m radius floor. |

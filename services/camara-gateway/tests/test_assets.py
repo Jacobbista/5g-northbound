@@ -120,6 +120,26 @@ async def test_details_telemetry_null_when_engine_unreachable(
     assert resp.json()["telemetry"] is None
 
 
+async def test_put_assets_rejects_an_asset_id_used_twice(client, auth_headers):
+    dup_map = {
+        "version": 4,
+        "assets": [
+            {"assetId": "pkg-1", "kind": "tool", "org": "acme",
+             "capabilities": [{"source": "wifi", "positioningId": "pkg-1-wifi"}]},
+            {"assetId": "pkg-1", "kind": "tool", "org": "globex",
+             "capabilities": [{"source": "wifi", "positioningId": "pkg-1-other"}]},
+        ],
+    }
+    resp = await client.put(ASSETS, json=dup_map, headers=auth_headers)
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["code"] == "DUPLICATE_ASSET_ID"
+    assert body["message"] == "assetId 'pkg-1' appears twice, in organisations 'acme' and 'globex'."
+
+    got = await client.get(ASSETS, headers=auth_headers)
+    assert "globex" not in {a["org"] for a in got.json()["assets"]}
+
+
 async def test_put_assets_rejects_a_positioning_id_claimed_by_two_assets(client, auth_headers):
     # Reproduces the KELT repro: wittra-tag-shared standalone AND as a
     # capability of puppypi-01. The gateway's stream enrich groups engine

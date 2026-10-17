@@ -70,6 +70,7 @@ beside the fused position.
 
 | Code | Rule |
 |------|------|
+| `DUPLICATE_ASSET_ID` | an `assetId` appears once in the whole map, across organisations, since a request names the asset by `assetId` alone |
 | `DUPLICATE_POSITIONING_ID` | a `positioningId` appears once in the whole map, since the position stream maps it back to one asset |
 | `UNKNOWN_SOURCE` | a `source` is served by an adapter registered with the engine |
 | `UNKNOWN_KIND` | a `kind` is advertised by a registered adapter in its `kinds` |

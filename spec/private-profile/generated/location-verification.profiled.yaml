@@ -333,11 +333,9 @@ components:
       description: 'Private-asset profile: the tracked entity is an ASSET, identified
         by
 
-        `assetId`. `networkAccessIdentifier` is accepted only as the asset alias
+        `assetId`, unique in the gateway''s asset map. Public-network identifiers
 
-        `<asset_id>@<org>.assets`. Public-network identifiers (phoneNumber, IP)
-
-        are not part of this profile.
+        (phoneNumber, networkAccessIdentifier, IP) are not part of this profile.
 
         '
       type: object

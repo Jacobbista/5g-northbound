@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..assets import AssetMap, asset_by_id, list_assets, load_asset_map, save_asset_map
+from ..assets import AssetMap, asset_by_id, list_assets, load_asset_map, save_asset_map, validate_for_write
 from ..auth import consumer_org, require_location_role, require_operator
 from ..errors import CamaraError
 from ..position import authorize_asset, get_adapter_status, get_engine_devices, get_fused_details
@@ -34,26 +34,6 @@ async def get_assets(claims: dict = Depends(require_location_role)) -> AssetMap:
     if org:  # tenant gate: a consumer sees only its own org's assets
         amap = AssetMap(version=amap.version, assets=[a for a in amap.assets if a.org == org])
     return amap
-
-
-def _reject_duplicate_positioning_ids(amap: AssetMap) -> None:
-    """The engine routes a `positioningId` to exactly one adapter-learned
-    source (docs/asset-registry.md); two assets claiming the same one starve
-    one of them on the stream (an internal lookup keyed by positioningId can
-    resolve to only one asset) and would blend one asset's telemetry into the
-    other's fusion. Reject at write time instead of letting it land - the
-    store is not re-validated on every read, so this is the only gate."""
-    seen: dict[str, str] = {}
-    for asset in amap.assets:
-        for cap in asset.capabilities:
-            prior = seen.get(cap.positioningId)
-            if prior is not None:
-                raise CamaraError(
-                    422, "DUPLICATE_POSITIONING_ID",
-                    f"positioningId '{cap.positioningId}' is claimed by both "
-                    f"'{prior}' and '{asset.assetId}'.",
-                )
-            seen[cap.positioningId] = asset.assetId
 
 
 async def _known_sources_and_kinds() -> Optional[tuple[set[str], set[str]]]:
@@ -110,7 +90,7 @@ async def put_assets(
     body: AssetMap,
     _claims: dict = Depends(require_operator),
 ) -> AssetMap:
-    _reject_duplicate_positioning_ids(body)
+    validate_for_write(body)
     known = await _known_sources_and_kinds()
     if known is not None:
         sources, kinds = known

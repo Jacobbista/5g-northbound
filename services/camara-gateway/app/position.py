@@ -75,27 +75,13 @@ class PositionDetails:
     vertical_accuracy_m: float | None = None
 
 
-def _asset_id_from_nai(nai: str) -> str | None:
-    """Parse the asset-alias NAI scheme `<asset_id>@<org>.assets`.
-
-    Returns the asset_id when the suffix matches, else None (so a stray NAI
-    doesn't accidentally resolve). The scheme is the optional CAMARA-stock
-    carrier; `device.assetId` is the first-class path.
-    """
-    local, sep, domain = nai.partition("@")
-    if sep and domain.endswith(".assets") and local:
-        return local
-    return None
-
-
 def resolve_asset(device: Device) -> Asset:
     """Resolve a CAMARA device identifier to an asset. No subscriber lookup.
 
-    `assetId` is first-class; `networkAccessIdentifier` is accepted only via
-    the `<asset_id>@<org>.assets` alias scheme. Public-network identifiers are
-    rejected with UNSUPPORTED_IDENTIFIER (they are the assumption this profile
-    drops); an unknown asset is a 404 - there is no "fall back to the raw
-    value" path.
+    `assetId` is the only identifier. Public-network identifiers, the network
+    access identifier among them, are rejected with UNSUPPORTED_IDENTIFIER:
+    they are the assumption this profile drops. An unknown asset is a 404,
+    with no fallback to the raw value.
     """
     if device.has_public_identifier():
         raise CamaraError(
@@ -103,8 +89,6 @@ def resolve_asset(device: Device) -> Asset:
             "Public-network identifiers are not supported; identify the asset by assetId.",
         )
     asset_id = device.assetId
-    if not asset_id and device.networkAccessIdentifier:
-        asset_id = _asset_id_from_nai(device.networkAccessIdentifier)
     if not asset_id:
         raise CamaraError(422, "MISSING_IDENTIFIER", "The asset cannot be identified.")
     asset = asset_by_id(asset_id)
