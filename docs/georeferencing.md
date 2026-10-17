@@ -28,7 +28,7 @@ converted into the venue frame with the inverse transform.
 | `latitude`, `longitude` | the venue origin, the lower-left corner of the floor plan |
 | `azimuth_deg` | the bearing of the venue +y axis from true north, clockwise |
 | `width_m`, `depth_m` | the size of the floor plan |
-| `altitude_m` | the ellipsoidal height of the venue floor, present only when surveyed. A CAMARA response carries an altitude only when this is set and the source measures height |
+| `altitude_m` | the ellipsoidal height of the floor, present only when surveyed ([altitude](#altitude)). A CAMARA response carries an altitude only when this is set and the source measures height |
 | `calibrated_against` | the basemap the world alignment was fitted on: `mapbox`, `google-satellite`, `google-hybrid`, `esri` or `osm-carto` |
 | `calibration_points` | the number of point pairs in that fit |
 | `calibration_rms_m` | the root-mean-square residual of the fit, in metres |
@@ -49,6 +49,34 @@ origin at 0,0 and an extent of 0.
 The engine converts with an equirectangular approximation at 111 320 m per
 degree. At the latitude of Stockholm this differs from the WGS84 ellipsoid by
 0.07 % north-south and 0.25 % east-west, up to 25 cm across 100 m.
+
+## Altitude
+
+`altitude_m` is the height of the floor of this floor plan above the WGS84
+ellipsoid, the surface latitude and longitude are defined on. A source that
+measures height adds the height of the fix above that floor. Leave the field
+empty when the floor has not been surveyed: positions then carry no altitude.
+
+A map gives heights above mean sea level, which sits above or below the
+ellipsoid by the geoid undulation of the place. The undulation varies across
+the world from about -100 m to about +85 m, and is about 22 m around
+Stockholm. A height read from a map is therefore not an ellipsoidal height.
+
+The value for a floor:
+
+1. the ground height at the origin, from a national map (in Sweden
+   Lantmäteriet, in RH 2000);
+2. plus the height of the floor above that ground, from the building drawings
+   or measured;
+3. plus the geoid undulation at the origin, from the national model (in Sweden
+   SWEN17_RH2000, through Lantmäteriet's
+   [geoid height service](https://www2.lantmateriet.se/en/geodata/gps-geodesi-och-swepos/geodesy/geodesy-services/compute-geoid-height/)),
+   or from EGM2008 elsewhere.
+
+A floor is level, so any point of it gives the same value. A GNSS receiver
+reports an ellipsoidal height directly, but indoors and on a phone its height
+error is several metres or more. The accuracy of the result is set mostly by
+the height of the floor above the ground.
 
 ## Absolute accuracy
 

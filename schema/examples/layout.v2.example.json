@@ -3,7 +3,7 @@
   "room_w": 10,
   "room_h": 8,
   "aps": [{ "id": "AP01", "x": 1.0, "y": 1.0 }],
-  "gps_origin": { "latitude": 59.4042, "longitude": 17.9492, "azimuth_deg": -36.4, "altitude_m": 31.0 },
+  "gps_origin": { "latitude": 59.4042, "longitude": 17.9492, "azimuth_deg": -36.4 },
   "walls": [],
   "floor_plan_image": null,
   "floor_plans": [
@@ -15,7 +15,6 @@
         "latitude": 59.4042,
         "longitude": 17.9492,
         "azimuth_deg": -36.4,
-        "altitude_m": 31.0,
         "width_m": 40,
         "height_m": 30
       },

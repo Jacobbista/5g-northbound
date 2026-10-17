@@ -346,7 +346,7 @@ the outputs of the comparison strategies when `FUSION_COMPARE` is set
     "label": "Floor 6",
     "georef": {
       "latitude": 59.4042, "longitude": 17.9492, "azimuth_deg": -36.4,
-      "altitude_m": 31.0, "width_m": 40, "depth_m": 30
+      "width_m": 40, "depth_m": 30
     }
   }],
   "rooms": [{
