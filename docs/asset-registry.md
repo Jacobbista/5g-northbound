@@ -73,11 +73,11 @@ beside the fused position.
 | `DUPLICATE_ASSET_ID` | an `assetId` appears once in the whole map, across organisations, since a request names the asset by `assetId` alone |
 | `DUPLICATE_POSITIONING_ID` | a `positioningId` appears once in the whole map, since the position stream maps it back to one asset |
 | `UNKNOWN_SOURCE` | a `source` is served by an adapter registered with the engine |
-| `UNKNOWN_KIND` | a `kind` is advertised by a registered adapter in its `kinds` |
 
-A `source` or `kind` the stored map already uses is accepted, so the assets of
-an adapter that is down stay writable. When the engine cannot be reached, the
-source and kind checks are skipped. The checks run on write only: a stored map
+A `source` the stored map already uses is accepted, so the assets of an adapter
+that is down stay writable. When the engine cannot be reached, the source check
+is skipped. `kind` is not checked: it names the object, and the site chooses
+it. The checks run on write only: a stored map
 is not validated again when it is read.
 
 ## Writing the map

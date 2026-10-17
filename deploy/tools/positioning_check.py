@@ -86,7 +86,6 @@ def main() -> int:
         return 1
 
     advertised_sources: set[str] = set()
-    advertised_kinds: set[str] = set()
     declared: dict[str, dict] = {}
 
     print("· adapter capabilities (compose vs contract)")
@@ -130,7 +129,6 @@ def main() -> int:
 
         # Coverage is judged on what the deployment actually advertises.
         advertised_sources.add(effective.get("source"))
-        advertised_kinds.update(effective.get("kinds") or [])
         declared[svc_name] = effective
 
     # Accuracy class: the declared band has to agree with what the adapter can
@@ -187,9 +185,6 @@ def main() -> int:
             for s in unserved:
                 errors.append(f"asset {a['assetId']}: source '{s}' not advertised by any adapter")
                 print(f"  {BAD} {a['assetId']}: source '{s}' unserved")
-        elif a["kind"] not in advertised_kinds:
-            errors.append(f"asset {a['assetId']}: kind '{a['kind']}' not advertised by any adapter")
-            print(f"  {BAD} {a['assetId']}: kind '{a['kind']}' unadvertised")
         else:
             print(f"  {OK} {a['assetId']}: {a['kind']} via {', '.join(sources)}")
 

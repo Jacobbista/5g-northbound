@@ -192,9 +192,8 @@ def _adapters_response(*entries):
     return httpx.Response(200, json={"adapters": list(entries)})
 
 
-def _adapter(name, source, kinds):
-    return {"name": name, "state": "live",
-            "capabilities": {"source": source, "kinds": kinds}}
+def _adapter(name, source):
+    return {"name": name, "state": "live", "capabilities": {"source": source}}
 
 
 @pytest.fixture
@@ -220,7 +219,7 @@ def _map_with(source, kind="tool"):
 async def test_put_assets_rejects_a_source_no_adapter_serves(client, auth_headers, engine):
     # The typo case: accepted today and then silent, because nothing answers
     # for that source and no error ever says so.
-    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi")))
     resp = await client.put(ASSETS, json=_map_with("wtira"), headers=auth_headers)
     assert resp.status_code == 422
     assert resp.json()["code"] == "UNKNOWN_SOURCE"
@@ -230,15 +229,15 @@ async def test_put_assets_rejects_a_source_no_adapter_serves(client, auth_header
     assert "drill-1" not in {a["assetId"] for a in got.json()["assets"]}
 
 
-async def test_put_assets_rejects_a_kind_no_adapter_advertises(client, auth_headers, engine):
-    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
-    resp = await client.put(ASSETS, json=_map_with("wifi", kind="submarine"), headers=auth_headers)
-    assert resp.status_code == 422
-    assert resp.json()["code"] == "UNKNOWN_KIND"
+async def test_put_assets_accepts_any_kind(client, auth_headers, engine):
+    # The kind names the object the site tracks. No adapter can know it.
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi")))
+    resp = await client.put(ASSETS, json=_map_with("wifi", kind="robot"), headers=auth_headers)
+    assert resp.status_code == 200
 
 
 async def test_put_assets_accepts_what_the_live_fabric_advertises(client, auth_headers, engine):
-    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool"])))
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi")))
     resp = await client.put(ASSETS, json=_map_with("wifi"), headers=auth_headers)
     assert resp.status_code == 200
 
@@ -255,7 +254,7 @@ async def test_put_assets_keeps_a_source_the_stored_map_already_uses(client, aut
     # A self-registered adapter that stays down long enough is evicted from the
     # registry. A source the map already carries is not a typo, so it remains
     # writable rather than becoming unwritable during an outage.
-    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi", ["tool", "pallet"])))
+    engine.mock(return_value=_adapters_response(_adapter("wifi", "wifi")))
     # `wittra` is in the seeded map and no adapter advertises it here.
     seeded = await client.get(ASSETS, headers=auth_headers)
     assert "wittra" in {c["source"] for a in seeded.json()["assets"] for c in a["capabilities"]}

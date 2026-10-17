@@ -2,7 +2,7 @@
 #
 # This image is generic. It bridges ANY vendor positioning cloud that an
 # operator describes in a schema document (PUT /schema, or a mounted file), so
-# it bakes no vendor's traits: no source name, no asset kinds, no coordinate
+# it bakes no vendor's traits: no source name, no coordinate
 # frame, no accuracy class. Those describe the bound vendor, not this binary,
 # and they arrive per deployment in ADAPTER_CAPABILITIES (JSON) - the same
 # reason GET /contract names no vendor's environment variables until a schema

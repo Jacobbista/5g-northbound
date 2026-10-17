@@ -35,7 +35,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "description": "Asset class, surfaced as profile `kind`. PUT /assets accepts a kind that a registered adapter advertises, or one the stored map already uses."
+          "description": "Asset class, the object the site tracks, surfaced as profile `kind`. The site chooses it, independently of the sources that locate the asset."
         },
         "org": {
           "type": "string",

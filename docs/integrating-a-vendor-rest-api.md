@@ -83,7 +83,7 @@ decimals, about 11 m, while `GET /devices/{id}` returns full precision.
 ## Declaring how the source reports
 
 The schema says where the data is. `ADAPTER_CAPABILITIES` says what it means:
-`source`, `kinds`, `frame`, `accuracy_class`, `z`, `reporting` and
+`source`, `frame`, `accuracy_class`, `z`, `reporting` and
 `reportingInterval` (see [adapters](adapters.md#what-an-adapter-declares)).
 Declare them from the vendor's documentation and from real payloads.
 

@@ -121,7 +121,6 @@ class AdapterCapabilities(BaseModel):
     model_config = ConfigDict(extra="allow", title="Adapter capabilities")
 
     source: Optional[str] = Field(default=None, description="Technology tag the adapter reports under.")
-    kinds: list[str] = Field(default_factory=list, description="Asset kinds this source can position.")
     frame: Optional[Frame] = Field(default=None, description="Frame of the measurements it sends.")
     streaming: bool = Field(default=False, description="The adapter pushes its fixes instead of being polled.")
     z: bool = Field(default=False, description="The source measures height.")

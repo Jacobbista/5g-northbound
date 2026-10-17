@@ -10,7 +10,7 @@ vi.mock("../../hooks/useAnchorCalibration", () => ({
 // the details endpoint returns no telemetry.
 vi.mock("../../hooks/useDeviceDetails", () => ({
   useDeviceDetails: () => ({
-    details: { telemetry: null, kind: "uwb-tag", source: "wittra" },
+    details: { telemetry: null, kind: "robot", source: "wittra" },
     error: null,
     loading: false,
   }),

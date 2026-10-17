@@ -54,8 +54,6 @@ async def capabilities(claims: dict = Depends(require_location_role)) -> Capabil
         caps = ad.get("capabilities") or {}
         if caps.get("source"):
             sources.add(caps["source"])
-        for k in caps.get("kinds") or []:
-            kinds.add(k)
         if caps.get("accuracy_class"):
             accuracy.add(caps["accuracy_class"])
         streaming = streaming or bool(caps.get("streaming"))
@@ -65,7 +63,9 @@ async def capabilities(claims: dict = Depends(require_location_role)) -> Capabil
                 name=ad.get("name", ""),
                 source=caps.get("source"),
                 state=ad.get("state"),
-                capabilities=caps,
+                # `kinds` is retired from the adapter contract. An older adapter
+                # may still send it, and it is not shown to other organisations.
+                capabilities={k: v for k, v in caps.items() if k != "kinds"},
             )
         )
 

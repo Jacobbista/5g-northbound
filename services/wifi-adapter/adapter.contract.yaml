@@ -5,7 +5,6 @@ adapter: wifi
 description: WiFi RSSI trilateration against calibrated anchors.
 capabilities:
   source: wifi
-  kinds: [tool, asset]
   frame: room           # fixes in the frame of the room the anchors belong to
   streaming: false
   z: false              # 2D trilateration, no height estimate

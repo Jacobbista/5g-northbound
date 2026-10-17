@@ -19,14 +19,6 @@
           "description": "Technology tag the adapter reports under.",
           "title": "Source"
         },
-        "kinds": {
-          "description": "Asset kinds this source can position.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Kinds",
-          "type": "array"
-        },
         "frame": {
           "anyOf": [
             {

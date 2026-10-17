@@ -146,7 +146,6 @@ agree.
 | Key | Meaning |
 |-----|---------|
 | `source` | technology tag of the fixes |
-| `kinds` | asset kinds the source positions |
 | `frame` | frame of its measurements |
 | `z` | the source measures height. A height from a source without `z: true` is discarded, with its `verticalAccuracy` |
 | `accuracy_class` | `sub-metre`, `metre` or `coarse` |

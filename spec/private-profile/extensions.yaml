@@ -164,8 +164,8 @@ paths:
       summary: What this deployment can do now.
       description: >-
         Derived from the capabilities the adapters currently advertise and from
-        the Asset Identity Map. A tenant-scoped token sees the kinds and orgs of
-        its own assets only.
+        the Asset Identity Map, which alone supplies the kinds. A tenant-scoped
+        token sees the kinds and orgs of its own assets only.
       operationId: getCapabilities
       responses:
         "200":

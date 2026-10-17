@@ -57,7 +57,7 @@ class _Entry:
         self.last_seen = last_seen
         self.adapter = adapter
         # Self-advertised positioning traits (frame, streaming, z, accuracy
-        # class, kinds). Drives the gateway's GET /capabilities so the profile
+        # class). Drives the gateway's GET /capabilities so the profile
         # surface reflects what the live deployment can actually do.
         self.capabilities = capabilities or {}
         # Running instances that announced this name: instance id -> when it

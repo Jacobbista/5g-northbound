@@ -11,7 +11,7 @@ vi.mock("../../hooks/useDeviceDetails", () => ({
     details: { telemetry: {
       latitude: 59.4, longitude: 17.9, accuracy: 0.9, altitude: 32.6, verticalAccuracy: 0.8,
       strategy: "weighted_avg", sources: ["wittra"], lastLocationTime: "2026-09-29T10:00:00Z",
-    }, kind: "uwb-tag", source: "wittra" },
+    }, kind: "robot", source: "wittra" },
     error: null, loading: false,
   }),
 }));

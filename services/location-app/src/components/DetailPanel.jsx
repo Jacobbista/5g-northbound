@@ -7,7 +7,7 @@ const KIND_ICON = {
   forklift: "🚜",
   pallet: "📦",
   tool: "🔧",
-  "uwb-tag": "🏷️",
+  robot: "🤖",
   asset: "📍",
   ue: "📱",
 };

@@ -36,9 +36,9 @@ async def get_assets(claims: dict = Depends(require_location_role)) -> AssetMap:
     return amap
 
 
-async def _known_sources_and_kinds() -> Optional[tuple[set[str], set[str]]]:
-    """What the live fabric currently advertises, or None when it cannot be
-    asked. The sets come from the engine's adapter registry rather than a list
+async def _known_sources() -> Optional[set[str]]:
+    """The sources the live fabric currently serves, or None when it cannot be
+    asked. The set comes from the engine's adapter registry rather than a list
     in this file: the valid sources are whichever adapters are deployed right
     now, and that changes without a gateway release. `GET /capabilities`
     aggregates the same data for consumers.
@@ -52,30 +52,21 @@ async def _known_sources_and_kinds() -> Optional[tuple[set[str], set[str]]]:
     if adapters is None:
         return None
     sources: set[str] = set()
-    kinds: set[str] = set()
     for ad in adapters:
         caps = ad.get("capabilities") or {}
         if ad.get("name"):
             sources.add(ad["name"])
         if caps.get("source"):
             sources.add(caps["source"])
-        kinds.update(caps.get("kinds") or [])
-    return sources, kinds
+    return sources
 
 
-def _reject_unknown_source_or_kind(
-    amap: AssetMap, sources: set[str], kinds: set[str]
-) -> None:
+def _reject_unknown_source(amap: AssetMap, sources: set[str]) -> None:
     """An asset whose source no adapter serves gets no position, ever, and says
-    nothing about why. Today a typo in that field is accepted and then silent:
-    the marker simply never appears. Catch it where it is written."""
+    nothing about why. A typo in that field would be accepted and then silent.
+    Catch it where it is written. The asset's `kind` is the site's own word for
+    the object and is not checked: no adapter can know it."""
     for asset in amap.assets:
-        if asset.kind not in kinds:
-            raise CamaraError(
-                422, "UNKNOWN_KIND",
-                f"asset '{asset.assetId}': kind '{asset.kind}' is advertised by no "
-                f"adapter. Known: {', '.join(sorted(kinds)) or 'none'}.",
-            )
         for cap in asset.capabilities:
             if cap.source not in sources:
                 raise CamaraError(
@@ -91,17 +82,15 @@ async def put_assets(
     _claims: dict = Depends(require_operator),
 ) -> AssetMap:
     validate_for_write(body)
-    known = await _known_sources_and_kinds()
-    if known is not None:
-        sources, kinds = known
-        # Values the stored map already uses are not typos, so they stay
+    sources = await _known_sources()
+    if sources is not None:
+        # Sources the stored map already uses are not typos, so they stay
         # writable even while their adapter is down long enough to be evicted
         # from the registry. The cost is that a typo written before this check
         # existed is grandfathered rather than caught.
         current = load_asset_map()
         sources |= {c.source for a in current.assets for c in a.capabilities}
-        kinds |= {a.kind for a in current.assets}
-        _reject_unknown_source_or_kind(body, sources, kinds)
+        _reject_unknown_source(body, sources)
     # An engine that cannot be reached cannot be asked, and a check that cannot
     # run must not block an operator from writing.
     save_asset_map(body)

@@ -201,7 +201,7 @@ clamping ([placement](adapters.md#placement)):
 ```json
 {
   "profile": "camara-private-asset",
-  "kinds": ["asset", "forklift", "pallet", "tool", "uwb-tag"],
+  "kinds": ["forklift", "pallet", "tool"],
   "sources": ["synthetic", "wifi", "wittra"],
   "orgs": ["acme"],
   "streaming": false,
@@ -214,8 +214,9 @@ clamping ([placement](adapters.md#placement)):
 }
 ```
 
-`kinds` joins the kinds of the organisation's assets with those the adapters
-advertise. `altitude` is true when a registered adapter declares `z: true`.
+`kinds` lists the kinds of the token's assets: those of its organisation, or
+every asset's for an operator token. `altitude` is true when a registered
+adapter declares `z: true`.
 
 `GET /adapters`:
 
@@ -314,7 +315,7 @@ the outputs of the comparison strategies when `FUSION_COMPARE` is set
   "baseUrl": "http://vendor-adapter:8080",
   "kind": "vendor",
   "capabilities": {
-    "source": "wittra", "kinds": ["pallet", "uwb-tag", "asset"], "frame": "wgs84",
+    "source": "wittra", "frame": "wgs84",
     "z": true, "nominalVerticalAccuracy": 0.8, "accuracy_class": "sub-metre",
     "reporting": "on_motion", "reportingInterval": 900, "devices": true, "discover": true, "diagnostics": true
   }
